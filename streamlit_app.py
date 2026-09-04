@@ -3,6 +3,7 @@ import requests
 import math
 import hashlib
 import random
+import pandas as pd
 from datetime import datetime, timedelta, timezone
 
 # Deutsche Zeitzone (Europe/Berlin)
@@ -14,21 +15,14 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Live Auto-Refresh Engine",
+    page_title="KI Wettprognosen — Professional Pro Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- AUTOMATISCHER SEITEN-RELOAD ALLE 20 MINUTEN (1200 SEKUNDEN) ---
+# --- AUTO-RELOAD ALLE 20 MINUTEN (1200 SEKUNDEN) ---
 st.markdown('<meta http-equiv="refresh" content="1200">', unsafe_allow_html=True)
-
-# Optionales Paket streamlit-autorefresh (falls in requirements.txt vorhanden)
-try:
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=1200 * 1000, key="datarefresh")
-except ImportError:
-    pass
 
 # --- SESSION STATE INITIALISIERUNG ---
 if 'saved_tickets' not in st.session_state:
@@ -76,7 +70,6 @@ def calculate_dynamic_xg(home_team, away_team):
     xg_away = round(max(0.4, min(3.8, 1.25 * (ratio_away ** 1.8))), 2)
     return xg_home, xg_away
 
-# --- WETTANBIETER DATENBANK & URLS ---
 ANBIETER_URLS = {
     "Tipico": "https://www.tipico.de",
     "bwin": "https://sports.bwin.de",
@@ -88,7 +81,6 @@ ANBIETER_URLS = {
     "Bet-at-home": "https://www.bet-at-home.com"
 }
 
-# --- KEYLESS LIGEN MAPPING ---
 OPENLIGA_SHORTCUTS = {
     "🇩🇪 1. Bundesliga": "bl1",
     "🇩🇪 2. Bundesliga": "bl2",
@@ -104,7 +96,6 @@ ESPN_LEAGUE_CODES = {
     "🇪🇺 Europa League": "uefa.europa"
 }
 
-# --- FETCH ENGINES (TTL = 1200 SEKUNDEN / 20 MINUTEN AUTO-EXPIRE) ---
 @st.cache_data(ttl=1200)
 def fetch_openliga_matches(shortcut):
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
@@ -148,16 +139,33 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
-# --- MATH ENGINE: POISSON BERECHNUNG ---
+# --- MATH ENGINE: DIXON-COLES & POISSON BERECHNUNG ---
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
+
+def dixon_coles_tau(h, a, home_xg, away_xg, rho=-0.13):
+    if h == 0 and a == 0:
+        return max(0.2, 1.0 - (home_xg * away_xg * rho))
+    elif h == 0 and a == 1:
+        return max(0.2, 1.0 + (home_xg * rho))
+    elif h == 1 and a == 0:
+        return max(0.2, 1.0 + (away_xg * rho))
+    elif h == 1 and a == 1:
+        return max(0.2, 1.0 - rho)
+    return 1.0
 
 def calculate_poisson_markets(home_xg, away_xg):
     matrix = [[0.0 for _ in range(7)] for _ in range(7)]
     for h in range(7):
         for a in range(7):
-            matrix[h][a] = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a)
+            tau = dixon_coles_tau(h, a, home_xg, away_xg)
+            matrix[h][a] = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a) * tau
             
+    # Matrix normalisieren
+    total_p = sum(sum(row) for row in matrix)
+    if total_p > 0:
+        matrix = [[matrix[h][a] / total_p for a in range(7)] for h in range(7)]
+
     ht_home_xg, ht_away_xg = home_xg * 0.45, away_xg * 0.45
     ht_matrix = [[0.0 for _ in range(5)] for _ in range(5)]
     for h in range(5):
@@ -225,7 +233,6 @@ def calculate_poisson_markets(home_xg, away_xg):
     p_tore_beide_ht = ht_p_over05 * p_2ht_over05
 
     margin = 1.05
-    
     def prob_to_odds(p):
         if p <= 0.01: return 99.00
         q = round((1.0 / p) * margin, 2)
@@ -364,6 +371,7 @@ st.markdown("""
     .badge-market { background-color: #2563eb; color: #ffffff; }
     .badge-safe { background-color: #00d47e; color: #070a13; }
     .badge-bookie { background-color: #f59e0b; color: #070a13; }
+    .badge-ev { background-color: #10b981; color: #ffffff; font-weight:800; }
     .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
     .prob-tag { color: #94a3b8; font-size: 0.85rem; }
     .counter-box {
@@ -403,8 +411,8 @@ last_update_str = now_de.strftime("%H:%M:%S Uhr")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Live-Wettgenerator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Auto-Refresh alle 20 Min • Multi-Markt Analyse Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Professional Wett-Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Dixon-Coles Modell • EV+ Valuebet Berechnung • Kelly-Einsatz • Scheine Speichern & Exportieren</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
@@ -420,8 +428,15 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- HAUPTSEITE EINSTELLUNGEN EXPANDER ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Wettmärkte, Ligen & Zeitraum)", expanded=True):
+with st.expander("⚙️ Einstellungen (Wettanbieter, Wettmärkte, Bankroll & Zeitraum)", expanded=True):
 
+    col_bank1, col_bank2 = st.columns(2)
+    with col_bank1:
+        total_bankroll = st.number_input("💰 Deine Gesamt-Bankroll (€) für Kelly-Empfehlung:", min_value=10.0, max_value=50000.0, value=200.0, step=10.0)
+    with col_bank2:
+        max_kelly_pct = st.slider("🛡️ Max. Kelly-Einsatz Limit (% der Bankroll):", min_value=1.0, max_value=10.0, value=3.0, step=0.5)
+
+    st.markdown("---")
     st.markdown("#### 🏪 Wettanbieter für Quotenvergleich auswählen (Haken setzen):")
     aktive_anbieter = []
     col_b1, col_b2, col_b3, col_b4 = st.columns(4)
@@ -559,7 +574,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
     elif generate_click and not erlaubte_maerkte:
         st.error("Bitte wähle mindestens einen Wettmarkt per Haken aus!")
     else:
-        with st.spinner("Berechne Elo-Ratings & alle verfügbaren Wettmärkte..."):
+        with st.spinner("Berechne Dixon-Coles Elo-Ratings & alle verfügbaren Wettmärkte..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
@@ -633,8 +648,8 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
 
 matches = st.session_state.get('matches_cache', [])
 
-# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE ---
-def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets):
+# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE (MIT EV+ & KELLY) ---
+def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, bankroll, max_k_pct):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
@@ -732,13 +747,31 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets):
     best_bm, best_quote, all_bm_odds = get_best_bookmaker_odds(base_q, home, away, m_key, checked_bookmakers)
     bm_url = ANBIETER_URLS.get(best_bm, "https://www.tipico.de")
     
+    # --- VALUE BET (EV+) & KELLY BERECHNUNG ---
+    p_dec = prob_val / 100.0
+    ev_val = round(((p_dec * best_quote) - 1.0) * 100.0, 1)
+    
+    # Fractional Kelly (Half Kelly for safety)
+    if best_quote > 1.0 and p_dec > (1.0 / best_quote):
+        b = best_quote - 1.0
+        p = p_dec
+        q = 1.0 - p
+        f_star = (b * p - q) / b
+        f_half = max(0.0, f_star * 0.5)
+        f_capped = min(f_half, max_k_pct / 100.0)
+        kelly_stake_eur = round(bankroll * f_capped, 2)
+    else:
+        kelly_stake_eur = round(bankroll * 0.01, 2)
+    
     return {
         "tipp": tipp_str,
         "quote": best_quote,
         "prob": prob_val,
         "markt": mkt_name,
         "best_bookmaker": best_bm,
-        "bookmaker_url": bm_url
+        "bookmaker_url": bm_url,
+        "ev": ev_val,
+        "kelly_stake": kelly_stake_eur
     }
 
 # --- ERGEBNISSE ANZEIGEN ---
@@ -761,22 +794,28 @@ else:
     shuffled_matches = matches.copy()
     random.Random(current_reroll).shuffle(shuffled_matches)
     
+    current_picks = []
+
     if g_typ == "📊 Reine Einzelwetten":
         for match in shuffled_matches:
-            pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter, erlaubte_maerkte)
+            pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
+            current_picks.append((match, pick))
+            
+            ev_badge = f'<span class="badge badge-ev">💎 EV: +{pick["ev"]}% Value</span>' if pick['ev'] > 0 else f'<span class="badge" style="background:#475569; color:#fff;">EV: {pick["ev"]}%</span>'
             
             st.markdown(f"""
                 <div class="best-card">
-                    <span class="badge badge-safe">🛡️ KI POISSON TIPP</span>
+                    <span class="badge badge-safe">🛡️ DIXON-COLES TIPP</span>
                     <span class="badge badge-market">{pick['markt']}</span>
+                    {ev_badge}
                     <span class="badge badge-bookie">⭐ Bestes Angebot: {pick['best_bookmaker']}</span>
                     <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-left:4px;">{match['liga']}</span>
                     <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.15rem;">{match['home']} vs {match['away']}</h4>
                     <p style="color: #00d47e; font-size: 0.78rem; margin-bottom: 12px;">📅 {match['time_str']}</p>
                     <div style="background:#070a13; border:1px solid #1e293b; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                         <div>
-                            <span style="color:#94a3b8; font-size:0.8rem;">Empfohlener Tipp:</span><br>
-                            <b style="color:#ffffff; font-size:1rem;">{pick['tipp']}</b>
+                            <span style="color:#94a3b8; font-size:0.8rem;">Empfohlener Tipp & Kelly-Einsatz:</span><br>
+                            <b style="color:#ffffff; font-size:1rem;">{pick['tipp']}</b> <span style="color:#00d47e; font-weight:700;">(Empf. Einsatz: {pick['kelly_stake']} €)</span>
                         </div>
                         <div style="text-align:right;">
                             <span class="odds-tag">{pick['quote']}</span><br>
@@ -798,11 +837,10 @@ else:
             st.warning("⚠️ Nicht genügend Spiele im gewählten Zeitraum vorhanden, um eine Kombiwette mit deiner Wunschanzahl zu erstellen.")
         else:
             gesamtq = 1.0
-            picks_data = []
             for m in ausgewaehlte:
-                p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter, erlaubte_maerkte)
+                p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
                 gesamtq *= p['quote']
-                picks_data.append((m, p))
+                current_picks.append((m, p))
                 
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 20px;">
@@ -811,7 +849,7 @@ else:
                 </div>
             """, unsafe_allow_html=True)
 
-            for m, p in picks_data:
+            for m, p in current_picks:
                 st.markdown(f"""
                     <div class="bet-card">
                         <span class="badge badge-market">{p['markt']}</span>
@@ -829,88 +867,69 @@ else:
                     </div>
                 """, unsafe_allow_html=True)
 
-    elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-        fb_w = st.session_state.get('freebet_wert', freebet_wert)
-        fb_picks = shuffled_matches[:2]
-        if len(fb_picks) < 2:
-            st.warning("⚠️ Für den Freebet-Modus werden mindestens 2 Spiele benötigt.")
-        else:
-            p1 = get_profile_pick_mixed(fb_picks[0], risiko_profil, aktive_anbieter, erlaubte_maerkte)
-            p2 = get_profile_pick_mixed(fb_picks[1], risiko_profil, aktive_anbieter, erlaubte_maerkte)
-            
-            q_ges = round(p1['quote'] * p2['quote'], 2)
-            netto = round((fb_w * q_ges) - fb_w, 2)
-            
-            st.markdown(f"""
-                <div class="multi-ticket-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span class="badge" style="background-color: #8b5cf6; color: #ffffff;">🎁 Gratiswette: {fb_w:.2f} €</span>
-                        <span class="badge badge-safe">💥 Gesamtquote: {q_ges}</span>
-                    </div>
-                    <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 15px;">
-                        <span style="color: #94a3b8; font-size: 0.9rem;">Erwarteter Reingewinn (Netto):</span><br>
-                        <span style="color: #00d47e; font-size: 1.8rem; font-weight: 800;">{netto:.2f} €</span>
-                    </div>
-            """, unsafe_allow_html=True)
-            for m, p in [(fb_picks[0], p1), (fb_picks[1], p2)]:
-                st.markdown(f"""
-                    <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="color: #ffffff; font-weight: 600;">⚽ {m['home']} vs {m['away']}</span><br>
-                            <span style="color: #94a3b8; font-size: 0.8rem;">📅 {m['time_str']} | Markt: <b style="color: #ffffff;">{p['markt']}</b> | Tipp: <b style="color: #00d47e;">{p['tipp']}</b> ({p['best_bookmaker']})</span>
-                        </div>
-                        <span style="color: #00d47e; font-weight: 800; font-size: 1.1rem;">{p['quote']}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+    # BUTTON ZUM SPEICHERN DES SCHEINS
+    if current_picks:
+        if st.button("📌 Wettschein speichern", type="secondary"):
+            ticket_entry = {
+                "zeitpunkt": datetime.now(tz_de).strftime("%d.%m.%Y %H:%M"),
+                "typ": g_typ,
+                "picks": current_picks
+            }
+            st.session_state['saved_tickets'].append(ticket_entry)
+            st.success("✅ Wettschein erfolgreich gespeichert!")
 
-    else:
-        bud = st.session_state.get('multi_budget', multi_budget)
-        e1, e2, e3 = round(bud * 0.25, 2), round(bud * 0.50, 2), round(bud * 0.25, 2)
-        
-        s1 = shuffled_matches[0:1]
-        s2 = shuffled_matches[1:3] if len(shuffled_matches) >= 3 else shuffled_matches[0:2]
-        s3 = shuffled_matches[3:6] if len(shuffled_matches) >= 6 else shuffled_matches
-
-        tickets = [
-            {"name": "🛡️ Schein 1: Solider Anker (25% Budget)", "einsatz": e1, "matches": s1},
-            {"name": "⭐ Schein 2: Hauptgewinn-Kombi (50% Budget)", "einsatz": e2, "matches": s2},
-            {"name": "🚀 Schein 3: High-Reward System (25% Budget)", "einsatz": e3, "matches": s3}
-        ]
-
-        st.markdown(f"### 🛡️ Multi-Ticket System (Gesamtbudget: {bud:.2f} €)")
-        for ticket in tickets:
-            if ticket['matches']:
-                q_schein = 1.0
-                ticket_picks = []
-                for m in ticket['matches']:
-                    p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter, erlaubte_maerkte)
-                    q_schein *= p['quote']
-                    ticket_picks.append((m, p))
-                    
-                gewinn_schein = round(ticket['einsatz'] * q_schein, 2)
-                
-                st.markdown(f"""
-                    <div class="multi-ticket-box">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <span class="badge badge-safe">{ticket['name']}</span>
-                            <span class="badge badge-market">Einsatz: {ticket['einsatz']:.2f} €</span>
-                        </div>
-                        <div style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 10px;">
-                            Gesamtquote: <b style="color: #00d47e;">{round(q_schein, 2)}</b> | Möglicher Gewinn: <b style="color: #00d47e;">{gewinn_schein:.2f} €</b>
-                        </div>
-                """, unsafe_allow_html=True)
-                for m, p in ticket_picks:
-                    st.markdown(f"""
-                        <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #ffffff; font-size: 0.9rem;">⚽ {m['home']} vs {m['away']} (Markt: <b>{p['markt']}</b> — Tipp: <b>{p['tipp']}</b>) — <b style="color:#f59e0b;">{p['best_bookmaker']}</b></span>
-                            <span style="color: #00d47e; font-weight: 800;">{p['quote']}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
+# --- GESPEICHERTE WETTSCHEINE & EXPORT SECTION ---
 st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0;'>", unsafe_allow_html=True)
-st.markdown("### 🗂️ Gespeicherte Wettscheine")
+st.markdown("### 🗂️ Gespeicherte Wettscheine & CSV Export")
+
 if not st.session_state['saved_tickets']:
-    st.info("Bisher keine Scheine hinterlegt.")
+    st.info("Bisher keine Scheine hinterlegt. Klicke oben auf '📌 Wettschein speichern'.")
+else:
+    export_rows = []
+    text_share = "📱 *MEINE KI-WETTSCHEINE*\n\n"
+
+    for idx, t in enumerate(st.session_state['saved_tickets'], 1):
+        st.markdown(f"#### 🎫 Schein #{idx} ({t['typ']} — Speichertag: {t['zeitpunkt']})")
+        
+        ticket_text = f"🎫 *Schein #{idx} ({t['typ']})*\n"
+        for m, p in t['picks']:
+            st.write(f"• **{m['home']} vs {m['away']}** | Tipp: `{p['tipp']}` | Quote: `{p['quote']}` ({p['best_bookmaker']})")
+            ticket_text += f"⚽ {m['home']} vs {m['away']} -> Tipp: {p['tipp']} @ {p['quote']} ({p['best_bookmaker']})\n"
+            
+            export_rows.append({
+                "Schein_ID": idx,
+                "Datum": t['zeitpunkt'],
+                "Typ": t['typ'],
+                "Heim": m['home'],
+                "Auswärts": m['away'],
+                "Tipp": p['tipp'],
+                "Quote": p['quote'],
+                "Anbieter": p['best_bookmaker'],
+                "Empf_Einsatz_EUR": p.get('kelly_stake', 0.0)
+            })
+        
+        text_share += ticket_text + "\n"
+
+    st.markdown("---")
+    col_exp1, col_exp2 = st.columns(2)
+    
+    with col_exp1:
+        # CSV DOWNLOAD
+        df_export = pd.DataFrame(export_rows)
+        csv_data = df_export.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Wettscheine als CSV herunterladen",
+            data=csv_data,
+            file_name=f"wettscheine_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv"
+        )
+        
+    with col_exp2:
+        # WHATSAPP / TELEGRAM TEXT FORMAT
+        st.markdown("**📋 Teilen-Text (Kopieren für WhatsApp/Telegram):**")
+        st.code(text_share, language="markdown")
+
+    if st.button("🗑️ Alle gespeicherten Scheine löschen"):
+        st.session_state['saved_tickets'] = []
+        st.rerun()
 
