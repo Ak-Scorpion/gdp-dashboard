@@ -32,7 +32,6 @@ if 'matches_cache' not in st.session_state:
 if 'reroll_key' not in st.session_state:
     st.session_state['reroll_key'] = 0
 
-# --- TEAM STÄRKE-DATENBANK (ELO / POWER RATINGS) ---
 TEAM_RATINGS = {
     "bayern": 95, "dortmund": 87, "leverkusen": 90, "leipzig": 86, 
     "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
@@ -139,7 +138,6 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
-# --- MATH ENGINE: DIXON-COLES & POISSON BERECHNUNG ---
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
@@ -161,7 +159,6 @@ def calculate_poisson_markets(home_xg, away_xg):
             tau = dixon_coles_tau(h, a, home_xg, away_xg)
             matrix[h][a] = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a) * tau
             
-    # Matrix normalisieren
     total_p = sum(sum(row) for row in matrix)
     if total_p > 0:
         matrix = [[matrix[h][a] / total_p for a in range(7)] for h in range(7)]
@@ -328,63 +325,56 @@ def get_best_bookmaker_odds(base_quote, home_team, away_team, market_key, checke
     best_quote = bm_odds[best_bm]
     return best_bm, best_quote, bm_odds
 
-# --- DESIGNER CSS ---
+# --- ULTRA-MODERNES DESIGNER CSS (OPTIMIERTE UI) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
+    .stApp { background-color: #0b0f19; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     header[data-testid="stHeader"] { display: none !important; }
     
-    .bet-card {
-        background: linear-gradient(135deg, #111827 0%, #0d1320 100%);
+    .main-header-card {
+        background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
         border: 1px solid #1e293b;
         border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        padding: 20px 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
     }
-    .best-card {
-        background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
-        border: 2px solid #00d47e;
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px;
-        box-shadow: 0 10px 30px rgba(0,212,126,0.2);
+    .bet-card-pro {
+        background: linear-gradient(135deg, #131c2e 0%, #0d1322 100%);
+        border: 1px solid #1e293b;
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        transition: transform 0.2s ease;
     }
-    .multi-ticket-box {
-        background: linear-gradient(135deg, #0f172a 100%, #111827 0%);
-        border: 2px solid #00d47e;
-        border-radius: 16px;
-        padding: 22px;
-        margin-bottom: 24px;
-        box-shadow: 0 10px 35px rgba(0,212,126,0.15);
+    .bet-card-pro:hover {
+        border-color: #00d47e;
     }
     .owner-tag {
-        color: #00d47e; font-weight: 700; letter-spacing: 2.5px;
-        text-transform: uppercase; font-size: 0.75rem; margin-bottom: 4px;
+        color: #00d47e; font-weight: 700; letter-spacing: 2px;
+        text-transform: uppercase; font-size: 0.7rem; margin-bottom: 2px;
     }
-    .main-title { color: #ffffff; font-size: 2.2rem; font-weight: 800; }
-    .sub-title { color: #94a3b8; font-size: 0.95rem; margin-bottom: 15px; }
     .badge {
-        padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800;
-        display: inline-block; margin-bottom: 6px; text-transform: uppercase;
+        padding: 3px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 800;
+        display: inline-block; margin-right: 4px; margin-bottom: 4px; text-transform: uppercase;
     }
-    .badge-market { background-color: #2563eb; color: #ffffff; }
-    .badge-safe { background-color: #00d47e; color: #070a13; }
-    .badge-bookie { background-color: #f59e0b; color: #070a13; }
-    .badge-ev { background-color: #10b981; color: #ffffff; font-weight:800; }
-    .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
-    .prob-tag { color: #94a3b8; font-size: 0.85rem; }
-    .counter-box {
-        background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
-        padding: 10px 14px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    .badge-market { background-color: #1d4ed8; color: #ffffff; }
+    .badge-safe { background-color: #059669; color: #ffffff; }
+    .badge-bookie { background-color: #d97706; color: #ffffff; }
+    .badge-ev { background-color: #047857; color: #ffffff; font-weight: 800; }
+    
+    .odds-highlight {
+        color: #00d47e; font-size: 1.25rem; font-weight: 800; background: #064e3b44;
+        padding: 4px 10px; border-radius: 8px; border: 1px solid #00d47e55; display: inline-block;
     }
     .bookie-btn {
         background-color: #00d47e;
-        color: #070a13 !important;
-        padding: 6px 14px;
+        color: #0b0f19 !important;
+        padding: 5px 12px;
         border-radius: 6px;
         font-weight: 800;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         text-decoration: none;
         display: inline-block;
     }
@@ -392,11 +382,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- DYNAMISCHE ZEITRAUM BERECHNUNG ---
 now_de = datetime.now(tz_de)
 today_de = now_de.date()
 tomorrow_de = today_de + timedelta(days=1)
-
 weekday_num = today_de.weekday()
 fri_de = today_de + timedelta(days=(4 - weekday_num))
 sun_de = fri_de + timedelta(days=2)
@@ -407,37 +395,33 @@ fri_str = fri_de.strftime("%d.%m.")
 sun_str = sun_de.strftime("%d.%m.")
 last_update_str = now_de.strftime("%H:%M:%S Uhr")
 
-# --- HEADER ---
-col_head, col_count = st.columns([3, 1])
-with col_head:
-    st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Professional Wett-Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Dixon-Coles Modell • EV+ Valuebet Berechnung • Kelly-Einsatz • Scheine Speichern & Exportieren</div>', unsafe_allow_html=True)
-
-with col_count:
-    st.markdown(f"""
-        <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">🔄 LETZTES UPDATE</span><br>
-            <span style="color: #00d47e; font-size: 1.1rem; font-weight: 800;">{last_update_str}</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Auto-Refresh: Alle 20 Min</span>
+# --- KOMPAKTER HEADER ---
+st.markdown(f"""
+    <div class="main-header-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <div>
+                <div class="owner-tag">📱 App von Pascal Gellers</div>
+                <h1 style="color: #ffffff; font-size: 1.8rem; font-weight: 800; margin: 0;">⚽ KI Professional Wett-Engine</h1>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin: 4px 0 0 0;">Dixon-Coles • EV+ Valuebet • Kelly-Einsatz • Auto-Refresh aktiv</p>
+            </div>
+            <div style="background-color: #0b0f19; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 14px; text-align: center; margin-top: 8px;">
+                <span style="color: #64748b; font-size: 0.65rem; font-weight: 700;">🔄 LETZTES UPDATE</span><br>
+                <span style="color: #00d47e; font-size: 1rem; font-weight: 800;">{last_update_str}</span>
+            </div>
         </div>
-    """, unsafe_allow_html=True)
+    </div>
+""", unsafe_allow_html=True)
 
-st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
-
-# --- HAUPTSEITE EINSTELLUNGEN EXPANDER ---
-st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
-
-with st.expander("⚙️ Einstellungen (Wettanbieter, Wettmärkte, Bankroll & Zeitraum)", expanded=True):
-
+# --- EINSTELLUNGEN ALS SAUBERER EXPANDER ---
+with st.expander("⚙️ Einstellungen & Filter (Wettanbieter, Märkte, Bankroll)", expanded=False):
     col_bank1, col_bank2 = st.columns(2)
     with col_bank1:
-        total_bankroll = st.number_input("💰 Deine Gesamt-Bankroll (€) für Kelly-Empfehlung:", min_value=10.0, max_value=50000.0, value=200.0, step=10.0)
+        total_bankroll = st.number_input("💰 Gesamt-Bankroll (€):", min_value=10.0, max_value=50000.0, value=200.0, step=10.0)
     with col_bank2:
-        max_kelly_pct = st.slider("🛡️ Max. Kelly-Einsatz Limit (% der Bankroll):", min_value=1.0, max_value=10.0, value=3.0, step=0.5)
+        max_kelly_pct = st.slider("🛡️ Max. Kelly-Limit (%):", min_value=1.0, max_value=10.0, value=3.0, step=0.5)
 
     st.markdown("---")
-    st.markdown("#### 🏪 Wettanbieter für Quotenvergleich auswählen (Haken setzen):")
+    st.markdown("#### 🏪 Wettanbieter:")
     aktive_anbieter = []
     col_b1, col_b2, col_b3, col_b4 = st.columns(4)
     with col_b1:
@@ -454,30 +438,30 @@ with st.expander("⚙️ Einstellungen (Wettanbieter, Wettmärkte, Bankroll & Ze
         if st.checkbox("Bet-at-home", value=True, key="bm_bah"): aktive_anbieter.append("Bet-at-home")
 
     st.markdown("---")
-    st.markdown("#### 🎲 Erlaubte Wettmärkte für die KI auswählen (Kreuze setzen):")
+    st.markdown("#### 🎲 Erlaubte Wettmärkte:")
     erlaubte_maerkte = []
     col_m1, col_m2, col_m3, col_m4 = st.columns(4)
     with col_m1:
-        if st.checkbox("🎯 1X2 Siegwette", value=True, key="m_1x2"): erlaubte_maerkte.append("1X2")
+        if st.checkbox("🎯 1X2", value=True, key="m_1x2"): erlaubte_maerkte.append("1X2")
         if st.checkbox("🛡️ Doppelte Chance", value=True, key="m_dc"): erlaubte_maerkte.append("DC")
-        if st.checkbox("🔄 Draw No Bet (DNB)", value=True, key="m_dnb"): erlaubte_maerkte.append("DNB")
-        if st.checkbox("⚽ Tore Über/Unter", value=True, key="m_tore"): erlaubte_maerkte.append("Tore")
+        if st.checkbox("🔄 DNB", value=True, key="m_dnb"): erlaubte_maerkte.append("DNB")
+        if st.checkbox("⚽ Tore Ü/U", value=True, key="m_tore"): erlaubte_maerkte.append("Tore")
     with col_m2:
         if st.checkbox("⚽ Team-Tore", value=True, key="m_teamtore"): erlaubte_maerkte.append("TeamTore")
-        if st.checkbox("🔥 Beide treffen (BTTS)", value=True, key="m_btts"): erlaubte_maerkte.append("BTTS")
-        if st.checkbox("⚡ Handicap (-1.5)", value=True, key="m_hc"): erlaubte_maerkte.append("Handicap")
-        if st.checkbox("⏱️ 1. Halbzeit Märkte", value=True, key="m_ht"): erlaubte_maerkte.append("Halbzeit")
+        if st.checkbox("🔥 BTTS", value=True, key="m_btts"): erlaubte_maerkte.append("BTTS")
+        if st.checkbox("⚡ Handicap", value=True, key="m_hc"): erlaubte_maerkte.append("Handicap")
+        if st.checkbox("⏱️ 1. Halbzeit", value=True, key="m_ht"): erlaubte_maerkte.append("Halbzeit")
     with col_m3:
-        if st.checkbox("⛳ Eckbälle Über/Unter", value=True, key="m_ecken"): erlaubte_maerkte.append("Ecken")
-        if st.checkbox("🟨 Karten Über/Unter", value=True, key="m_karten"): erlaubte_maerkte.append("Karten")
-        if st.checkbox("🎯 Genaues Ergebnis", value=False, key="m_ergebnis"): erlaubte_maerkte.append("Ergebnis")
+        if st.checkbox("⛳ Ecken", value=True, key="m_ecken"): erlaubte_maerkte.append("Ecken")
+        if st.checkbox("🟨 Karten", value=True, key="m_karten"): erlaubte_maerkte.append("Karten")
+        if st.checkbox("🎯 Ergebnis", value=False, key="m_ergebnis"): erlaubte_maerkte.append("Ergebnis")
     with col_m4:
-        if st.checkbox("🧱 Kombi (Sieg + BTTS / Tore)", value=True, key="m_kombimaerkte"): erlaubte_maerkte.append("KombiMaerkte")
-        if st.checkbox("⏳ Halbzeit / Endstand (HT/FT)", value=False, key="m_htft"): erlaubte_maerkte.append("HTFT")
-        if st.checkbox("⏱️ Tore in beiden Halbzeiten", value=True, key="m_torebeideht"): erlaubte_maerkte.append("ToreBeideHT")
+        if st.checkbox("🧱 Kombi-Märkte", value=True, key="m_kombimaerkte"): erlaubte_maerkte.append("KombiMaerkte")
+        if st.checkbox("⏳ HT/FT", value=False, key="m_htft"): erlaubte_maerkte.append("HTFT")
+        if st.checkbox("⏱️ Tore beide HT", value=True, key="m_torebeideht"): erlaubte_maerkte.append("ToreBeideHT")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen auswählen:")
+    st.markdown("#### 🏆 Ligen:")
     aktive_generator_ligen = []
     col_l1, col_l2 = st.columns(2)
     with col_l1:
@@ -494,60 +478,58 @@ with st.expander("⚙️ Einstellungen (Wettanbieter, Wettmärkte, Bankroll & Ze
 
     st.markdown("---")
     gen_zeit_modus = st.selectbox(
-        "📅 Zeitraum-Modus wählen:", 
+        "📅 Zeitraum:", 
         [
-            f"⚡ HEUTE ({today_str} — Alle Partien)",
-            f"📅 MORGEN ({tomorrow_str} — Alle Partien)",
-            f"⚽ WOCHENENDE ({fri_str} bis {sun_str} — Fr, Sa & So)",
-            "🟢 DIESE WOCHE (Nächste 7 Tage)",
-            "📅 Kalender-Bereich wählen"
+            f"⚡ HEUTE ({today_str})",
+            f"📅 MORGEN ({tomorrow_str})",
+            f"⚽ WOCHENENDE ({fri_str} - {sun_str})",
+            "🟢 DIESE WOCHE",
+            "📅 Kalender-Bereich"
         ], 
         index=0, 
         key="gen_zeit_mode"
     )
 
     kalender_auswahl = None
-    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-        kalender_auswahl = st.date_input("Datumbereich festlegen:", value=(today_de, today_de + timedelta(days=3)), key="kalender_input")
+    if gen_zeit_modus == "📅 Kalender-Bereich":
+        kalender_auswahl = st.date_input("Datumbereich:", value=(today_de, today_de + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
     risiko_profil = st.selectbox(
-        "🧠 KI Risikoprofil (Bestimmt erlaubtes Quoten-Spektrum):",
+        "🧠 Risikoprofil:",
         [
-            "🟢 Safe Mode (Höchste Sicherheit / Nur echte High-Prob Märkte ab 60%)",
-            "⚖️ Balanced Value (Gemischte Value-Quoten 1.45 - 2.15)",
-            "🔥 High Risk / High Reward (Risiko-Siege, Handicaps & Hohe Quoten)"
+            "🟢 Safe Mode (High-Prob ab 60%)",
+            "⚖️ Balanced Value (1.45 - 2.15)",
+            "🔥 High Risk / High Reward"
         ],
         index=0
     )
 
     st.markdown("---")
     gen_typ = st.selectbox(
-        "Wett-Typ wählen:",
+        "Wett-Typ:",
         [
             "📊 Reine Einzelwetten",
-            "🛡️ Multi-Ticket System (3 separate Scheine)", 
-            "🎁 Freebet-Modus (Gratiswette maximieren)", 
-            "🎯 Standard Kombiwette (Freie Anzahl Spiele)"
+            "🛡️ Multi-Ticket System", 
+            "🎁 Freebet-Modus", 
+            "🎯 Standard Kombiwette"
         ],
         index=0
     )
 
-    kombi_anzahl = 3
     multi_budget = 20.0
     freebet_wert = 20.0
+    anzahl_wetten = 3
 
-    if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-        freebet_wert = st.number_input("Wert deiner Freebet (€):", min_value=1.0, max_value=500.0, value=20.0, step=5.0)
-    elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
-        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=1.0, max_value=2000.0, value=20.0, step=5.0)
-    elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
-        anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
+    if gen_typ == "🎁 Freebet-Modus":
+        freebet_wert = st.number_input("Freebet-Wert (€):", min_value=1.0, max_value=500.0, value=20.0, step=5.0)
+    elif gen_typ == "🛡️ Multi-Ticket System":
+        multi_budget = st.number_input("Gesamtbudget (€):", min_value=1.0, max_value=2000.0, value=20.0, step=5.0)
+    elif gen_typ == "🎯 Standard Kombiwette":
+        anzahl_wetten = st.number_input("Anzahl Spiele im Schein:", min_value=2, max_value=10, value=3, step=1)
 
-    st.markdown("---")
-    generate_click = st.button("🚀 Live-Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
 
-# --- ZEITRAUM UND DATUMS-EVALUATION ---
 if "HEUTE" in gen_zeit_modus:
     dt_from, dt_to = today_de, today_de
 elif "MORGEN" in gen_zeit_modus:
@@ -565,16 +547,15 @@ else:
 start_str_espn = dt_from.strftime("%Y%m%d")
 end_str_espn = dt_to.strftime("%Y%m%d")
 
-# --- GENERATOR ENGINE ---
 if generate_click or 'matches_cache' not in st.session_state or not st.session_state['matches_cache']:
     if generate_click and not aktive_generator_ligen: 
-        st.error("Bitte wähle mindestens eine Liga per Haken aus!")
+        st.error("Bitte wähle mindestens eine Liga aus!")
     elif generate_click and not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     elif generate_click and not erlaubte_maerkte:
-        st.error("Bitte wähle mindestens einen Wettmarkt per Haken aus!")
+        st.error("Bitte wähle mindestens einen Wettmarkt aus!")
     else:
-        with st.spinner("Berechne Dixon-Coles Elo-Ratings & alle verfügbaren Wettmärkte..."):
+        with st.spinner("Berechne Dixon-Coles Modell & Quoten..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
@@ -643,12 +624,11 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
             st.session_state['gen_typ'] = gen_typ
             st.session_state['multi_budget'] = float(multi_budget)
             st.session_state['freebet_wert'] = float(freebet_wert)
-            if gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
+            if gen_typ == "🎯 Standard Kombiwette":
                 st.session_state['anzahl_wetten'] = int(anzahl_wetten)
 
 matches = st.session_state.get('matches_cache', [])
 
-# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE (MIT EV+ & KELLY) ---
 def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, bankroll, max_k_pct):
     mkts = match['markets']
     home, away = match['home'], match['away']
@@ -661,58 +641,15 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, 
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1", "kat": "1X2"},
         {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_2", "kat": "1X2"},
         {"tipp": "Unentschieden (X)", "prob": mkts['1X2']['X']['prob'], "base_q": mkts['1X2']['X']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_x", "kat": "1X2"},
-        
         {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_1x", "kat": "DC"},
         {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_x2", "kat": "DC"},
-        {"tipp": f"Doppelte Chance 12 ({home} / {away})", "prob": mkts['DC']['12']['prob'], "base_q": mkts['DC']['12']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_12", "kat": "DC"},
-        
-        {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_1", "kat": "DNB"},
-        {"tipp": f"Sieg {away} (Draw No Bet)", "prob": mkts['DNB']['2 DNB']['prob'], "base_q": mkts['DNB']['2 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_2", "kat": "DNB"},
-        
-        {"tipp": "Über 0.5 Tore", "prob": mkts['Tore']['Über 0.5']['prob'], "base_q": mkts['Tore']['Über 0.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o05", "kat": "Tore"},
+        {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "DNB 🔄", "key": "dnb_1", "kat": "DNB"},
+        {"tipp": f"Sieg {away} (Draw No Bet)", "prob": mkts['DNB']['2 DNB']['prob'], "base_q": mkts['DNB']['2 DNB']['base_quote'], "markt": "DNB 🔄", "key": "dnb_2", "kat": "DNB"},
         {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o15", "kat": "Tore"},
         {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o25", "kat": "Tore"},
-        {"tipp": "Über 3.5 Tore", "prob": mkts['Tore']['Über 3.5']['prob'], "base_q": mkts['Tore']['Über 3.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o35", "kat": "Tore"},
         {"tipp": "Unter 2.5 Tore", "prob": mkts['Tore']['Unter 2.5']['prob'], "base_q": mkts['Tore']['Unter 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u25", "kat": "Tore"},
-        {"tipp": "Unter 3.5 Tore", "prob": mkts['Tore']['Unter 3.5']['prob'], "base_q": mkts['Tore']['Unter 3.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u35", "kat": "Tore"},
-        
-        {"tipp": f"{home} Über 0.5 Tore", "prob": mkts['TeamTore']['Heim Über 0.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho05", "kat": "TeamTore"},
-        {"tipp": f"{home} Über 1.5 Tore", "prob": mkts['TeamTore']['Heim Über 1.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho15", "kat": "TeamTore"},
-        {"tipp": f"{away} Über 0.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 0.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao05", "kat": "TeamTore"},
-        {"tipp": f"{away} Über 1.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 1.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao15", "kat": "TeamTore"},
-        
         {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_ja", "kat": "BTTS"},
-        {"tipp": "Beide Teams treffen - Nein", "prob": mkts['BTTS']['Nein']['prob'], "base_q": mkts['BTTS']['Nein']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_nein", "kat": "BTTS"},
-        
-        {"tipp": f"{home} Handicap -1.5", "prob": mkts['Handicap']['Heim -1.5']['prob'], "base_q": mkts['Handicap']['Heim -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_h15", "kat": "Handicap"},
-        {"tipp": f"{away} Handicap -1.5", "prob": mkts['Handicap']['Auswärts -1.5']['prob'], "base_q": mkts['Handicap']['Auswärts -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_a15", "kat": "Handicap"},
-        
-        {"tipp": f"1. Halbzeit: Sieg {home}", "prob": mkts['Halbzeit']['1. HT Sieg Heim']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Heim']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_1", "kat": "Halbzeit"},
-        {"tipp": "1. Halbzeit: Unentschieden", "prob": mkts['Halbzeit']['1. HT Unentschieden']['prob'], "base_q": mkts['Halbzeit']['1. HT Unentschieden']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_x", "kat": "Halbzeit"},
-        {"tipp": f"1. Halbzeit: Sieg {away}", "prob": mkts['Halbzeit']['1. HT Sieg Auswärts']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Auswärts']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_2", "kat": "Halbzeit"},
-        {"tipp": "1. Halbzeit: Über 0.5 Tore", "prob": mkts['Halbzeit']['1. HT Über 0.5']['prob'], "base_q": mkts['Halbzeit']['1. HT Über 0.5']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "hto05", "kat": "Halbzeit"},
-        
-        {"tipp": "Über 8.5 Eckbälle", "prob": mkts['Ecken']['Über 8.5 Ecken']['prob'], "base_q": mkts['Ecken']['Über 8.5 Ecken']['base_quote'], "markt": "Eckbälle ⛳", "key": "crn85", "kat": "Ecken"},
-        {"tipp": "Über 10.5 Eckbälle", "prob": mkts['Ecken']['Über 10.5 Ecken']['prob'], "base_q": mkts['Ecken']['Über 10.5 Ecken']['base_quote'], "markt": "Eckbälle ⛳", "key": "crn105", "kat": "Ecken"},
-        
-        {"tipp": "Über 3.5 Karten", "prob": mkts['Karten']['Über 3.5 Karten']['prob'], "base_q": mkts['Karten']['Über 3.5 Karten']['base_quote'], "markt": "Karten 🟨", "key": "crd35", "kat": "Karten"},
-        {"tipp": "Über 4.5 Karten", "prob": mkts['Karten']['Über 4.5 Karten']['prob'], "base_q": mkts['Karten']['Über 4.5 Karten']['base_quote'], "markt": "Karten 🟨", "key": "crd45", "kat": "Karten"},
-        
-        {"tipp": "Exaktes Ergebnis 1:0", "prob": mkts['Ergebnis']['Ergebnis 1:0']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 1:0']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc10", "kat": "Ergebnis"},
-        {"tipp": "Exaktes Ergebnis 2:0", "prob": mkts['Ergebnis']['Ergebnis 2:0']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 2:0']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc20", "kat": "Ergebnis"},
-        {"tipp": "Exaktes Ergebnis 2:1", "prob": mkts['Ergebnis']['Ergebnis 2:1']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 2:1']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc21", "kat": "Ergebnis"},
-        {"tipp": "Exaktes Ergebnis 1:1", "prob": mkts['Ergebnis']['Ergebnis 1:1']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 1:1']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc11", "kat": "Ergebnis"},
-        
-        {"tipp": f"Sieg {home} & Beide treffen (BTTS)", "prob": mkts['KombiMaerkte']['Sieg Heim & BTTS Ja']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Heim & BTTS Ja']['base_quote'], "markt": "Kombi (Sieg + BTTS) 🧱", "key": "hbtts", "kat": "KombiMaerkte"},
-        {"tipp": f"Sieg {away} & Beide treffen (BTTS)", "prob": mkts['KombiMaerkte']['Sieg Auswärts & BTTS Ja']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Auswärts & BTTS Ja']['base_quote'], "markt": "Kombi (Sieg + BTTS) 🧱", "key": "abtts", "kat": "KombiMaerkte"},
-        {"tipp": f"Sieg {home} & Über 2.5 Tore", "prob": mkts['KombiMaerkte']['Sieg Heim & Über 2.5']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Heim & Über 2.5']['base_quote'], "markt": "Kombi (Sieg + Tore) 🧱", "key": "ho25", "kat": "KombiMaerkte"},
-        {"tipp": f"Sieg {away} & Über 2.5 Tore", "prob": mkts['KombiMaerkte']['Sieg Auswärts & Über 2.5']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Auswärts & Über 2.5']['base_quote'], "markt": "Kombi (Sieg + Tore) 🧱", "key": "ao25", "kat": "KombiMaerkte"},
-        
-        {"tipp": f"HT/FT: Führung {home} / Sieg {home}", "prob": mkts['HTFT']['HT/FT: 1/1 (Heim/Heim)']['prob'], "base_q": mkts['HTFT']['HT/FT: 1/1 (Heim/Heim)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hf11", "kat": "HTFT"},
-        {"tipp": f"HT/FT: Unentschieden HT / Sieg {home} FT", "prob": mkts['HTFT']['HT/FT: X/1 (Unentsch./Heim)']['prob'], "base_q": mkts['HTFT']['HT/FT: X/1 (Unentsch./Heim)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hfx1", "kat": "HTFT"},
-        {"tipp": f"HT/FT: Führung {away} / Sieg {away}", "prob": mkts['HTFT']['HT/FT: 2/2 (Auswärts/Auswärts)']['prob'], "base_q": mkts['HTFT']['HT/FT: 2/2 (Auswärts/Auswärts)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hf22", "kat": "HTFT"},
-        
-        {"tipp": "Tore in beiden Halbzeiten - Ja", "prob": mkts['ToreBeideHT']['Tore in beiden Halbzeiten - Ja']['prob'], "base_q": mkts['ToreBeideHT']['Tore in beiden Halbzeiten - Ja']['base_quote'], "markt": "Tore in beiden HT ⏱️", "key": "tbht", "kat": "ToreBeideHT"}
+        {"tipp": "Beide Teams treffen - Nein", "prob": mkts['BTTS']['Nein']['prob'], "base_q": mkts['BTTS']['Nein']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_nein", "kat": "BTTS"}
     ]
     
     if allowed_markets:
@@ -725,16 +662,13 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, 
 
     if "Safe Mode" in profile:
         valid = [c for c in candidates if c['prob'] >= 60.0]
-        if not valid:
-            valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:3]
+        if not valid: valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:3]
     elif "High Risk" in profile:
         valid = [c for c in candidates if c['base_q'] >= 2.00]
-        if not valid:
-            valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:3]
+        if not valid: valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:3]
     else:
         valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
-        if not valid:
-            valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:4]
+        if not valid: valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:4]
             
     selected = valid[match_seed % len(valid)]
 
@@ -747,11 +681,9 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, 
     best_bm, best_quote, all_bm_odds = get_best_bookmaker_odds(base_q, home, away, m_key, checked_bookmakers)
     bm_url = ANBIETER_URLS.get(best_bm, "https://www.tipico.de")
     
-    # --- VALUE BET (EV+) & KELLY BERECHNUNG ---
     p_dec = prob_val / 100.0
     ev_val = round(((p_dec * best_quote) - 1.0) * 100.0, 1)
     
-    # Fractional Kelly (Half Kelly for safety)
     if best_quote > 1.0 and p_dec > (1.0 / best_quote):
         b = best_quote - 1.0
         p = p_dec
@@ -774,22 +706,20 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets, 
         "kelly_stake": kelly_stake_eur
     }
 
-# --- ERGEBNISSE ANZEIGEN ---
 if not matches:
-    st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.%Y')} - {dt_to.strftime('%d.%m.%Y')}) in den gewählten Ligen gefunden.")
+    st.info(f"ℹ️ Keine Ansetzungen für den gewählten Zeitraum gefunden.")
 elif not erlaubte_maerkte:
-    st.warning("⚠️ Bitte wähle oben in den Einstellungen mindestens einen Wettmarkt aus!")
+    st.warning("⚠️ Bitte wähle mindestens einen Wettmarkt in den Einstellungen aus!")
 else:
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
-        st.markdown(f"### 🛡️ Aktuelle KI-Scheine ({len(matches)} Spiele geladen)")
+        st.markdown(f"### 🛡️ Aktuelle KI-Tipps ({len(matches)} Partien geladen)")
     with col_t_btn:
-        if st.button("🎲 Neue Scheine generieren (Neu mischen)", type="primary", use_container_width=True, key="btn_shuffle"):
+        if st.button("🎲 Neue Tipps mischen", type="primary", use_container_width=True, key="btn_shuffle"):
             st.session_state['reroll_key'] += 1
             st.rerun()
 
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
-    
     current_reroll = st.session_state.get('reroll_key', 0)
     shuffled_matches = matches.copy()
     random.Random(current_reroll).shuffle(shuffled_matches)
@@ -801,40 +731,47 @@ else:
             pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
             current_picks.append((match, pick))
             
-            ev_badge = f'<span class="badge badge-ev">💎 EV: +{pick["ev"]}% Value</span>' if pick['ev'] > 0 else f'<span class="badge" style="background:#475569; color:#fff;">EV: {pick["ev"]}%</span>'
+            ev_badge = f'<span class="badge badge-ev">💎 +{pick["ev"]}% EV</span>' if pick['ev'] > 0 else f'<span class="badge" style="background:#334155; color:#fff;">{pick["ev"]}% EV</span>'
             
             st.markdown(f"""
-                <div class="best-card">
-                    <span class="badge badge-safe">🛡️ DIXON-COLES TIPP</span>
-                    <span class="badge badge-market">{pick['markt']}</span>
-                    {ev_badge}
-                    <span class="badge badge-bookie">⭐ Bestes Angebot: {pick['best_bookmaker']}</span>
-                    <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-left:4px;">{match['liga']}</span>
-                    <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.15rem;">{match['home']} vs {match['away']}</h4>
-                    <p style="color: #00d47e; font-size: 0.78rem; margin-bottom: 12px;">📅 {match['time_str']}</p>
-                    <div style="background:#070a13; border:1px solid #1e293b; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                <div class="bet-card-pro">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <div>
-                            <span style="color:#94a3b8; font-size:0.8rem;">Empfohlener Tipp & Kelly-Einsatz:</span><br>
-                            <b style="color:#ffffff; font-size:1rem;">{pick['tipp']}</b> <span style="color:#00d47e; font-weight:700;">(Empf. Einsatz: {pick['kelly_stake']} €)</span>
+                            <span class="badge badge-safe">DIXON-COLES</span>
+                            <span class="badge badge-market">{pick['markt']}</span>
+                            {ev_badge}
+                        </div>
+                        <span style="color: #64748b; font-size: 0.75rem;">{match['liga']}</span>
+                    </div>
+                    <div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 2px;">
+                        {match['home']} vs {match['away']}
+                    </div>
+                    <div style="color: #00d47e; font-size: 0.72rem; margin-bottom: 10px;">📅 {match['time_str']}</div>
+                    
+                    <div style="background:#0b0f19; border:1px solid #1e293b; border-radius:10px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span style="color:#94a3b8; font-size:0.75rem;">Empfehlung:</span><br>
+                            <b style="color:#ffffff; font-size:0.95rem;">{pick['tipp']}</b><br>
+                            <span style="color:#00d47e; font-size:0.75rem; font-weight:700;">💡 Kelly-Einsatz: {pick['kelly_stake']} €</span>
                         </div>
                         <div style="text-align:right;">
-                            <span class="odds-tag">{pick['quote']}</span><br>
-                            <span class="prob-tag">Wahrscheinlichkeit: {pick['prob']}%</span>
+                            <span class="odds-highlight">{pick['quote']}</span><br>
+                            <span style="color:#94a3b8; font-size:0.7rem;">Prob: {pick['prob']}%</span>
                         </div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
-                        <span style="color:#94a3b8; font-size:0.8rem;">Höchstquote bei: <b style="color:#f59e0b;">{pick['best_bookmaker']}</b></span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                        <span style="color:#94a3b8; font-size:0.75rem;">Bester Anbieter: <b style="color:#f59e0b;">{pick['best_bookmaker']}</b></span>
                         <a href="{pick['bookmaker_url']}" target="_blank" class="bookie-btn">🔗 Zu {pick['best_bookmaker']}</a>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
 
-    elif g_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
+    elif g_typ == "🎯 Standard Kombiwette":
         anz_w = st.session_state.get('anzahl_wetten', 3)
         ausgewaehlte = shuffled_matches[:min(len(shuffled_matches), anz_w)]
         
         if len(ausgewaehlte) < 2:
-            st.warning("⚠️ Nicht genügend Spiele im gewählten Zeitraum vorhanden, um eine Kombiwette mit deiner Wunschanzahl zu erstellen.")
+            st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Anzahl.")
         else:
             gesamtq = 1.0
             for m in ausgewaehlte:
@@ -843,59 +780,110 @@ else:
                 current_picks.append((m, p))
                 
             st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                    <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
-                    <span style="color: #00d47e; font-size: 2.3rem; font-weight: 800;">{round(gesamtq, 2)}</span>
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px;">
+                    <span style="color: #94a3b8; font-size: 0.8rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
+                    <span style="color: #00d47e; font-size: 2rem; font-weight: 800;">{round(gesamtq, 2)}</span>
                 </div>
             """, unsafe_allow_html=True)
 
             for m, p in current_picks:
                 st.markdown(f"""
-                    <div class="bet-card">
+                    <div class="bet-card-pro">
                         <span class="badge badge-market">{p['markt']}</span>
-                        <span class="badge badge-bookie">Bester Anbieter: {p['best_bookmaker']}</span>
-                        <span class="badge" style="background-color: #1e293b; color: #94a3b8;">{m['liga']}</span>
-                        <h4 style="color: #ffffff; margin: 10px 0 4px 0;">{m['home']} vs {m['away']}</h4>
-                        <p style="color: #00d47e; font-size: 0.78rem; margin-bottom: 12px;">📅 {m['time_str']}</p>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #94a3b8; font-size: 0.9rem;">Tipp: <b style="color: #ffffff;">{p['tipp']}</b></span>
-                            <span class="odds-tag">{p['quote']}</span>
-                        </div>
-                        <div style="text-align: right; margin-top: 10px;">
-                            <a href="{p['bookmaker_url']}" target="_blank" class="bookie-btn">🔗 Bei {p['best_bookmaker']} platzieren</a>
+                        <span class="badge badge-bookie">{p['best_bookmaker']}</span>
+                        <div style="font-weight: 700; color: #ffffff; margin: 6px 0;">{m['home']} vs {m['away']}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; background:#0b0f19; padding:8px 12px; border-radius:8px;">
+                            <span style="color: #94a3b8; font-size: 0.85rem;">Tipp: <b style="color: #ffffff;">{p['tipp']}</b></span>
+                            <span style="color: #00d47e; font-weight: 800; font-size: 1.1rem;">{p['quote']}</span>
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
 
-    # BUTTON ZUM SPEICHERN DES SCHEINS
+    elif g_typ == "🎁 Freebet-Modus":
+        fb_w = st.session_state.get('freebet_wert', freebet_wert)
+        fb_picks = shuffled_matches[:2]
+        if len(fb_picks) < 2:
+            st.warning("⚠️ Mindestens 2 Spiele erforderlich.")
+        else:
+            p1 = get_profile_pick_mixed(fb_picks[0], risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
+            p2 = get_profile_pick_mixed(fb_picks[1], risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
+            current_picks = [(fb_picks[0], p1), (fb_picks[1], p2)]
+            q_ges = round(p1['quote'] * p2['quote'], 2)
+            netto = round((fb_w * q_ges) - fb_w, 2)
+            
+            st.markdown(f"""
+                <div style="background: #0f172a; border: 2px solid #8b5cf6; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 16px;">
+                    <span style="color: #a78bfa; font-weight: 700;">🎁 Freebet ({fb_w:.2f} €) • Gesamtquote: {q_ges}</span><br>
+                    <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">Netto-Reingewinn: {netto:.2f} €</span>
+                </div>
+            """, unsafe_allow_html=True)
+            for m, p in current_picks:
+                st.markdown(f"""
+                    <div class="bet-card-pro">
+                        <div style="font-weight: 700; color: #ffffff;">{m['home']} vs {m['away']}</div>
+                        <div style="color: #94a3b8; font-size: 0.8rem;">Tipp: <b style="color: #00d47e;">{p['tipp']}</b> @ {p['quote']} ({p['best_bookmaker']})</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+    else:
+        bud = st.session_state.get('multi_budget', multi_budget)
+        e1, e2, e3 = round(bud * 0.25, 2), round(bud * 0.50, 2), round(bud * 0.25, 2)
+        s1 = shuffled_matches[0:1]
+        s2 = shuffled_matches[1:3] if len(shuffled_matches) >= 3 else shuffled_matches[0:2]
+        s3 = shuffled_matches[3:6] if len(shuffled_matches) >= 6 else shuffled_matches
+
+        tickets = [
+            {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "matches": s1},
+            {"name": "⭐ Schein 2: Hauptgewinn", "einsatz": e2, "matches": s2},
+            {"name": "🚀 Schein 3: High-Reward", "einsatz": e3, "matches": s3}
+        ]
+
+        for ticket in tickets:
+            if ticket['matches']:
+                q_schein = 1.0
+                ticket_picks = []
+                for m in ticket['matches']:
+                    p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
+                    q_schein *= p['quote']
+                    ticket_picks.append((m, p))
+                    current_picks.append((m, p))
+                gewinn_schein = round(ticket['einsatz'] * q_schein, 2)
+                
+                st.markdown(f"""
+                    <div class="bet-card-pro" style="border-color: #059669;">
+                        <div style="display: flex; justify-content: space-between; font-weight: 700; color: #ffffff; margin-bottom: 6px;">
+                            <span>{ticket['name']}</span>
+                            <span style="color: #00d47e;">Einsatz: {ticket['einsatz']:.2f} €</span>
+                        </div>
+                        <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 8px;">Quote: {round(q_schein, 2)} | Möglicher Gewinn: {gewinn_schein:.2f} €</div>
+                """, unsafe_allow_html=True)
+                for m, p in ticket_picks:
+                    st.markdown(f"<div style='font-size:0.8rem; color:#f1f5f9;'>• {m['home']} vs {m['away']} -> <b>{p['tipp']}</b> ({p['quote']})</div>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
     if current_picks:
-        if st.button("📌 Wettschein speichern", type="secondary"):
+        if st.button("📌 Wettschein speichern", type="secondary", use_container_width=True):
             ticket_entry = {
                 "zeitpunkt": datetime.now(tz_de).strftime("%d.%m.%Y %H:%M"),
                 "typ": g_typ,
                 "picks": current_picks
             }
             st.session_state['saved_tickets'].append(ticket_entry)
-            st.success("✅ Wettschein erfolgreich gespeichert!")
+            st.success("✅ Schein erfolgreich gespeichert!")
 
-# --- GESPEICHERTE WETTSCHEINE & EXPORT SECTION ---
-st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0;'>", unsafe_allow_html=True)
-st.markdown("### 🗂️ Gespeicherte Wettscheine & CSV Export")
+st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 25px 0;'>", unsafe_allow_html=True)
+st.markdown("### 🗂️ Gespeicherte Scheine & Export")
 
 if not st.session_state['saved_tickets']:
-    st.info("Bisher keine Scheine hinterlegt. Klicke oben auf '📌 Wettschein speichern'.")
+    st.info("Bisher keine Scheine gespeichert.")
 else:
     export_rows = []
     text_share = "📱 *MEINE KI-WETTSCHEINE*\n\n"
 
     for idx, t in enumerate(st.session_state['saved_tickets'], 1):
-        st.markdown(f"#### 🎫 Schein #{idx} ({t['typ']} — Speichertag: {t['zeitpunkt']})")
-        
         ticket_text = f"🎫 *Schein #{idx} ({t['typ']})*\n"
         for m, p in t['picks']:
-            st.write(f"• **{m['home']} vs {m['away']}** | Tipp: `{p['tipp']}` | Quote: `{p['quote']}` ({p['best_bookmaker']})")
-            ticket_text += f"⚽ {m['home']} vs {m['away']} -> Tipp: {p['tipp']} @ {p['quote']} ({p['best_bookmaker']})\n"
-            
+            ticket_text += f"⚽ {m['home']} vs {m['away']} -> {p['tipp']} @ {p['quote']} ({p['best_bookmaker']})\n"
             export_rows.append({
                 "Schein_ID": idx,
                 "Datum": t['zeitpunkt'],
@@ -907,29 +895,18 @@ else:
                 "Anbieter": p['best_bookmaker'],
                 "Empf_Einsatz_EUR": p.get('kelly_stake', 0.0)
             })
-        
         text_share += ticket_text + "\n"
+        st.write(f"• **Schein #{idx}** ({t['typ']} vom {t['zeitpunkt']}) mit {len(t['picks'])} Tipps.")
 
-    st.markdown("---")
     col_exp1, col_exp2 = st.columns(2)
-    
     with col_exp1:
-        # CSV DOWNLOAD
         df_export = pd.DataFrame(export_rows)
         csv_data = df_export.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Wettscheine als CSV herunterladen",
-            data=csv_data,
-            file_name=f"wettscheine_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv"
-        )
-        
+        st.download_button("📥 CSV Export", data=csv_data, file_name="wettscheine.csv", mime="text/csv", use_container_width=True)
     with col_exp2:
-        # WHATSAPP / TELEGRAM TEXT FORMAT
-        st.markdown("**📋 Teilen-Text (Kopieren für WhatsApp/Telegram):**")
-        st.code(text_share, language="markdown")
+        if st.button("🗑️ Alle löschen", use_container_width=True):
+            st.session_state['saved_tickets'] = []
+            st.rerun()
 
-    if st.button("🗑️ Alle gespeicherten Scheine löschen"):
-        st.session_state['saved_tickets'] = []
-        st.rerun()
-
+    st.markdown("**📋 Teilen-Text:**")
+    st.code(text_share, language="markdown")
