@@ -191,6 +191,11 @@ ANBIETER_URLS = {
     "Oddset": "https://www.oddset.de"
 }
 
+DEUTSCHE_ANBIETER = {
+    "Tipico": "bwin", "Neo.bet": "bwin", "bwin (Deutschland)": "bwin",
+    "Bet-at-home": "betathome", "Bet365 (DE)": "bet365", "Betano": "bwin", "Oddset": "bwin"
+}
+
 WOCHEN_OPTIONS = {
     "🟢 Dieses Wochenende (Aktuelle Woche)": 0,
     "⏩ Nächste Woche (+1 Woche)": 1,
@@ -265,13 +270,9 @@ with st.sidebar:
     st.markdown("Hier steuerst du zentral alle Ligen, Spielwochen und Buchmacher.")
     st.markdown("---")
     
-    # 1. Buchmacher-Auswahl
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
-    
-    # 2. Spielwoche-Auswahl
     gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
     
-    # 3. Ligen-Modus
     modus_wahl = st.radio(
         "Ligen-Modus:",
         ["🌍 Alle europäischen Top-Ligen (Auto)", "📋 Manuelle Ligen-Auswahl"],
@@ -290,7 +291,7 @@ with st.sidebar:
         ausgewaehlte_ligen_keys = [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"]
         
     st.markdown("---")
-    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um blitzschnell Einstellungen zu ändern, ohne lange scrollen zu müssen.")
+    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um Einstellungen blitzschnell zu ändern.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -300,13 +301,13 @@ tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Ko
 # ==========================================
 with tab1:
     st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
-    st.markdown("Wähle links im Seitenpanel deine Wunsch-Liga aus und klicke auf den Button.")
+    st.markdown("Wähle unten deine Liga aus und lade die Live-Quoten.")
     
     Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"], key="l_tab1_single")
     
     if st.button("🔍 Spiele & Wahrscheinlichkeiten laden", use_container_width=True, type="primary"):
         liga_code = LIGEN[Einzelne_Liga_Auswahl]
-        bm_code = "bwin" # Default mapping für Tab 1
+        bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
         
         with st.spinner(f"Analysiere Quoten für {Einzelne_Liga_Auswahl}..."):
@@ -357,7 +358,7 @@ with tab2:
         if not ausgewaehlte_ligen_keys: 
             st.error("Bitte wähle mindestens eine Liga im Seitenpanel aus!")
         else:
-            bm_code = DEUTSCHE_ANBIETER[anbieter_wahl]
+            bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             moegliche_tipps = []
             
@@ -455,11 +456,10 @@ with tab2:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # --- DIREKT-LINK ZUM BUCHMACHER & EXPORT ---
         st.markdown(f"""
             <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
                 <h3 style="color: #ffffff; margin-top: 0;">🚀 Direkt zu {anbieter_label}</h3>
-                <p style="color: #94a3b8; font-size: 0.9rem;">Klicke unten, um direkt zur Website von {anbieter_label} zu wechseln und den Schein zu platzieren:</p>
+                <p style="color: #94a3b8; font-size: 0.9rem;">Klicke unten, um direkt zur Website von {anbieter_label} zu wechseln:</p>
                 <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Jetzt {anbieter_label} öffnen & wetten</a>
             </div>
         """, unsafe_allow_html=True)
