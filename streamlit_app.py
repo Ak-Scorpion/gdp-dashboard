@@ -30,33 +30,22 @@ if 'reroll_key' not in st.session_state:
 
 # --- TEAM STÄRKE-DATENBANK (ELO / POWER RATINGS) ---
 TEAM_RATINGS = {
-    # Deutschland Top & BL1
     "bayern": 95, "dortmund": 87, "leverkusen": 90, "leipzig": 86, 
     "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
     "freiburg": 78, "union berlin": 75, "mainz": 74, "augsburg": 73,
     "werder bremen": 75, "hoffenheim": 76, "heidenheim": 73, "st. pauli": 70,
     "bochum": 68, "holstein kiel": 67,
-    
-    # 2. BL & 3. Liga
     "hsv": 74, "hamburger sv": 74, "köln": 74, "hertha": 73, "schalke": 71,
     "duesseldorf": 74, "düsseldorf": 74, "hannover": 72, "paderborn": 71,
     "karlsruhe": 72, "kaiserslautern": 71, "dresden": 66, "aachen": 63,
     "essen": 64, "1860 münchen": 64, "osnabrück": 65, "rostock": 65,
-    
-    # England Premier League
     "manchester city": 95, "man city": 95, "arsenal": 92, "liverpool": 93,
     "chelsea": 85, "manchester united": 83, "man utd": 83, "tottenham": 83,
     "newcastle": 84, "aston villa": 84, "brighton": 79, "west ham": 78,
-    
-    # Spanien La Liga
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86, "athletic bilbao": 81,
     "real sociedad": 81, "girona": 80, "villarreal": 80, "betis": 79, "sevilla": 77,
-    
-    # Italien Serie A
     "inter": 91, "juventus": 86, "ac milan": 86, "milan": 86, "napoli": 86,
     "atalanta": 85, "roma": 82, "lazio": 81, "fiorentina": 80,
-    
-    # Frankreich Ligue 1
     "paris saint-germain": 93, "psg": 93, "monaco": 82, "marseille": 82,
     "lille": 81, "lyon": 80, "rennes": 78, "lens": 78
 }
@@ -71,13 +60,10 @@ def get_team_rating(team_name):
 def calculate_dynamic_xg(home_team, away_team):
     r_home = get_team_rating(home_team) + 4
     r_away = get_team_rating(away_team)
-    
     ratio_home = r_home / float(r_away)
     ratio_away = r_away / float(r_home)
-    
     xg_home = round(max(0.4, min(3.8, 1.45 * (ratio_home ** 1.8))), 2)
     xg_away = round(max(0.4, min(3.8, 1.25 * (ratio_away ** 1.8))), 2)
-    
     return xg_home, xg_away
 
 # --- WETTANBIETER DATENBANK & URLS ---
@@ -152,25 +138,22 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
-# --- MATH ENGINE: ERWEITERTE POISSON BERECHNUNG (ALLE WETTMÄRKTE) ---
+# --- MATH ENGINE: POISSON BERECHNUNG ---
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
 def calculate_poisson_markets(home_xg, away_xg):
-    # Vollzeit Matrix
     matrix = [[0.0 for _ in range(7)] for _ in range(7)]
     for h in range(7):
         for a in range(7):
             matrix[h][a] = poisson_pmf(home_xg, h) * poisson_pmf(away_xg, a)
             
-    # 1. Halbzeit Matrix (ca. 45% der Gesamttore)
     ht_home_xg, ht_away_xg = home_xg * 0.45, away_xg * 0.45
     ht_matrix = [[0.0 for _ in range(5)] for _ in range(5)]
     for h in range(5):
         for a in range(5):
             ht_matrix[h][a] = poisson_pmf(ht_home_xg, h) * poisson_pmf(ht_away_xg, a)
 
-    # Wahrscheinlichkeiten Berechnen
     p_home = sum(matrix[h][a] for h in range(7) for a in range(7) if h > a)
     p_draw = sum(matrix[h][a] for h in range(7) for a in range(7) if h == a)
     p_away = sum(matrix[h][a] for h in range(7) for a in range(7) if h < a)
@@ -179,11 +162,9 @@ def calculate_poisson_markets(home_xg, away_xg):
     p_dc_x2 = p_away + p_draw
     p_dc_12 = p_home + p_away
     
-    # Draw No Bet (DNB)
     p_dnb_1 = p_home / (p_home + p_away) if (p_home + p_away) > 0 else 0.5
     p_dnb_2 = p_away / (p_home + p_away) if (p_home + p_away) > 0 else 0.5
     
-    # Tore Über/Unter
     p_over05 = sum(matrix[h][a] for h in range(7) for a in range(7) if (h + a) > 0.5)
     p_over15 = sum(matrix[h][a] for h in range(7) for a in range(7) if (h + a) > 1.5)
     p_over25 = sum(matrix[h][a] for h in range(7) for a in range(7) if (h + a) > 2.5)
@@ -191,21 +172,17 @@ def calculate_poisson_markets(home_xg, away_xg):
     p_under25 = 1.0 - p_over25
     p_under35 = 1.0 - p_over35
     
-    # Team Tore
     p_home_over05 = sum(matrix[h][a] for h in range(1, 7) for a in range(7))
     p_home_over15 = sum(matrix[h][a] for h in range(2, 7) for a in range(7))
     p_away_over05 = sum(matrix[h][a] for h in range(7) for a in range(1, 7))
     p_away_over15 = sum(matrix[h][a] for h in range(7) for a in range(2, 7))
     
-    # BTTS
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
     p_btts_nein = 1.0 - p_btts_ja
     
-    # Handicap (-1.5)
     p_hc_home_minus15 = sum(matrix[h][a] for h in range(7) for a in range(7) if (h - a) >= 2)
     p_hc_away_minus15 = sum(matrix[h][a] for h in range(7) for a in range(7) if (a - h) >= 2)
     
-    # Halbzeit
     ht_p_home = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if h > a)
     ht_p_draw = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if h == a)
     ht_p_away = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if h < a)
@@ -265,7 +242,6 @@ def calculate_poisson_markets(home_xg, away_xg):
         }
     }
 
-# --- MULTI-BOOKMAKER QUOTEN ENGINE ---
 def get_best_bookmaker_odds(base_quote, home_team, away_team, market_key, checked_bookmakers):
     if not checked_bookmakers:
         checked_bookmakers = ["Tipico"]
@@ -364,14 +340,14 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Multi-Markt Wettgenerator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">1X2 • Doppelte Chance • DNB • Tore Über/Unter • BTTS • Team-Tore • Halbzeit • Handicap</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">1X2 • Doppelte Chance • DNB • Tore • BTTS • Team-Tore • Halbzeit • Handicap</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
         <div class="counter-box">
             <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📅 HEUTIGER TAG</span><br>
             <span style="color: #00d47e; font-size: 1.1rem; font-weight: 800;">{today_str}</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Alle Märkte Aktiv</span>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Zeitzone Berlin</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -570,31 +546,29 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
 
 matches = st.session_state.get('matches_cache', [])
 
-# --- DYNAMISCHE, REALISTISCHE KI MARKT-AUSWAHL ENGINE (ALLE MÄRKTE) ---
+# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE (ALLE MÄRKTE) ---
 def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
     reroll = st.session_state.get('reroll_key', 0)
-    match_seed = int(hashlib.md5(f"{home}_{away}_{profile}_{reroll}".encode()).hexdigest(), 16)
     
-    # Pool ALLER verfügbaren Märkte
+    # Zufälligerer Seed durch Einbeziehung der Systemzeit beim Reroll
+    seed_raw = f"{home}_{away}_{profile}_{reroll}_{random.randint(1, 100000)}"
+    match_seed = int(hashlib.md5(seed_raw.encode()).hexdigest(), 16)
+    
     candidates = [
-        # 1X2
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1"},
         {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_2"},
         {"tipp": "Unentschieden (X)", "prob": mkts['1X2']['X']['prob'], "base_q": mkts['1X2']['X']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_x"},
         
-        # Doppelte Chance
         {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_1x"},
         {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_x2"},
         {"tipp": f"Doppelte Chance 12 ({home} / {away})", "prob": mkts['DC']['12']['prob'], "base_q": mkts['DC']['12']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_12"},
         
-        # Draw No Bet (DNB)
         {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_1"},
         {"tipp": f"Sieg {away} (Draw No Bet)", "prob": mkts['DNB']['2 DNB']['prob'], "base_q": mkts['DNB']['2 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_2"},
         
-        # Tore Über/Unter
         {"tipp": "Über 0.5 Tore", "prob": mkts['Tore']['Über 0.5']['prob'], "base_q": mkts['Tore']['Über 0.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o05"},
         {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o15"},
         {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o25"},
@@ -602,28 +576,23 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
         {"tipp": "Unter 2.5 Tore", "prob": mkts['Tore']['Unter 2.5']['prob'], "base_q": mkts['Tore']['Unter 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u25"},
         {"tipp": "Unter 3.5 Tore", "prob": mkts['Tore']['Unter 3.5']['prob'], "base_q": mkts['Tore']['Unter 3.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u35"},
         
-        # Team Tore
         {"tipp": f"{home} Über 0.5 Tore", "prob": mkts['TeamTore']['Heim Über 0.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho05"},
         {"tipp": f"{home} Über 1.5 Tore", "prob": mkts['TeamTore']['Heim Über 1.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho15"},
         {"tipp": f"{away} Über 0.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 0.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao05"},
         {"tipp": f"{away} Über 1.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 1.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao15"},
         
-        # BTTS
         {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_ja"},
         {"tipp": "Beide Teams treffen - Nein", "prob": mkts['BTTS']['Nein']['prob'], "base_q": mkts['BTTS']['Nein']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_nein"},
         
-        # Handicap
         {"tipp": f"{home} Handicap -1.5", "prob": mkts['Handicap']['Heim -1.5']['prob'], "base_q": mkts['Handicap']['Heim -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_h15"},
         {"tipp": f"{away} Handicap -1.5", "prob": mkts['Handicap']['Auswärts -1.5']['prob'], "base_q": mkts['Handicap']['Auswärts -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_a15"},
         
-        # Halbzeit
         {"tipp": f"1. Halbzeit: Sieg {home}", "prob": mkts['Halbzeit']['1. HT Sieg Heim']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Heim']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_1"},
         {"tipp": "1. Halbzeit: Unentschieden", "prob": mkts['Halbzeit']['1. HT Unentschieden']['prob'], "base_q": mkts['Halbzeit']['1. HT Unentschieden']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_x"},
         {"tipp": f"1. Halbzeit: Sieg {away}", "prob": mkts['Halbzeit']['1. HT Sieg Auswärts']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Auswärts']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_2"},
         {"tipp": "1. Halbzeit: Über 0.5 Tore", "prob": mkts['Halbzeit']['1. HT Über 0.5']['prob'], "base_q": mkts['Halbzeit']['1. HT Über 0.5']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "hto05"}
     ]
     
-    # Risikoprofil-Filter
     if "Safe Mode" in profile:
         valid = [c for c in candidates if c['prob'] >= 60.0]
         if not valid:
@@ -632,7 +601,7 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
         valid = [c for c in candidates if c['base_q'] >= 2.00]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:3]
-    else: # Balanced Value
+    else:
         valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
         if not valid:
             valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:4]
@@ -661,7 +630,7 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
 if not matches:
     st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.%Y')} - {dt_to.strftime('%d.%m.%Y')}) in den gewählten Ligen gefunden.")
 else:
-    # NEU MISCHEN / REROLL BUTTON
+    # NEU MISCHEN BUTTON (LÖSCHT AUCH DEN ALTEN CACHE)
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
         st.markdown(f"### 🛡️ Aktuelle KI-Scheine ({len(matches)} Spiele geladen)")
@@ -828,3 +797,4 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0
 st.markdown("### 🗂️ Gespeicherte Wettscheine")
 if not st.session_state['saved_tickets']:
     st.info("Bisher keine Scheine hinterlegt.")
+
