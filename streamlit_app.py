@@ -145,8 +145,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Alle Ligen inklusive deutscher Unterligen
 LIGEN = {
-    "🇩🇪 Deutschland (Bundesliga)": "soccer_germany_bundesliga",
+    "🇩🇪 Deutschland (1. Bundesliga)": "soccer_germany_bundesliga",
+    "🇩🇪 Deutschland (2. Bundesliga)": "soccer_germany_liga2",
+    "🇩🇪 Deutschland (3. Liga)": "soccer_germany_liga3",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
     "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
     "🇮🇹 Italien (Serie A)": "soccer_italy_serie_a",
@@ -261,7 +264,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Inkl. DAZN Bet, Spieltag-Filter, Nächste-Woche-Modus & Kalender</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Inkl. DAZN Bet, 1./2./3. Liga, Spieltag-Filter & Kalender</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -280,7 +283,7 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- SIDEBAR (LEER / MINIMAL) ---
 with st.sidebar:
     st.markdown("### 🎛️ Info")
-    st.markdown("Alle Einstellungen (Wettanbieter, Spieltag, Zeitraum & Strategien) befinden sich zentral auf der Hauptseite.")
+    st.markdown("Alle Einstellungen (Wettanbieter, Spieltag, Zeitraum & Ligen) befinden sich zentral auf der Hauptseite.")
 
 # --- HAUPTSEITE (ALLES IN EINEM BEREICH) ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
@@ -336,21 +339,40 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
         kalender_auswahl = st.date_input("Zeitraum für Wetten auswählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl per Häkchen")
-    generator_ligen_modus = st.radio("Ligen-Filter:", ["🌍 Alle europäischen Top-Ligen nutzen", "☑️ Ligen per Häkchen einzeln wählen"], index=0)
+    st.markdown("#### 🏆 Ligen-Auswahl per Häkchen & Aufklapp-System")
     
+    # AUFKLAPP-SYSTEM FÜR DEUTSCHLAND (1., 2., 3. Bundesliga) & RESTLICHE LIGEN
     aktive_generator_ligen = []
-    if generator_ligen_modus == "☑️ Ligen per Häkchen einzeln wählen":
-        col_cb1, col_cb2 = st.columns(2)
-        temp_selected = []
-        for i, liga_name in enumerate(LIGEN.keys()):
-            target_col = col_cb1 if i % 2 == 0 else col_cb2
+    
+    with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=True):
+        chk_bundesliga = st.checkbox("🇩🇪 Deutschland (1. Bundesliga)", value=True, key="chk_BL1")
+        chk_liga2 = st.checkbox("🇩🇪 Deutschland (2. Bundesliga)", value=False, key="chk_BL2")
+        chk_liga3 = st.checkbox("🇩🇪 Deutschland (3. Liga)", value=False, key="chk_BL3")
+        
+        if chk_bundesliga: aktive_generator_ligen.append("🇩🇪 Deutschland (1. Bundesliga)")
+        if chk_liga2: aktive_generator_ligen.append("🇩🇪 Deutschland (2. Bundesliga)")
+        if chk_liga3: aktive_generator_ligen.append("🇩🇪 Deutschland (3. Liga)")
+
+    with st.expander("🌍 Internationale Top-Ligen & Europa", expanded=False):
+        inter_ligen = [
+            "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)",
+            "🇪🇸 Spanien (La Liga)",
+            "🇮🇹 Italien (Serie A)",
+            "🇫🇷 Frankreich (Ligue 1)",
+            "🇹🇷 Türkei (Süper Lig)",
+            "🇳🇱 Niederlande (Eredivisie)",
+            "🇵🇹 Portugal (Primeira Liga)",
+            "🏆 Champions League",
+            "🇪🇺 Europa League",
+            "🌍 Conference League"
+        ]
+        
+        col_il1, col_il2 = st.columns(2)
+        for idx, l_name in enumerate(inter_ligen):
+            target_col = col_il1 if idx % 2 == 0 else col_il2
             with target_col:
-                is_checked = st.checkbox(liga_name, value=(i < 2), key=f"chk_liga_{i}")
-                if is_checked: temp_selected.append(liga_name)
-        aktive_generator_ligen = temp_selected
-    else:
-        aktive_generator_ligen = list(LIGEN.keys())
+                is_chk = st.checkbox(l_name, value=False, key=f"chk_inter_{idx}")
+                if is_chk: aktive_generator_ligen.append(l_name)
 
     st.markdown("---")
     if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
@@ -364,7 +386,7 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
 
 if generate_click:
     if not aktive_generator_ligen: 
-        st.error("Bitte wähle mindestens eine Liga per Häkchen aus!")
+        st.error("Bitte wähle mindestens eine Liga per Häkchen aus den Aufklapp-Menüs aus!")
     else:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         
