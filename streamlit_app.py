@@ -229,21 +229,13 @@ now_de = datetime.now(tz_de)
 today_de = now_de.date()
 tomorrow_de = today_de + timedelta(days=1)
 
-weekday_num = today_de.weekday() # 0 = Mo, 5 = Sa, 6 = So
-if weekday_num == 5: # Samstag
-    sat_de = today_de
-    sun_de = today_de + timedelta(days=1)
-elif weekday_num == 6: # Sonntag
-    sat_de = today_de - timedelta(days=1)
-    sun_de = today_de
-else: # Montag bis Freitag
-    days_to_sat = 5 - weekday_num
-    sat_de = today_de + timedelta(days=days_to_sat)
-    sun_de = sat_de + timedelta(days=1)
+weekday_num = today_de.weekday()
+fri_de = today_de + timedelta(days=(4 - weekday_num))
+sun_de = fri_de + timedelta(days=2)
 
 today_str = today_de.strftime("%d.%m.%Y")
 tomorrow_str = tomorrow_de.strftime("%d.%m.%Y")
-sat_str = sat_de.strftime("%d.%m.")
+fri_str = fri_de.strftime("%d.%m.")
 sun_str = sun_de.strftime("%d.%m.")
 
 # --- HEADER ---
@@ -307,7 +299,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
         [
             f"⚡ HEUTE ({today_str} — Alle Partien)",
             f"📅 MORGEN ({tomorrow_str} — Alle Partien)",
-            f"⚽ WOCHENENDE ({sat_str} & {sun_str} — Samstag & Sonntag)",
+            f"⚽ WOCHENENDE ({fri_str} bis {sun_str} — Fr, Sa & So)",
             "🟢 DIESE WOCHE (Nächste 7 Tage)",
             "📅 Kalender-Bereich wählen"
         ], 
@@ -343,13 +335,13 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
     )
 
     kombi_anzahl = 3
-    multi_budget = 100.0
+    multi_budget = 20.0
     freebet_wert = 20.0
 
     if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-        freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=5, max_value=200, value=20, step=5)
+        freebet_wert = st.number_input("Wert deiner Freebet (€):", min_value=1.0, max_value=500.0, value=20.0, step=5.0)
     elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
-        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
+        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=1.0, max_value=2000.0, value=20.0, step=5.0)
     elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
@@ -362,7 +354,7 @@ if "HEUTE" in gen_zeit_modus:
 elif "MORGEN" in gen_zeit_modus:
     dt_from, dt_to = tomorrow_de, tomorrow_de
 elif "WOCHENENDE" in gen_zeit_modus:
-    dt_from, dt_to = sat_de, sun_de
+    dt_from, dt_to = fri_de, sun_de
 elif "DIESE WOCHE" in gen_zeit_modus:
     dt_from, dt_to = today_de, today_de + timedelta(days=7)
 else:
@@ -444,6 +436,10 @@ if generate_click or 'matches_cache' not in st.session_state:
 
             st.session_state['matches_cache'] = all_loaded_matches
             st.session_state['gen_typ'] = gen_typ
+            st.session_state['multi_budget'] = float(multi_budget)
+            st.session_state['freebet_wert'] = float(freebet_wert)
+            if gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
+                st.session_state['anzahl_wetten'] = int(anzahl_wetten)
 
 matches = st.session_state.get('matches_cache', [])
 
@@ -574,7 +570,7 @@ else:
                 """, unsafe_allow_html=True)
 
     elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-        fb_w = st.session_state.get('freebet_wert', 20)
+        fb_w = st.session_state.get('freebet_wert', freebet_wert)
         fb_picks = matches[:2]
         if len(fb_picks) < 2:
             st.warning("⚠️ Für den Freebet-Modus werden mindestens 2 Spiele benötigt.")
@@ -610,7 +606,7 @@ else:
             st.markdown("</div>", unsafe_allow_html=True)
 
     else:
-        bud = st.session_state.get('multi_budget', 100.0)
+        bud = st.session_state.get('multi_budget', multi_budget)
         e1, e2, e3 = round(bud * 0.25, 2), round(bud * 0.50, 2), round(bud * 0.25, 2)
         
         s1 = matches[0:1]
@@ -618,12 +614,12 @@ else:
         s3 = matches[3:6] if len(matches) >= 6 else matches
 
         tickets = [
-            {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "matches": s1},
-            {"name": "⭐ Schein 2: Hauptgewinn-Kombi", "einsatz": e2, "matches": s2},
-            {"name": "🚀 Schein 3: High-Reward System", "einsatz": e3, "matches": s3}
+            {"name": "🛡️ Schein 1: Solider Anker (25% Budget)", "einsatz": e1, "matches": s1},
+            {"name": "⭐ Schein 2: Hauptgewinn-Kombi (50% Budget)", "einsatz": e2, "matches": s2},
+            {"name": "🚀 Schein 3: High-Reward System (25% Budget)", "einsatz": e3, "matches": s3}
         ]
 
-        st.markdown(f"### 🛡️ Multi-Ticket System (Budget: {bud:.2f} €)")
+        st.markdown(f"### 🛡️ Multi-Ticket System (Gesamtbudget: {bud:.2f} €)")
         for ticket in tickets:
             if ticket['matches']:
                 q_schein = 1.0
