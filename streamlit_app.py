@@ -206,7 +206,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Präziser Tages-Filter & Echte Live-Daten</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Exakte Zeitfenster-Filterung (0:01 – 23:59 Uhr)</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -225,7 +225,7 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- HAUPTSEITE ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Risikoprofil)", expanded=True):
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Zeitfenster)", expanded=True):
     
     anbieter_wahl = st.radio(
         "Wähle deinen bevorzugten Wettanbieter:",
@@ -260,11 +260,10 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Risiko
     gen_zeit_modus = st.selectbox(
         "📅 Zeitraum-Modus wählen:", 
         [
-            "📌 Heute",
-            "📌 Morgen",
-            "📌 Sonntag",
-            "⚡ Wochenende (Freitag – Sonntag)", 
-            "🟢 Ganze Woche (Montag – Sonntag)", 
+            "📌 Freitag (00:01 – 23:59)",
+            "📌 Samstag (00:01 – 23:59)",
+            "📌 Sonntag (00:01 – 23:59)",
+            "🟢 Ganze Woche (Montag 00:01 – Sonntag 23:59)", 
             "📅 Kalender-Bereich wählen"
         ], 
         index=0, 
@@ -308,7 +307,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Risiko
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🔄 Heutige Spiele & Quoten laden", type="primary", use_container_width=True)
+    generate_click = st.button("🔄 Spiele im exakten Zeitfenster laden", type="primary", use_container_width=True)
 
 if generate_click:
     if not aktive_generator_ligen: 
@@ -321,10 +320,40 @@ if generate_click:
         else:
             min_q, max_q = 2.20, 4.50
 
-        with st.spinner("Lade alle heutigen Live-Spiele von der API..."):
+        now = datetime.now()
+        today_date = now.date()
+        
+        # Exakte Ermittlung des Wochentags (0 = Montag, ..., 4 = Freitag, 5 = Samstag, 6 = Sonntag)
+        current_weekday = today_date.weekday()
+
+        if "Freitag" in gen_zeit_modus:
+            # Finde den kommenden oder heutigen Freitag
+            days_to_fri = (4 - current_weekday) % 7
+            target_date = today_date + timedelta(days=days_to_fri)
+            start_dt = datetime.combine(target_date, datetime.min.time()).replace(hour=0, minute=1)
+            end_dt = datetime.combine(target_date, datetime.max.time())
+        elif "Samstag" in gen_zeit_modus:
+            days_to_sat = (5 - current_weekday) % 7
+            target_date = today_date + timedelta(days=days_to_sat)
+            start_dt = datetime.combine(target_date, datetime.min.time()).replace(hour=0, minute=1)
+            end_dt = datetime.combine(target_date, datetime.max.time())
+        elif "Sonntag" in gen_zeit_modus:
+            days_to_sun = (6 - current_weekday) % 7
+            target_date = today_date + timedelta(days=days_to_sun)
+            start_dt = datetime.combine(target_date, datetime.min.time()).replace(hour=0, minute=1)
+            end_dt = datetime.combine(target_date, datetime.max.time())
+        elif "Ganze Woche" in gen_zeit_modus:
+            mo_date = today_date - timedelta(days=current_weekday)
+            so_date = mo_date + timedelta(days=6)
+            start_dt = datetime.combine(mo_date, datetime.min.time()).replace(hour=0, minute=1)
+            end_dt = datetime.combine(so_date, datetime.max.time())
+        else:
+            start_dt = datetime.combine(kalender_auswahl[0], datetime.min.time())
+            end_dt = datetime.combine(kalender_auswahl[1], datetime.max.time())
+
+        with st.spinner("Filtere Spiele im exakten Zeitfenster (0:01 – 23:59)..."):
             
             gefilterte_spiele = []
-            heute_datum = date.today()
             
             for liga_label in aktive_generator_ligen:
                 code = LIGEN[liga_label]
@@ -332,23 +361,23 @@ if generate_click:
                 
                 if isinstance(data, list):
                     for match in data:
-                        # Zeitraum-Prüfung flexibel gestalten
                         commence_str = match.get('commence_time', '')
-                        match_date = heute_datum
-                        match_time_formatted = "Heute"
+                        match_in_range = True
+                        match_time_formatted = "Demnächst"
                         
                         try:
                             if commence_str:
                                 dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00'))
-                                match_date = dt.date()
-                                match_time_formatted = dt.strftime('%H:%M Uhr')
+                                dt_naive = dt.replace(tzinfo=None)
+                                match_time_formatted = dt.strftime('%d.%m. - %H:%M Uhr')
+                                
+                                if not (start_dt <= dt_naive <= end_dt):
+                                    match_in_range = False
                         except Exception:
                             pass
 
-                        # Wenn Modus "Heute" ist, zeige alle heutigen Spiele (oder nahe Live-Spiele)
-                        if gen_zeit_modus == "📌 Heute" and match_date != heute_datum:
-                            # Falls die API Spiele für heute liefert, diese priorisieren
-                            pass
+                        if not match_in_range:
+                            continue
 
                         home, away = match['home_team'], match['away_team']
                         q_home, q_away, q_draw, used_bm = get_strict_preferred_odds(match.get('bookmakers'), anbieter_wahl, home, away)
@@ -378,10 +407,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine Spiele im gewählten Quoten-Bereich für heute gefunden. Probiere ein anderes Risikoprofil (z. B. Balanced Value).")
+        st.warning("⚠️ Keine Spiele im exakten gewählten Zeitfenster (0:01 – 23:59) und Quoten-Bereich gefunden.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Optimierte Einzelwetten (Heutige Live-Spiele)")
+            st.markdown(f"### 📊 Optimierte Einzelwetten (Exaktes Zeitfenster)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
@@ -450,7 +479,7 @@ if 'gefilterte_spiele' in st.session_state:
                     </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Größe verfügbar.")
+                st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Größe im gewählten Zeitraum.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
