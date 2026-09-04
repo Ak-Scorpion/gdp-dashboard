@@ -229,7 +229,7 @@ def extract_all_markets(match_bookmakers, selected_bm_name, home_team, away_team
                     elif name == 'Under':
                         extracted_tips.append({"tipp": f"Unter {point} Tore", "quote": price, "markt": "Tor-Markt ⚽"})
 
-        h2h_market = next((m for m in markets if m.get('key'] == 'h2h'), None)
+        h2h_market = next((m for m in markets if m.get('key') == 'h2h'), None)
         if h2h_market:
             outcomes = h2h_market.get('outcomes', [])
             q_h = next((o['price'] for o in outcomes if o['name'] == home_team), 1.85)
@@ -463,7 +463,6 @@ if generate_click:
                                 })
                                 liga_hat_spiele = True
 
-                # Intelligenter Web-/Echt-Fallback, falls die API für die Liga leer ist
                 if not liga_hat_spiele:
                     paarungen = fallback_match_pool.get(liga_label, [("Top-Team A", "Top-Team B")])
                     for t_home, t_away in paarungen:
