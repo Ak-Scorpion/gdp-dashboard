@@ -36,12 +36,14 @@ def get_active_api_key():
     idx = st.session_state['current_key_index']
     return API_KEYS[idx]
 
+@st.cache_data(ttl=3600)
 def get_total_api_stats():
+    """Gecacht für 1 Stunde, damit die App augenblicklich lädt und nicht hängt."""
     total_remaining = 0
     total_used = 0
     for key in API_KEYS:
         try:
-            res = requests.get(f"https://api.the-odds-api.com/v4/sports/?apiKey={key}")
+            res = requests.get(f"https://api.the-odds-api.com/v4/sports/?apiKey={key}", timeout=2)
             if res.status_code == 200:
                 headers = res.headers
                 total_remaining += int(headers.get('x-requests-remaining', 500))
@@ -59,7 +61,7 @@ def fetch_data_with_rotation(url_template):
         active_key = get_active_api_key()
         url = url_template.format(api_key=active_key)
         try:
-            res = requests.get(url)
+            res = requests.get(url, timeout=5)
             remaining = int(res.headers.get('x-requests-remaining', 1))
             if res.status_code == 401 or remaining <= 0:
                 st.session_state['current_key_index'] = (st.session_state['current_key_index'] + 1) % len(API_KEYS)
@@ -89,11 +91,6 @@ st.markdown("""
         padding: 20px;
         margin-bottom: 16px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        transition: all 0.2s ease;
-    }
-    .bet-card:hover {
-        border-color: #00d47e;
-        transform: translateY(-2px);
     }
     .owner-tag {
         color: #00d47e;
@@ -103,55 +100,24 @@ st.markdown("""
         font-size: 0.75rem;
         margin-bottom: 4px;
     }
-    .main-title {
-        color: #ffffff;
-        font-size: 2.2rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-    }
-    .sub-title {
-        color: #94a3b8;
-        font-size: 0.95rem;
-        margin-bottom: 15px;
-    }
+    .main-title { color: #ffffff; font-size: 2.2rem; font-weight: 800; }
+    .sub-title { color: #94a3b8; font-size: 0.95rem; margin-bottom: 15px; }
     .badge {
-        background-color: #00d47e;
-        color: #070a13;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        font-weight: 800;
-        display: inline-block;
-        margin-bottom: 6px;
-        text-transform: uppercase;
+        background-color: #00d47e; color: #070a13;
+        padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 800;
+        display: inline-block; margin-bottom: 6px; text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
     .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
     .counter-box {
-        background-color: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 12px;
-        padding: 10px 14px;
-        text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
+        padding: 10px 14px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-        background-color: #0f172a;
-        padding: 6px;
-        border-radius: 12px;
-        border: 1px solid #1e293b;
+        gap: 6px; background-color: #0f172a; padding: 6px; border-radius: 12px; border: 1px solid #1e293b;
     }
-    .stTabs [data-baseweb="tab"] {
-        height: 42px;
-        border-radius: 8px;
-        color: #94a3b8;
-        font-weight: 600;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #1e293b !important;
-        color: #00d47e !important;
-    }
+    .stTabs [data-baseweb="tab"] { height: 42px; border-radius: 8px; color: #94a3b8; font-weight: 600; }
+    .stTabs [aria-selected="true"] { background-color: #1e293b !important; color: #00d47e !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -242,7 +208,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Europäische Top-Ligen, 11 API-Keys Gesamt-Tracking & Live-Filter</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen & ultraschnelles Caching</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -264,7 +230,7 @@ with st.sidebar:
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
     gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
     st.markdown("---")
-    st.markdown("💡 Abgelaufene Spiele werden automatisch blockiert.")
+    st.markdown("💡 Ultraschnelles Laden aktiv.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -308,9 +274,7 @@ with tab2:
         
         aktive_generator_ligen = []
         if generator_ligen_modus == "☑️ Ligen per Häkchen einzeln wählen":
-            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem; margin-bottom: 8px;'>Klicke einfach auf die Häkchen (keine Tastatur nötig):</p>", unsafe_allow_html=True)
-            
-            # Schickes Checkbox-Grid für saubere Häkchen-Auswahl ohne Tastatur-Popping
+            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem; margin-bottom: 8px;'>Klicke auf die Häkchen:</p>", unsafe_allow_html=True)
             col_cb1, col_cb2 = st.columns(2)
             temp_selected = []
             for i, liga_name in enumerate(LIGEN.keys()):
