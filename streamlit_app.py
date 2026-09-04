@@ -134,6 +134,16 @@ ligen = {
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
 }
 
+# Buchmacher-Mappen
+BUCHMACHER_MAPPING = {
+    "Alle Anbieter (Bester Markt-Durchschnitt)": "all",
+    "Bwin": "bwin",
+    "Bet365": "bet365",
+    "Unibet": "unibet",
+    "Bet-at-home": "betathome",
+    "Pinnacle": "pinnacle"
+}
+
 def format_datum_and_check_aktuell(date_str):
     if not date_str:
         return "Unbekannt", False
@@ -148,31 +158,54 @@ def format_datum_and_check_aktuell(date_str):
         return date_str, True
 
 def get_torjaeger_tipp(team_name):
-    """Gibt den konkreten Namen des Stürmers zurück oder wählt eine torgefährliche Alternative."""
     if team_name in TOP_STUERMER:
         return f"Tor durch {TOP_STUERMER[team_name]}"
     return f"{team_name} erzielt mind. 2 Tore"
 
+def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
+    """Findet die passenden Quoten basierend auf dem gewählten Buchmacher."""
+    if not match_bookmakers:
+        return None, None, None
+    
+    target_bm = None
+    if selected_bm_key != "all":
+        target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
+    
+    # Fallback auf den ersten verfügbaren Buchmacher, falls der gewählte für das Spiel nicht da ist
+    if not target_bm:
+        target_bm = match_bookmakers[0]
+        
+    odds = target_bm['markets'][0]['outcomes']
+    q_home = next((item['price'] for item in odds if item['name'] == home_team), None)
+    q_away = next((item['price'] for item in odds if item['name'] == away_team), None)
+    q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), None)
+    
+    return q_home, q_away, q_draw
+
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-title">⚽ KI Wettprognosen & Tipico Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyse von Live-Quoten, Anstoßzeiten & KI-generierten Kombi-Scheinen für die nächsten Spiele</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Analyse von Live-Quoten verschiedener Wettanbieter & KI-generierten Kombi-Scheinen</div>', unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
-tab1, tab2 = st.tabs(["📊 Liga Analyse & Quoten", "🎯 Tipico Kombi-Generator"])
+tab1, tab2 = st.tabs(["📊 Liga Analyse & Quoten", "🎯 Kombi-Generator"])
 
 # --- TAB 1: LIGA ANALYSE ---
 with tab1:
-    col_sel, col_space = st.columns([1, 2])
+    col_sel, col_bm = st.columns([2, 1])
     with col_sel:
         ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(ligen.keys()))
-        btn_liga = st.button("🔍 Spiele laden", use_container_width=True)
+    with col_bm:
+        anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(BUCHMACHER_MAPPING.keys()), key="bm_tab1")
+        
+    btn_liga = st.button("🔍 Spiele laden", use_container_width=True)
     
     if btn_liga:
         liga_code = ligen[ausgewaehlte_liga_label]
+        bm_code = BUCHMACHER_MAPPING[anbieter_wahl_tab1]
         url = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
         
-        with st.spinner("Lade Live-Daten für anstehende Spiele..."):
+        with st.spinner(f"Lade Live-Daten ({anbieter_wahl_tab1})..."):
             try:
                 res = requests.get(url)
                 data = res.json()
@@ -187,26 +220,22 @@ with tab1:
                         home = match['home_team']
                         away = match['away_team']
                         
-                        if match.get('bookmakers'):
-                            odds = match['bookmakers'][0]['markets'][0]['outcomes']
-                            q_home = next((item['price'] for item in odds if item['name'] == home), None)
-                            q_away = next((item['price'] for item in odds if item['name'] == away), None)
-                            q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), None)
+                        q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
 
-                            prob_h = round((1 / q_home) * 100) if q_home else 0
-                            prob_d = round((1 / q_draw) * 100) if q_draw else 0
-                            prob_a = round((1 / q_away) * 100) if q_away else 0
+                        prob_h = round((1 / q_home) * 100) if q_home else 0
+                        prob_d = round((1 / q_draw) * 100) if q_draw else 0
+                        prob_a = round((1 / q_away) * 100) if q_away else 0
 
-                            spiele_liste.append({
-                                "Anstoßzeit": match_time,
-                                "Heim": home,
-                                "Auswärts": away,
-                                "Quote 1": q_home,
-                                "Quote X": q_draw,
-                                "Quote 2": q_away,
-                                "Chance Heim": f"{prob_h}%",
-                                "Chance Auswärts": f"{prob_a}%"
-                            })
+                        spiele_liste.append({
+                            "Anstoßzeit": match_time,
+                            "Heim": home,
+                            "Auswärts": away,
+                            "Quote 1": q_home,
+                            "Quote X": q_draw,
+                            "Quote 2": q_away,
+                            "Chance Heim": f"{prob_h}%",
+                            "Chance Auswärts": f"{prob_a}%"
+                        })
                     if spiele_liste:
                         df_display = pd.DataFrame(spiele_liste)
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
@@ -221,18 +250,21 @@ with tab1:
 with tab2:
     st.write("### Einstellungen für deinen KI-Kombi-Schein")
     
-    col_fokus, col_anzahl = st.columns([2, 1])
+    col_fokus, col_bm_gen, col_anzahl = st.columns([2, 1.5, 1])
     with col_fokus:
         fokus_wahl = st.selectbox(
             "Wähle den Fokus der Spiele:",
             ["🌍 Alle Ligen & Europapokale (Gemischt)", "🏆 Nur Europapokal (Champions League, Europa League, ECL)", "🏟️ Nur Top 5 Ligen (Wochenende)"]
         )
+    with col_bm_gen:
+        anbieter_wahl_gen = st.selectbox("Wettanbieter für Quoten:", list(BUCHMACHER_MAPPING.keys()), key="bm_gen")
     with col_anzahl:
-        anzahl_wetten = st.slider("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=5, value=3)
+        anzahl_wetten = st.slider("Anzahl Wetten:", min_value=2, max_value=5, value=3)
         
     generate_click = st.button("🔄 KI Kombi-Schein jetzt generieren", type="primary", use_container_width=True)
 
     if generate_click:
+        bm_code = BUCHMACHER_MAPPING[anbieter_wahl_gen]
         if "Europapokal" in fokus_wahl:
             fokus_ligen = {
                 "Champions League": "soccer_uefa_champs_league",
@@ -255,7 +287,7 @@ with tab2:
 
         moegliche_tipps = []
         
-        with st.spinner("Analysiere Favoriten & konkrete Torschützen..."):
+        with st.spinner(f"Analysiere Live-Quoten von {anbieter_wahl_gen}..."):
             for liga_label, code in fokus_ligen.items():
                 url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
                 try:
@@ -270,11 +302,9 @@ with tab2:
                             home = match['home_team']
                             away = match['away_team']
                             
-                            if match.get('bookmakers'):
-                                odds = match['bookmakers'][0]['markets'][0]['outcomes']
-                                q_home = next((item['price'] for item in odds if item['name'] == home), None)
-                                q_away = next((item['price'] for item in odds if item['name'] == away), None)
-                                
+                            q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            
+                            if q_home or q_away:
                                 # A) KLARER FAVORIT HEIM
                                 if q_home and 1.25 <= q_home <= 1.65:
                                     tor_tipp = get_torjaeger_tipp(home)
@@ -349,35 +379,54 @@ with tab2:
                 if len(kombi_auswahl) == anzahl_wetten:
                     break
             
-            gesamtquote = 1.0
-            st.markdown(f"### 📜 Dein KI Tipico-Kombi-Schein ({len(kombi_auswahl)}er Kombi)")
-            
-            cols = st.columns(len(kombi_auswahl))
-            for idx, tipp in enumerate(kombi_auswahl):
-                gesamtquote *= tipp['Quote']
-                with cols[idx]:
-                    card_html = (
-                        f'<div class="bet-card">'
-                        f'<span class="badge badge-market">{tipp["Markt"]}</span> '
-                        f'<span class="badge" style="background-color: #334155; color: #fff;">{tipp["Liga"]}</span>'
-                        f'<h4 style="color: #ffffff; margin: 8px 0 2px 0;">{tipp["Begegnung"]}</h4>'
-                        f'<p style="color: #00d47e; font-size: 0.8rem; margin-bottom: 10px;">📅 {tipp["Datum"]}</p>'
-                        f'<p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
-                        f'<hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">'
-                        f'<div style="display: flex; justify-content: space-between; align-items: center;">'
-                        f'<span style="color: #64748b; font-size: 0.85rem;">Quote:</span>'
-                        f'<span class="odds-tag">{tipp["Quote"]}</span>'
-                        f'</div>'
-                        f'</div>'
-                    )
-                    st.markdown(card_html, unsafe_allow_html=True)
-            
-            st.divider()
-            
-            col_m1, col_m2 = st.columns([1, 2])
-            with col_m1:
-                st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
-            with col_m2:
-                st.success("✅ Schein erfolgreich generiert! Du kannst die Einstellungen anpassen oder erneut generieren.")
+            st.session_state['kombi_auswahl'] = kombi_auswahl
+            st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
         else:
             st.warning("Für die ausgewählten Filter stehen derzeit nicht genügend Spiele in den nächsten 7 Tagen zur Verfügung.")
+
+    # --- SCHEIN ANZEIGEN UND RECHNER BEREITSTELLEN ---
+    if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
+        kombi_auswahl = st.session_state['kombi_auswahl']
+        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Ausgewählter Anbieter')
+        gesamtquote = 1.0
+        for item in kombi_auswahl:
+            gesamtquote *= item['Quote']
+            
+        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {anbieter_label})")
+        
+        cols = st.columns(len(kombi_auswahl))
+        for idx, tipp in enumerate(kombi_auswahl):
+            with cols[idx]:
+                card_html = (
+                    f'<div class="bet-card">'
+                    f'<span class="badge badge-market">{tipp["Markt"]}</span> '
+                    f'<span class="badge" style="background-color: #334155; color: #fff;">{tipp["Liga"]}</span>'
+                    f'<h4 style="color: #ffffff; margin: 8px 0 2px 0;">{tipp["Begegnung"]}</h4>'
+                    f'<p style="color: #00d47e; font-size: 0.8rem; margin-bottom: 10px;">📅 {tipp["Datum"]}</p>'
+                    f'<p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
+                    f'<hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center;">'
+                    f'<span style="color: #64748b; font-size: 0.85rem;">Quote:</span>'
+                    f'<span class="odds-tag">{tipp["Quote"]}</span>'
+                    f'</div>'
+                    f'</div>'
+                )
+                st.markdown(card_html, unsafe_allow_html=True)
+        
+        st.divider()
+        
+        # --- EINSATZ- & GEWINNRECHNER ---
+        st.subheader(f"💰 Einsatz & Gewinn Rechner ({anbieter_label})")
+        
+        col_q, col_einsatz, col_gewinn = st.columns([1, 1, 1.5])
+        
+        with col_q:
+            st.metric(label="💥 Gesamtquote", value=f"{round(gesamtquote, 2)}")
+            
+        with col_einsatz:
+            einsatz = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
+            
+        with col_gewinn:
+            moeglicher_gewinn = round(einsatz * gesamtquote, 2)
+            st.metric(label="🏆 Möglicher Gewinn", value=f"{moeglicher_gewinn:.2f} €")
+
