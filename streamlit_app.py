@@ -79,10 +79,15 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (TASTATUR-SPERRE FÜR DEN KALENDER) ---
+# --- DESIGNER CSS (VOLLSTÄNDIGE AUSBLENDUNG DER OBEREN LEISTE & TASTATUR-SPERRE) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
+    
+    /* Entfernt die obere Streamlit-Toolbar komplett (Share, Settings, GitHub, Menü) */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
     
     input[aria-label*="Zeitraum"], input[aria-label*="Datum"], input[aria-expanded] {
         caret-color: transparent !important;
