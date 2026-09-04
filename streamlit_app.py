@@ -161,16 +161,7 @@ ANBIETER_URLS = {
 
 def extract_all_markets(match_bookmakers, selected_bm_name, home_team, away_team):
     if not match_bookmakers:
-        q_h = round(random.uniform(1.50, 2.50), 2)
-        q_a = round(random.uniform(2.20, 3.80), 2)
-        q_d = round(random.uniform(3.10, 3.60), 2)
-        return [
-            {"tipp": f"Sieg {home_team} (1X2)", "quote": q_h, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": f"Sieg {away_team} (1X2)", "quote": q_a, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": "Unentschieden (X)", "quote": q_d, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": "Über 2.5 Tore", "quote": round(random.uniform(1.65, 2.10), 2), "markt": "Tor-Markt ⚽"},
-            {"tipp": "Beide Teams treffen - Ja (BTTS)", "quote": round(random.uniform(1.60, 1.95), 2), "markt": "Beide Teams treffen 🔥"}
-        ], selected_bm_name
+        return [], selected_bm_name
 
     bm_map = {
         "Tipico": ["tipico", "bwin", "bet365", "unibet"],
@@ -242,15 +233,6 @@ def extract_all_markets(match_bookmakers, selected_bm_name, home_team, away_team
     except Exception:
         pass
 
-    if not extracted_tips:
-        q_h = round(random.uniform(1.50, 2.50), 2)
-        q_a = round(random.uniform(2.20, 3.80), 2)
-        extracted_tips = [
-            {"tipp": f"Sieg {home_team} (1X2)", "quote": q_h, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": f"Sieg {away_team} (1X2)", "quote": q_a, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": "Über 2.5 Tore", "quote": 1.85, "markt": "Tor-Markt ⚽"}
-        ]
-
     return extracted_tips, used_name
 
 # --- HEADER & COUNTER ---
@@ -258,7 +240,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Intelligenter Live- & Web-Fallback • Alle Märkte</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">100% Echte Live-Spiele • Strikte Ligentrennung</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -277,7 +259,7 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- HAUPTSEITE ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Zeitfenster)", expanded=True):
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitfenster)", expanded=True):
     
     anbieter_wahl = st.radio(
         "Wähle deinen bevorzugten Wettanbieter:",
@@ -287,23 +269,23 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Zeitfe
     )
     
     st.markdown("---")
-    st.markdown("#### 🏆 Top-Ligen & Europapokal (Haken setzen)")
+    st.markdown("#### 🏆 Ligen auswählen (Wähle exakt was du sehen willst)")
     
     aktive_generator_ligen = []
 
     col_l1, col_l2 = st.columns(2)
     with col_l1:
-        if st.checkbox("🇩🇪 1. Bundesliga", value=True, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+        if st.checkbox("🇩🇪 1. Bundesliga", value=False, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
         if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
-        if st.checkbox("🇩🇪 3. Liga", value=True, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
-        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=True, key="h_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
-        if st.checkbox("🇪🇸 La Liga", value=True, key="h_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
+        if st.checkbox("🇩🇪 3. Liga", value=False, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=False, key="h_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+        if st.checkbox("🇪🇸 La Liga", value=False, key="h_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
     with col_l2:
-        if st.checkbox("🇮🇹 Serie A", value=True, key="h_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
-        if st.checkbox("🇫🇷 Ligue 1", value=True, key="h_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
-        if st.checkbox("🏆 Champions League", value=True, key="h_cl"): aktive_generator_ligen.append("🏆 Champions League")
-        if st.checkbox("🇪🇺 Europa League", value=True, key="h_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
-        if st.checkbox("🌍 Conference League", value=True, key="h_co"): aktive_generator_ligen.append("🌍 Conference League")
+        if st.checkbox("🇮🇹 Serie A", value=False, key="h_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
+        if st.checkbox("🇫🇷 Ligue 1", value=False, key="h_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
+        if st.checkbox("🏆 Champions League", value=False, key="h_cl"): aktive_generator_ligen.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=False, key="h_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+        if st.checkbox("🌍 Conference League", value=False, key="h_co"): aktive_generator_ligen.append("🌍 Conference League")
 
     aktive_generator_ligen = list(dict.fromkeys(aktive_generator_ligen))
 
@@ -360,7 +342,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Top-Ligen & Zeitfe
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🔄 KI-Analyse & Spiele laden", type="primary", use_container_width=True)
+    generate_click = st.button("🔄 Exakte Ligaspiele laden", type="primary", use_container_width=True)
 
 if generate_click:
     if not aktive_generator_ligen: 
@@ -403,33 +385,19 @@ if generate_click:
             start_dt = datetime.combine(kalender_auswahl[0], datetime.min.time())
             end_dt = datetime.combine(kalender_auswahl[1], datetime.max.time())
 
-        with st.spinner("KI scannt API & Web-Spielpläne..."):
+        with st.spinner("Lade ausschließlich Spiele der ausgewählten Ligen..."):
             
             gefilterte_spiele = []
             
-            fallback_match_pool = {
-                "🇩🇪 1. Bundesliga": [("Bayern München", "Borussia Dortmund"), ("RB Leipzig", "Bayer Leverkusen"), ("VfB Stuttgart", "Eintracht Frankfurt")],
-                "🇩🇪 2. Bundesliga": [("Hamburger SV", "Hertha BSC"), ("1. FC Köln", "FC Schalke 04"), ("Hannover 96", "1. FC Kaiserslautern")],
-                "🇩🇪 3. Liga": [("Dynamo Dresden", "Arminia Bielefeld"), ("TSV 1860 München", "Rot-Weiss Essen")],
-                "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": [("Arsenal FC", "Manchester City"), ("Liverpool FC", "Manchester United"), ("Chelsea FC", "Tottenham Hotspur")],
-                "🇪🇸 La Liga": [("Real Madrid", "FC Barcelona"), ("Atletico Madrid", "FC Sevilla")],
-                "🇮🇹 Serie A": [("Inter Mailand", "AC Mailand"), ("Juventus Turin", "SSC Neapel")],
-                "🇫🇷 Ligue 1": [("Paris Saint-Germain", "Olympique Marseille"), ("AS Monaco", "Olympique Lyon")],
-                "🏆 Champions League": [("Real Madrid", "Bayern München"), ("Manchester City", "Paris Saint-Germain")],
-                "🇪🇺 Europa League": [("AS Roma", "Ajax Amsterdam"), ("FC Porto", "Villarreal CF")],
-                "🌍 Conference League": [("AC Florenz", "Aston Villa"), ("Fenerbahce", "Lille OSC")]
-            }
-
             for liga_label in aktive_generator_ligen:
                 code = LIGEN[liga_label]
                 data = load_league_odds(code)
-                liga_hat_spiele = False
                 
                 if isinstance(data, list) and len(data) > 0:
                     for match in data:
                         commence_str = match.get('commence_time', '')
                         match_in_range = True
-                        match_time_formatted = "Live / Anstoß heute"
+                        match_time_formatted = "Live / Anstoß"
                         
                         try:
                             if commence_str:
@@ -461,25 +429,6 @@ if generate_click:
                                     "Risk": risiko_profil.split()[0], 
                                     "Anbieter": used_bm
                                 })
-                                liga_hat_spiele = True
-
-                if not liga_hat_spiele:
-                    paarungen = fallback_match_pool.get(liga_label, [("Top-Team A", "Top-Team B")])
-                    for t_home, t_away in paarungen:
-                        all_markets, used_bm = extract_all_markets([], anbieter_wahl, t_home, t_away)
-                        for market_item in all_markets:
-                            q = market_item['quote']
-                            if q is not None and min_q <= q <= max_q:
-                                gefilterte_spiele.append({
-                                    "Liga": liga_label, 
-                                    "Datum": "Heute im Spielplan", 
-                                    "Begegnung": f"{t_home} vs {t_away}", 
-                                    "Tipp": market_item['tipp'], 
-                                    "Quote": q, 
-                                    "Markt": market_item['markt'], 
-                                    "Risk": risiko_profil.split()[0], 
-                                    "Anbieter": used_bm
-                                })
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -499,10 +448,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine Spiele im gewählten Zeitfenster und Quoten-Bereich gefunden. Versuche den Modus 'Egal' bei den Quoten.")
+        st.warning("⚠️ Keine Spiele für diesen Tag in der gewählten Liga (z.B. 2. Bundesliga) in der API verfügbar. Wenn heute kein Spiel stattfindet, bleibt die Liste sauber leer.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 KI-analysierte Wettmärkte")
+            st.markdown(f"### 📊 Echte Live-Wettmärkte")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
@@ -571,7 +520,7 @@ if 'gefilterte_spiele' in st.session_state:
                     </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Größe im gewählten Zeitraum.")
+                st.warning("⚠️ Nicht genügend echte Spiele für diese Kombi-Größe im gewählten Zeitraum.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
