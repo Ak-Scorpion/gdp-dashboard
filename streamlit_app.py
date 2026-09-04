@@ -15,11 +15,21 @@ st.set_page_config(
 # --- DEIN FEST EINGEBAUTER API-KEY ---
 API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
 
-# --- SESSION STATE FÜR COUNTER INITIALISIEREN ---
+def update_api_counter(headers):
+    """Liest die echten API-Limits aus den HTTP-Headern aus."""
+    if 'x-requests-remaining' in headers:
+        st.session_state['api_remaining'] = headers['x-requests-remaining']
+    if 'x-requests-used' in headers:
+        st.session_state['api_used'] = headers['x-requests-used']
+
+# --- AUTOMATISCHER APPS-START INITIALISIERUNGS-CALL (LÄDT DEIN LIVE-GUTHABEN SOFORT) ---
 if 'api_remaining' not in st.session_state:
-    st.session_state['api_remaining'] = "Unbekannt (Noch kein Aufruf)"
-if 'api_used' not in st.session_state:
-    st.session_state['api_used'] = "0"
+    try:
+        init_res = requests.get(f'https://api.the-odds-api.com/v4/sports/?apiKey={API_KEY}')
+        update_api_counter(init_res.headers)
+    except Exception:
+        st.session_state['api_remaining'] = "500"
+        st.session_state['api_used'] = "0"
 
 # --- CUSTOM CSS FÜR PREMIUM DESIGN ---
 st.markdown("""
@@ -139,13 +149,6 @@ WOCHEN_OPTIONS = {
     "⏩ In 4 Wochen (+4 Wochen)": 4
 }
 
-def update_api_counter(headers):
-    """Aktualisiert verbleibendes API-Guthaben aus den HTTP-Antworten."""
-    if 'x-requests-remaining' in headers:
-        st.session_state['api_remaining'] = headers['x-requests-remaining']
-    if 'x-requests-used' in headers:
-        st.session_state['api_used'] = headers['x-requests-used']
-
 def check_und_format_woche(date_str, offset_wochen):
     if not date_str:
         return "Unbekannt", False
@@ -190,10 +193,10 @@ with col_head:
 with col_count:
     st.markdown(f"""
         <div class="counter-box">
-            <span style="color: #8b9bb4; font-size: 0.8rem; font-weight: bold;">📊 API-LIMIT COUNTER</span><br>
-            <span style="color: #00d47e; font-size: 1.4rem; font-weight: 800;">{st.session_state['api_remaining']}</span>
+            <span style="color: #8b9bb4; font-size: 0.8rem; font-weight: bold;">📊 LIVE API-GUTHABEN</span><br>
+            <span style="color: #00d47e; font-size: 1.4rem; font-weight: 800;">{st.session_state.get('api_remaining', '500')}</span>
             <span style="color: #ffffff; font-size: 0.9rem;">/ 500 übrig</span><br>
-            <span style="color: #64748b; font-size: 0.75rem;">Verbraucht: {st.session_state['api_used']} Aufrufe</span>
+            <span style="color: #64748b; font-size: 0.75rem;">Verbraucht: {st.session_state.get('api_used', '0')} Klicks</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -418,3 +421,4 @@ with tab2:
         with col_gewinn:
             moeglicher_gewinn = round(einsatz * gesamtquote, 2)
             st.metric(label="🏆 Möglicher Gewinn", value=f"{moeglicher_gewinn:.2f} €")
+
