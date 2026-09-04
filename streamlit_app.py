@@ -79,33 +79,26 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (MODERN & CLEAN) ---
+# --- DESIGNER CSS (TASTATURSPERRE FÜR ALLE EINGABEN & CLEANES LAYOUT) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
     header[data-testid="stHeader"] { display: none !important; }
     
-    input[aria-label*="Zeitraum"], input[aria-label*="Datum"], input[aria-expanded] {
+    /* VOM-HAND-SCHREIBEN / TASTATUR AUF HANDYS KOMPLETT SPERREN */
+    input, textarea, [data-baseweb="input"] input, [data-baseweb="base-input"] input {
         caret-color: transparent !important;
         pointer-events: auto !important;
     }
-    div[data-baseweb="input"] input { caret-color: transparent !important; }
-
-    .settings-box {
-        background: linear-gradient(135deg, #0f172a 0%, #090d16 100%);
-        border: 1px solid #1e293b;
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    }
+    
     .league-card {
-        background-color: #111827;
-        border: 1px solid #1f2937;
+        background-color: #0f172a;
+        border: 1px solid #1e293b;
         border-radius: 12px;
-        padding: 14px 18px;
-        margin-bottom: 10px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     .bet-card {
         background: linear-gradient(135deg, #111827 0%, #0d1320 100%);
@@ -278,7 +271,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Modernes Design • DAZN Bet • Top-Ligen mit Unterligen & Spieltag-Filter</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Ultra-Übersichtlich • DAZN Bet • Gesperrte Tastatur • Top-Ligen</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -360,7 +353,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=2, step=1)
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Top-Ligen & Unterligen)")
+    st.markdown("#### 🏆 Ligen-Auswahl (Übersichtlich & Kompakt)")
     
     schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen (Bundesliga, PL, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top1")
 
@@ -375,14 +368,14 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
             "🇫🇷 Ligue 1"
         ])
 
-    # Sehr saubere, zweispaltige und übersichtliche Karten für die Ligen
+    # Äußerst sauberes, kartenbasiertes 2-Spalten-Layout für maximale Übersichtlichkeit
     col_l1, col_l2 = st.columns(2)
 
     with col_l1:
         st.markdown('<div class="league-card">', unsafe_allow_html=True)
         chk_de1 = st.checkbox("🇩🇪 1. Bundesliga", value=schnellwahl_top1, key="chk_de1")
         if chk_de1 and "🇩🇪 1. Bundesliga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
-        with st.expander("📂 Unterligen (2. & 3. Liga)", expanded=False):
+        with st.expander("📂 2. & 3. Bundesliga öffnen", expanded=False):
             if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="chk_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
             if st.checkbox("🇩🇪 3. Liga", value=False, key="chk_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -390,14 +383,14 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         st.markdown('<div class="league-card">', unsafe_allow_html=True)
         chk_es1 = st.checkbox("🇪🇸 La Liga", value=schnellwahl_top1, key="chk_es1")
         if chk_es1 and "🇪🇸 La Liga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇪🇸 La Liga")
-        with st.expander("📂 Unterligen (La Liga 2)", expanded=False):
+        with st.expander("📂 La Liga 2 öffnen", expanded=False):
             if st.checkbox("🇪🇸 La Liga 2", value=False, key="chk_es2"): aktive_generator_ligen.append("🇪🇸 La Liga 2")
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="league-card">', unsafe_allow_html=True)
         chk_fr1 = st.checkbox("🇫🇷 Ligue 1", value=schnellwahl_top1, key="chk_fr1")
         if chk_fr1 and "🇫🇷 Ligue 1" not in aktive_generator_ligen: aktive_generator_ligen.append("🇫🇷 Ligue 1")
-        with st.expander("📂 Unterligen (Ligue 2)", expanded=False):
+        with st.expander("📂 Ligue 2 öffnen", expanded=False):
             if st.checkbox("🇫🇷 Ligue 2", value=False, key="chk_fr2"): aktive_generator_ligen.append("🇫🇷 Ligue 2")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -405,19 +398,19 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         st.markdown('<div class="league-card">', unsafe_allow_html=True)
         chk_en1 = st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=schnellwahl_top1, key="chk_en1")
         if chk_en1 and "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" not in aktive_generator_ligen: aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
-        with st.expander("📂 Unterligen (Championship)", expanded=False):
+        with st.expander("📂 Championship öffnen", expanded=False):
             if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship", value=False, key="chk_en2"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship")
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="league-card">', unsafe_allow_html=True)
         chk_it1 = st.checkbox("🇮🇹 Serie A", value=schnellwahl_top1, key="chk_it1")
         if chk_it1 and "🇮🇹 Serie A" not in aktive_generator_ligen: aktive_generator_ligen.append("🇮🇹 Serie A")
-        with st.expander("📂 Unterligen (Serie B)", expanded=False):
+        with st.expander("📂 Serie B öffnen", expanded=False):
             if st.checkbox("🇮🇹 Serie B", value=False, key="chk_it2"): aktive_generator_ligen.append("🇮🇹 Serie B")
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="league-card">', unsafe_allow_html=True)
-    with st.expander("🌍 Weitere Ligen & Europapokal öffnen", expanded=False):
+    with st.expander("🌍 Internationale Ligen & Europa öffnen", expanded=False):
         if st.checkbox("🇹🇷 Süper Lig", value=False, key="chk_tr"): aktive_generator_ligen.append("🇹🇷 Süper Lig")
         if st.checkbox("🇳🇱 Eredivisie", value=False, key="chk_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
         if st.checkbox("🇵🇹 Primeira Liga", value=False, key="chk_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
