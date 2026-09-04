@@ -9,7 +9,7 @@ st.title("⚽ KI Wettprognosen & Kombi-Generator")
 st.write("Vergleiche Quoten und erstelle automatisch KI-Kombi-Scheine.")
 
 # TRAGE HIER DEINEN API-KEY EIN:
-API_KEY = 'DEIN_API_KEY_HIER'
+API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
 
 ligen = {
     "Deutschland (Bundesliga)": "soccer_germany_bundesliga",
