@@ -231,7 +231,7 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
         q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), 3.30)
         return q_home, q_away, q_draw
     except Exception:
-        return 2.10, 3.30, 3.30
+        return 2.10, 3.10, 3.30
 
 # --- HEADER & COUNTER ---
 col_head, col_count = st.columns([3, 1])
@@ -381,16 +381,18 @@ if generate_click:
         
         with st.spinner(f"Lade Quoten bei {anbieter_wahl}..."):
             
-            # Garantiertes Fallback-Spiel (Bielefeld vs St. Pauli) einbinden, damit immer sofort etwas da ist
+            # Garantierte Fallback-Spiele (Bielefeld vs St. Pauli & Hannover vs Karlsruhe)
             garantiertes_spiel = []
             if "🇩🇪 2. Bundesliga" in aktive_generator_ligen:
                 garantiertes_spiel = [
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Sieg Arminia Bielefeld", "Quote": 2.10, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Unentschieden (X)", "Quote": 3.30, "Markt": "Einzelwette 🎯"},
-                    {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Sieg FC St. Pauli", "Quote": 3.10, "Markt": "Einzelwette 🎯"}
+                    {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Sieg FC St. Pauli", "Quote": 3.10, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Sieg Hannover 96", "Quote": 1.95, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Unentschieden (X)", "Quote": 3.40, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Sieg Karlsruher SC", "Quote": 3.60, "Markt": "Einzelwette 🎯"}
                 ]
 
-            # Alle Spiele aus den gewählten Ligen einsammeln
             gesammelte_spiele = list(garantiertes_spiel)
             for liga_label in aktive_generator_ligen:
                 code = LIGEN[liga_label]
@@ -425,7 +427,6 @@ if generate_click:
                     st.session_state['kombi_auswahl'] = kombi_auswahl
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    # Flexibler Fallback, falls weniger Spiele da sind als gewünscht
                     st.session_state['mode_type'] = 'standard'
                     st.session_state['kombi_auswahl'] = gesammelte_spiele[:2] if len(gesammelte_spiele) >= 2 else gesammelte_spiele
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
@@ -450,7 +451,7 @@ if generate_click:
                     st.session_state['freebet_kombi'] = gesammelte_spiele[:1]
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
 
-            else: # Multi-Ticket System ohne harte Abstürze
+            else:
                 e1 = round(multi_budget * 0.25, 2)
                 e2 = round(multi_budget * 0.50, 2)
                 e3 = round(multi_budget * 0.25, 2)
