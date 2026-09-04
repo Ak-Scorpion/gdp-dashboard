@@ -79,14 +79,14 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (STRENGES BLOCKIEREN DER TASTATUR BEI ALLEN AUSWÄHLEN) ---
+# --- DESIGNER CSS (TASTATUR GESPERRT & TIPICO-STYLE DESIGN) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
     header[data-testid="stHeader"] { display: none !important; }
     
-    /* VOM-HAND-SCHREIBEN / TASTATUR AUF MOBILGERÄTEN VOLLSTÄNDIG SPERREN */
+    /* HANDY-TASTATUR VOLLSTÄNDIG BLOCKIEREN */
     input, textarea, select, 
     [data-baseweb="input"] input, 
     [data-baseweb="base-input"] input, 
@@ -267,7 +267,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Tipico-Style • Kompakt • Tastatur gesperrt • DAZN Bet</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Tipico-Style • Haken-System mit Aufklapp-Ligen • Tastatur gesperrt</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -349,26 +349,56 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=2, step=1)
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Tipico-Kompaktansicht & Tastatursperre)")
+    st.markdown("#### 🏆 Ligen-Auswahl (Haken-System mit Aufklapp-Menüs)")
     
-    schnellwahl_top5 = st.checkbox("🔥 Top-5 Ligen Schnellstart (Bundesliga, PL, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top5")
+    # Schnellstart-Schalter für Top-Ligen
+    schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen (Bundesliga, Premier League, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top1")
 
-    alle_ligen_Namen = list(LIGEN.keys())
-    standard_auswahl = [
-        "🇩🇪 1. Bundesliga",
-        "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League",
-        "🇪🇸 La Liga",
-        "🇮🇹 Serie A",
-        "🇫🇷 Ligue 1"
-    ] if schnellwahl_top5 else ["🇩🇪 1. Bundesliga"]
+    aktive_generator_ligen = []
 
-    # Kompakter Multiselect, bei dem durch das CSS jegliches Aufpoppen der Handytastatur unterdrückt wird
-    aktive_generator_ligen = st.multiselect(
-        "Wähle Ligen aus oder füge Unterligen hinzu:",
-        options=alle_ligen_Namen,
-        default=standard_auswahl,
-        key="multiselect_ligen"
-    )
+    if schnellwahl_top1:
+        aktive_generator_ligen.extend([
+            "🇩🇪 1. Bundesliga",
+            "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League",
+            "🇪🇸 La Liga",
+            "🇮🇹 Serie A",
+            "🇫🇷 Ligue 1"
+        ])
+
+    # Saubere Haken-Auswahl mit Aufklappern für Unterligen (Tipico-Stil)
+    st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke auf die Länder, um Unterligen (2. & 3. Ligen) per Haken hinzuzufügen:</p>", unsafe_allow_html=True)
+
+    with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=False):
+        if st.checkbox("🇩🇪 1. Bundesliga", value=schnellwahl_top1, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+        if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
+        if st.checkbox("🇩🇪 3. Liga", value=False, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
+
+    with st.expander("🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League, Championship)", expanded=False):
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=schnellwahl_top1, key="h_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship", value=False, key="h_en2"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship")
+
+    with st.expander("🇪🇸 Spanien (La Liga, La Liga 2)", expanded=False):
+        if st.checkbox("🇪🇸 La Liga", value=schnellwahl_top1, key="h_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
+        if st.checkbox("🇪🇸 La Liga 2", value=False, key="h_es2"): aktive_generator_ligen.append("🇪🇸 La Liga 2")
+
+    with st.expander("🇮🇹 Italien (Serie A, Serie B)", expanded=False):
+        if st.checkbox("🇮🇹 Serie A", value=schnellwahl_top1, key="h_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
+        if st.checkbox("🇮🇹 Serie B", value=False, key="h_it2"): aktive_generator_ligen.append("🇮🇹 Serie B")
+
+    with st.expander("🇫🇷 Frankreich (Ligue 1, Ligue 2)", expanded=False):
+        if st.checkbox("🇫🇷 Ligue 1", value=schnellwahl_top1, key="h_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
+        if st.checkbox("🇫🇷 Ligue 2", value=False, key="h_fr2"): aktive_generator_ligen.append("🇫🇷 Ligue 2")
+
+    with st.expander("🌍 Europapokal & Internationale Ligen", expanded=False):
+        if st.checkbox("🏆 Champions League", value=False, key="h_cl"): aktive_generator_ligen.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=False, key="h_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+        if st.checkbox("🌍 Conference League", value=False, key="h_co"): aktive_generator_ligen.append("🌍 Conference League")
+        if st.checkbox("🇹🇷 Süper Lig", value=False, key="h_tr"): aktive_generator_ligen.append("🇹🇷 Süper Lig")
+        if st.checkbox("🇳🇱 Eredivisie", value=False, key="h_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
+        if st.checkbox("🇵🇹 Primeira Liga", value=False, key="h_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
+
+    # Doppelte Einträge sauber filtern
+    aktive_generator_ligen = list(dict.fromkeys(aktive_generator_ligen))
 
     st.markdown("---")
     generate_click = st.button("🔄 Wetten & Quoten jetzt laden / generieren", type="primary", use_container_width=True)
