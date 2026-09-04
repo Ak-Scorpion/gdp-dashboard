@@ -302,16 +302,24 @@ with tab2:
     with st.expander("⚙️ Ligen- & Ziel-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
         generator_ligen_modus = st.radio(
             "Ligen-Auswahl für diesen Schein:",
-            ["🌍 Alle europäischen Top-Ligen nutzen", "📋 Ligen manuell separat auswählen"],
+            ["🌍 Alle europäischen Top-Ligen nutzen", "☑️ Ligen per Häkchen einzeln wählen"],
             index=0
         )
         
-        if generator_ligen_modus == "📋 Ligen manuell separat auswählen":
-            aktive_generator_ligen = st.multiselect(
-                "Wähle deine Ligen für den Kombi-Schein:",
-                options=list(LIGEN.keys()),
-                default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"]
-            )
+        aktive_generator_ligen = []
+        if generator_ligen_modus == "☑️ Ligen per Häkchen einzeln wählen":
+            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem; margin-bottom: 8px;'>Klicke einfach auf die Häkchen (keine Tastatur nötig):</p>", unsafe_allow_html=True)
+            
+            # Schickes Checkbox-Grid für saubere Häkchen-Auswahl ohne Tastatur-Popping
+            col_cb1, col_cb2 = st.columns(2)
+            temp_selected = []
+            for i, liga_name in enumerate(LIGEN.keys()):
+                target_col = col_cb1 if i % 2 == 0 else col_cb2
+                with target_col:
+                    is_checked = st.checkbox(liga_name, value=(i < 2), key=f"chk_liga_{i}")
+                    if is_checked:
+                        temp_selected.append(liga_name)
+            aktive_generator_ligen = temp_selected
         else:
             aktive_generator_ligen = list(LIGEN.keys())
             
@@ -332,7 +340,7 @@ with tab2:
 
     if generate_click:
         if not aktive_generator_ligen: 
-            st.error("Bitte wähle mindestens eine Liga aus!")
+            st.error("Bitte wähle mindestens eine Liga per Häkchen aus!")
         else:
             bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
