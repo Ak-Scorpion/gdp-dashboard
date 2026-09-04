@@ -15,6 +15,12 @@ st.set_page_config(
 # --- DEIN FEST EINGEBAUTER API-KEY ---
 API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
 
+# --- SESSION STATE FÜR COUNTER INITIALISIEREN ---
+if 'api_remaining' not in st.session_state:
+    st.session_state['api_remaining'] = "Unbekannt (Noch kein Aufruf)"
+if 'api_used' not in st.session_state:
+    st.session_state['api_used'] = "0"
+
 # --- CUSTOM CSS FÜR PREMIUM DESIGN ---
 st.markdown("""
     <style>
@@ -73,6 +79,13 @@ st.markdown("""
         font-size: 1.2rem;
         font-weight: bold;
     }
+    .counter-box {
+        background-color: #1a2234;
+        border: 1px solid #00d47e;
+        border-radius: 10px;
+        padding: 10px 15px;
+        text-align: center;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,19 +139,21 @@ WOCHEN_OPTIONS = {
     "⏩ In 4 Wochen (+4 Wochen)": 4
 }
 
+def update_api_counter(headers):
+    """Aktualisiert verbleibendes API-Guthaben aus den HTTP-Antworten."""
+    if 'x-requests-remaining' in headers:
+        st.session_state['api_remaining'] = headers['x-requests-remaining']
+    if 'x-requests-used' in headers:
+        st.session_state['api_used'] = headers['x-requests-used']
+
 def check_und_format_woche(date_str, offset_wochen):
-    """Prüft, ob das Spiel exakt in die gewählte Woche fällt."""
     if not date_str:
         return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
         jetzt = datetime.utcnow()
-        
-        # Start und Ende der Zielwoche berechnen
         start_zielwoche = jetzt + timedelta(weeks=offset_wochen)
-        # Woche ab Montag/heute bis 7 Tage später
         end_zielwoche = start_zielwoche + timedelta(days=7)
-        
         ist_in_zielwoche = (dt >= start_zielwoche) and (dt < end_zielwoche)
         formatted_str = dt.strftime("%d.%m.%Y um %H:%M Uhr")
         return formatted_str, ist_in_zielwoche
@@ -153,7 +168,6 @@ def get_torjaeger_tipp(team_name):
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
     if not match_bookmakers:
         return None, None, None
-    
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
     if not target_bm:
         target_bm = match_bookmakers[0]
@@ -165,10 +179,23 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
     
     return q_home, q_away, q_draw
 
-# --- HEADER ---
-st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Präzise Wochenauswahl, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
+# --- HEADER BEREICH MIT COUNTER ---
+col_head, col_count = st.columns([3, 1])
+
+with col_head:
+    st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Präzise Wochenauswahl, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
+
+with col_count:
+    st.markdown(f"""
+        <div class="counter-box">
+            <span style="color: #8b9bb4; font-size: 0.8rem; font-weight: bold;">📊 API-LIMIT COUNTER</span><br>
+            <span style="color: #00d47e; font-size: 1.4rem; font-weight: 800;">{st.session_state['api_remaining']}</span>
+            <span style="color: #ffffff; font-size: 0.9rem;">/ 500 übrig</span><br>
+            <span style="color: #64748b; font-size: 0.75rem;">Verbraucht: {st.session_state['api_used']} Aufrufe</span>
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
 tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 Individueller Kombi-Generator"])
@@ -195,6 +222,7 @@ with tab1:
         with st.spinner(f"Lade Quoten für {ausgewaehlte_liga_label} ({gewaehlte_woche_label_tab1})..."):
             try:
                 res = requests.get(url)
+                update_api_counter(res.headers)
                 data = res.json()
 
                 if isinstance(data, list) and len(data) > 0:
@@ -267,6 +295,7 @@ with tab2:
                     url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
                     try:
                         res = requests.get(url)
+                        update_api_counter(res.headers)
                         data = res.json()
                         if isinstance(data, list):
                             for match in data:
