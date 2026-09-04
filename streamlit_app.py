@@ -18,13 +18,10 @@ API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
 # --- CUSTOM CSS FÜR PREMIUM DESIGN ---
 st.markdown("""
     <style>
-    /* Haupt-Hintergrund & Schriftarten */
     .stApp {
         background-color: #0e1117;
         font-family: 'Inter', sans-serif;
     }
-    
-    /* Wett-Karte Styling */
     .bet-card {
         background: linear-gradient(135deg, #1e2638 0%, #151b28 100%);
         border: 1px solid #2e3a52;
@@ -38,8 +35,6 @@ st.markdown("""
         border-color: #00d47e;
         transform: translateY(-2px);
     }
-    
-    /* Header & Titel */
     .owner-tag {
         color: #00d47e;
         font-weight: 700;
@@ -59,8 +54,6 @@ st.markdown("""
         font-size: 1.0rem;
         margin-bottom: 25px;
     }
-    
-    /* Badges / Kategorien */
     .badge {
         background-color: #00d47e;
         color: #0e1117;
@@ -75,8 +68,6 @@ st.markdown("""
         background-color: #3b82f6;
         color: #ffffff;
     }
-    
-    /* Quoten-Text */
     .odds-tag {
         color: #00d47e;
         font-size: 1.2rem;
@@ -120,7 +111,6 @@ ligen = {
 }
 
 def format_datum(date_str):
-    """Konvertiert UTC Datums-String in lesbares deutsches Format."""
     if not date_str:
         return "Unbekannt"
     try:
@@ -218,4 +208,100 @@ with tab2:
                             away = match['away_team']
                             match_time = format_datum(match.get('commence_time'))
                             
-                            if match.get('bookmakers
+                            if match.get('bookmakers'):
+                                odds = match['bookmakers'][0]['markets'][0]['outcomes']
+                                q_home = next((item['price'] for item in odds if item['name'] == home), None)
+                                q_away = next((item['price'] for item in odds if item['name'] == away), None)
+                                
+                                # 1. Favorit Heim
+                                if q_home and 1.20 <= q_home <= 1.45:
+                                    stuermer = TOP_STUERGME.get(home, f"Top-Torjäger ({home})")
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.70, "Markt": "Torschütze ⚽"
+                                    })
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": "Über 2.5 Tore im Spiel", "Quote": 1.55, "Markt": "Über 2.5 Tore 🔥"
+                                    })
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": f"Sieg {home} & Über 2.5 Tore", "Quote": round(q_home * 1.45, 2), "Markt": "Sieg + Tore 💥"
+                                    })
+
+                                if q_away and 1.20 <= q_away <= 1.45:
+                                    stuermer = TOP_STUERGME.get(away, f"Top-Torjäger ({away})")
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.75, "Markt": "Torschütze ⚽"
+                                    })
+
+                                # 2. Moderate Matches
+                                if q_home and 1.46 <= q_home <= 1.85:
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
+                                    })
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.30, "Markt": "Über 1.5 Tore ⚽"
+                                    })
+
+                                # 3. Ausgeglichene Matches
+                                if (q_home and q_home > 1.85) or (q_away and q_away > 1.85):
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.65, "Markt": "BTTS 🔥"
+                                    })
+                                    moegliche_tipps.append({
+                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                        "Tipp": f"Doppelte Chance (1X {home})", "Quote": 1.38, "Markt": "Doppelte Chance 🔒"
+                                    })
+                except Exception:
+                    pass
+
+        if len(moegliche_tipps) >= 3:
+            random.shuffle(moegliche_tipps)
+            
+            ausgewaehlte_spiele = set()
+            kombi_auswahl = []
+            
+            for tipp in moegliche_tipps:
+                if tipp['Begegnung'] not in ausgewaehlte_spiele:
+                    kombi_auswahl.append(tipp)
+                    ausgewaehlte_spiele.add(tipp['Begegnung'])
+                if len(kombi_auswahl) == 3:
+                    break
+            
+            gesamtquote = 1.0
+            st.markdown("### 📜 Dein KI Tipico-Kombi-Schein")
+            
+            cols = st.columns(3)
+            for idx, tipp in enumerate(kombi_auswahl):
+                gesamtquote *= tipp['Quote']
+                with cols[idx]:
+                    card_html = (
+                        f'<div class="bet-card">'
+                        f'<span class="badge badge-market">{tipp["Markt"]}</span> '
+                        f'<span class="badge" style="background-color: #334155; color: #fff;">{tipp["Liga"]}</span>'
+                        f'<h4 style="color: #ffffff; margin: 8px 0 2px 0;">{tipp["Begegnung"]}</h4>'
+                        f'<p style="color: #00d47e; font-size: 0.8rem; margin-bottom: 10px;">📅 {tipp["Datum"]}</p>'
+                        f'<p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
+                        f'<hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">'
+                        f'<div style="display: flex; justify-content: space-between; align-items: center;">'
+                        f'<span style="color: #64748b; font-size: 0.85rem;">Quote:</span>'
+                        f'<span class="odds-tag">{tipp["Quote"]}</span>'
+                        f'</div>'
+                        f'</div>'
+                    )
+                    st.markdown(card_html, unsafe_allow_html=True)
+            
+            st.divider()
+            
+            col_m1, col_m2 = st.columns([1, 2])
+            with col_m1:
+                st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
+            with col_m2:
+                st.success("✅ Schein erfolgreich generiert! Klicke erneut auf den Button oben, um neue Variationen zu sehen.")
+        else:
+            st.warning("Momentan stehen nicht genügend Spiele zur Verfügung. Versuche es vor dem Spieltag erneut.")
