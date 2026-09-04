@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -78,52 +78,26 @@ st.markdown("""
 
 # --- ERWEITERTE TORJÄGER-DATENBANK ---
 TOP_STUERMER = {
-    # Deutschland
     "FC Bayern München": "Harry Kane", "Bayern Munich": "Harry Kane",
     "Eintracht Frankfurt": "Omar Marmoush",
     "Borussia Dortmund": "Serhou Guirassy",
     "Bayer Leverkusen": "Victor Boniface",
     "RB Leipzig": "Loïs Openda",
     "VfB Stuttgart": "Deniz Undav",
-    "Borussia Mönchengladbach": "Tim Kleindienst",
-    
-    # England
     "Manchester City": "Erling Haaland",
     "Liverpool": "Mohamed Salah",
     "Arsenal": "Bukayo Saka",
     "Chelsea": "Cole Palmer",
     "Tottenham Hotspur": "Son Heung-min",
-    "Manchester United": "Rasmus Højlund",
-    "Aston Villa": "Ollie Watkins",
-    "Newcastle United": "Alexander Isak",
-    
-    # Spanien
     "Real Madrid": "Kylian Mbappé",
     "FC Barcelona": "Robert Lewandowski", "Barcelona": "Robert Lewandowski",
-    "Atletico Madrid": "Antoine Griezmann", "Atlético Madrid": "Antoine Griezmann",
-    "Athletic Bilbao": "Iñaki Williams",
-    "Villarreal": "Ayoze Pérez",
-    
-    # Italien
+    "Atletico Madrid": "Antoine Griezmann",
     "Inter Milan": "Lautaro Martínez", "Inter": "Lautaro Martínez",
     "Juventus": "Dušan Vlahović",
-    "AC Milan": "Alvaro Morata",
-    "Napoli": "Romelu Lukaku",
-    "Atalanta": "Ademola Lookman",
-    "Lazio": "Taty Castellanos",
-    
-    # Frankreich & International
-    "Paris Saint-Germain": "Ousmane Dembélé", "PSG": "Ousmane Dembélé",
-    "Marseille": "Mason Greenwood",
-    "Lille": "Jonathan David",
-    "Sporting CP": "Viktor Gyökeres",
-    "Benfica": "Vangelis Pavlidis",
-    "FC Porto": "Samu Omorodion",
-    "Galatasaray": "Victor Osimhen",
-    "Feyenoord": "Santiago Giménez"
+    "Paris Saint-Germain": "Ousmane Dembélé", "PSG": "Ousmane Dembélé"
 }
 
-ligen = {
+LIGEN = {
     "🇩🇪 Deutschland (Bundesliga)": "soccer_germany_bundesliga",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
     "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
@@ -134,40 +108,27 @@ ligen = {
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
 }
 
-# MAPPING DEUTSCHER WETTANBIETER
 DEUTSCHE_ANBIETER = {
     "Tipico": "bwin",
     "Neo.bet": "bwin",
     "bwin (Deutschland)": "bwin",
     "Bet-at-home": "betathome",
-    "Winamax": "bwin",
     "Bet365 (DE)": "bet365",
     "Betano": "bwin",
     "Oddset": "bwin"
 }
 
-SPIELTAG_FILTER = {
-    "📅 Aktueller Spieltag (Nächste 7 Tage)": (0, 7),
-    "⏩ Nächster Spieltag (Tag 8 - 14)": (8, 14),
-    "🔮 Übernächster Spieltag (Tag 15 - 21)": (15, 21),
-    "📆 Alle kommenden Spieltage (Nächste 30 Tage)": (0, 30)
-}
+# Generiere Liste von Spieltag 1 bis 34
+SPIELTAGE = [f"{i}. Spieltag" for i in range(1, 35)] + ["Aktuelle Woche (Standard)"]
 
-def format_datum_and_check_zeitfenster(date_str, min_tage, max_tage):
-    """Prüft, ob das Spiel im gewählten Spieltags-Zeitfenster liegt."""
+def format_datum(date_str):
     if not date_str:
-        return "Unbekannt", False
+        return "Unbekannt"
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
-        jetzt = datetime.utcnow()
-        start_fenster = jetzt + timedelta(days=min_tage)
-        end_fenster = jetzt + timedelta(days=max_tage)
-        
-        ist_im_fenster = start_fenster <= dt <= end_fenster
-        formatted_str = dt.strftime("%d.%m.%Y um %H:%M Uhr")
-        return formatted_str, ist_im_fenster
+        return dt.strftime("%d.%m.%Y um %H:%M Uhr")
     except Exception:
-        return date_str, True
+        return date_str
 
 def get_torjaeger_tipp(team_name):
     if team_name in TOP_STUERMER:
@@ -192,31 +153,30 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyse von Live-Quoten deutscher Wettanbieter nach Spieltagen & KI Kombi-Scheinen</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Präzise Spieltag-Analyse, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
-tab1, tab2 = st.tabs(["📊 Liga Analyse & Quoten", "🎯 Kombi-Generator"])
+tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spieltag", "🎯 Individueller Kombi-Generator"])
 
-# --- TAB 1: LIGA ANALYSE ---
+# --- TAB 1: EINZELNE LIGA ANALYSE ---
 with tab1:
-    col_sel, col_sp, col_bm = st.columns([2, 2, 1.5])
+    col_sel, col_sp, col_bm = st.columns([2, 1.5, 1.5])
     with col_sel:
-        ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(ligen.keys()))
+        ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(LIGEN.keys()))
     with col_sp:
-        spieltag_wahl_tab1 = st.selectbox("Spieltag / Zeitraum:", list(SPIELTAG_FILTER.keys()), key="sp_tab1")
+        gewaehlter_spieltag_tab1 = st.selectbox("Spieltag wählen:", SPIELTAGE, index=len(SPIELTAGE)-1, key="sp_tab1")
     with col_bm:
-        anbieter_wahl_tab1 = st.selectbox("Deutscher Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
+        anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
         
     btn_liga = st.button("🔍 Spiele laden", use_container_width=True)
     
     if btn_liga:
-        liga_code = ligen[ausgewaehlte_liga_label]
+        liga_code = LIGEN[ausgewaehlte_liga_label]
         bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
-        min_d, max_d = SPIELTAG_FILTER[spieltag_wahl_tab1]
         
         url = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
         
-        with st.spinner(f"Lade Quoten für {spieltag_wahl_tab1}..."):
+        with st.spinner(f"Lade Quoten für {ausgewaehlte_liga_label} ({gewaehlter_spieltag_tab1})..."):
             try:
                 res = requests.get(url)
                 data = res.json()
@@ -224,10 +184,7 @@ with tab1:
                 if isinstance(data, list) and len(data) > 0:
                     spiele_liste = []
                     for match in data:
-                        match_time, ist_passend = format_datum_and_check_zeitfenster(match.get('commence_time'), min_d, max_d)
-                        if not ist_passend:
-                            continue
-                            
+                        match_time = format_datum(match.get('commence_time'))
                         home = match['home_team']
                         away = match['away_team']
                         
@@ -251,154 +208,116 @@ with tab1:
                         df_display = pd.DataFrame(spiele_liste)
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
                     else:
-                        st.info("Keine anstehenden Spiele für das gewählte Spieltags-Fenster gefunden.")
+                        st.info("Keine Begegnungen für den gewählten Filter gefunden.")
                 else:
                     st.error("Keine Spiele gefunden oder API-Limit erreicht.")
             except Exception as e:
                 st.error(f"Fehler beim Abrufen der Daten: {e}")
 
-# --- TAB 2: KOMBI GENERATOR ---
+# --- TAB 2: INDIVIDUELLER KOMBI GENERATOR ---
 with tab2:
-    st.write("### Einstellungen für deinen KI-Kombi-Schein")
+    st.write("### ⚙️ Eigene Ligen & Einstellungen festlegen")
     
-    col_fokus, col_sp_gen, col_bm_gen, col_anzahl = st.columns([2, 2, 1.5, 1])
-    with col_fokus:
-        fokus_wahl = st.selectbox(
-            "Wähle den Fokus der Spiele:",
-            ["🌍 Alle Ligen & Europapokale (Gemischt)", "🏆 Nur Europapokal (Champions League, Europa League, ECL)", "🏟️ Nur Top 5 Ligen"]
+    col_ligen, col_settings = st.columns([2, 1])
+    
+    with col_ligen:
+        ausgewaehlte_ligen = st.multiselect(
+            "Wähle deine gewünschten Ligen aus (einzeln oder gemischt):",
+            options=list(LIGEN.keys()),
+            default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"]
         )
-    with col_sp_gen:
-        spieltag_wahl_gen = st.selectbox("Spieltag / Zeitraum:", list(SPIELTAG_FILTER.keys()), key="sp_gen")
-    with col_bm_gen:
+        
+    with col_settings:
+        gewaehlter_spieltag_gen = st.selectbox("Spieltag / Zeitraum:", SPIELTAGE, index=len(SPIELTAGE)-1, key="sp_gen")
         anbieter_wahl_gen = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_gen")
-    with col_anzahl:
-        anzahl_wetten = st.slider("Anzahl Wetten:", min_value=2, max_value=5, value=3)
+        anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=10, value=3, step=1)
         
     generate_click = st.button("🔄 KI Kombi-Schein jetzt generieren", type="primary", use_container_width=True)
 
     if generate_click:
-        bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
-        min_d, max_d = SPIELTAG_FILTER[spieltag_wahl_gen]
-        
-        if "Europapokal" in fokus_wahl:
-            fokus_ligen = {
-                "Champions League": "soccer_uefa_champs_league",
-                "Europa League": "soccer_uefa_europa_league",
-                "Conference League": "soccer_uefa_europa_conference_league"
-            }
-        elif "Top 5" in fokus_wahl:
-            fokus_ligen = {
-                "Bundesliga": "soccer_germany_bundesliga", "Premier League": "soccer_epl",
-                "La Liga": "soccer_spain_la_liga", "Serie A": "soccer_italy_serie_a",
-                "Ligue 1": "soccer_france_ligue_one"
-            }
+        if not ausgewaehlte_ligen:
+            st.error("Bitte wähle mindestens eine Liga aus!")
         else:
-            fokus_ligen = {
-                "Bundesliga": "soccer_germany_bundesliga", "Premier League": "soccer_epl",
-                "La Liga": "soccer_spain_la_liga", "Serie A": "soccer_italy_serie_a",
-                "Ligue 1": "soccer_france_ligue_one", "Champions League": "soccer_uefa_champs_league",
-                "Europa League": "soccer_uefa_europa_league", "Conference League": "soccer_uefa_europa_conference_league"
-            }
-
-        moegliche_tipps = []
-        
-        with st.spinner(f"Analysiere Spiele für {spieltag_wahl_gen} ({anbieter_wahl_gen})..."):
-            for liga_label, code in fokus_ligen.items():
-                url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
-                try:
-                    res = requests.get(url)
-                    data = res.json()
-                    if isinstance(data, list):
-                        for match in data:
-                            match_time, ist_passend = format_datum_and_check_zeitfenster(match.get('commence_time'), min_d, max_d)
-                            if not ist_passend:
-                                continue
+            bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
+            moegliche_tipps = []
+            
+            with st.spinner("Analysiere gewählte Ligen & Spieltage..."):
+                for liga_label in ausgewaehlte_ligen:
+                    code = LIGEN[liga_label]
+                    url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
+                    try:
+                        res = requests.get(url)
+                        data = res.json()
+                        if isinstance(data, list):
+                            for match in data:
+                                match_time = format_datum(match.get('commence_time'))
+                                home = match['home_team']
+                                away = match['away_team']
                                 
-                            home = match['home_team']
-                            away = match['away_team']
-                            
-                            q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                            
-                            if q_home or q_away:
-                                # A) KLARER FAVORIT HEIM
-                                if q_home and 1.25 <= q_home <= 1.65:
-                                    tor_tipp = get_torjaeger_tipp(home)
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": tor_tipp, "Quote": 1.75, "Markt": "Torschütze / Tore ⚽"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": round(q_home * 1.30, 2), "Markt": "Sieg + Tore 💥"
-                                    })
+                                q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                                
+                                if q_home or q_away:
+                                    # A) KLARER FAVORIT HEIM
+                                    if q_home and 1.25 <= q_home <= 1.65:
+                                        tor_tipp = get_torjaeger_tipp(home)
+                                        moegliche_tipps.append({
+                                            "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                            "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
+                                        })
+                                        moegliche_tipps.append({
+                                            "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                            "Tipp": tor_tipp, "Quote": 1.75, "Markt": "Torschütze / Tore ⚽"
+                                        })
 
-                                # B) KLARER FAVORIT AUSWÄRTS
-                                if q_away and 1.25 <= q_away <= 1.65:
-                                    tor_tipp = get_torjaeger_tipp(away)
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": tor_tipp, "Quote": 1.80, "Markt": "Torschütze / Tore ⚽"
-                                    })
+                                    # B) KLARER FAVORIT AUSWÄRTS
+                                    if q_away and 1.25 <= q_away <= 1.65:
+                                        tor_tipp = get_torjaeger_tipp(away)
+                                        moegliche_tipps.append({
+                                            "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                            "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"
+                                        })
+                                        moegliche_tipps.append({
+                                            "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                            "Tipp": tor_tipp, "Quote": 1.80, "Markt": "Torschütze / Tore ⚽"
+                                        })
 
-                                # C) LEICHTER FAVORIT / VALUE WETTE
-                                if q_home and 1.66 <= q_home <= 2.30 and (not q_away or q_home < q_away):
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Value Sieg 🎯"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Doppelte Chance (1X {home})", "Quote": round(q_home * 0.70, 2) if q_home * 0.70 >= 1.25 else 1.28, "Markt": "Doppelte Chance 🔒"
-                                    })
+                                    # C) LEICHTER FAVORIT / VALUE WETTE
+                                    if q_home and 1.66 <= q_home <= 2.30 and (not q_away or q_home < q_away):
+                                        moegliche_tipps.append({
+                                            "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
+                                            "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Value Sieg 🎯"
+                                        })
 
-                                if q_away and 1.66 <= q_away <= 2.30 and (not q_home or q_away < q_home):
+                                    # D) TORMARKT
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Value Sieg 🎯"
+                                        "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Über 1.5 Tore ⚽"
                                     })
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Doppelte Chance (X2 {away})", "Quote": round(q_away * 0.70, 2) if q_away * 0.70 >= 1.25 else 1.28, "Markt": "Doppelte Chance 🔒"
+                                        "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.68, "Markt": "BTTS 🔥"
                                     })
+                    except Exception:
+                        pass
 
-                                # D) TORMARKT
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                    "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Über 1.5 Tore ⚽"
-                                })
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                    "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.68, "Markt": "BTTS 🔥"
-                                })
-                except Exception:
-                    pass
-
-        if len(moegliche_tipps) >= anzahl_wetten:
-            random.shuffle(moegliche_tipps)
-            
-            ausgewaehlte_spiele = set()
-            kombi_auswahl = []
-            
-            for tipp in moegliche_tipps:
-                if tipp['Begegnung'] not in ausgewaehlte_spiele:
-                    kombi_auswahl.append(tipp)
-                    ausgewaehlte_spiele.add(tipp['Begegnung'])
-                if len(kombi_auswahl) == anzahl_wetten:
-                    break
-            
-            st.session_state['kombi_auswahl'] = kombi_auswahl
-            st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
-            st.session_state['gewaehlter_spieltag'] = spieltag_wahl_gen
-        else:
-            st.warning("Für das ausgewählte Spieltags-Fenster stehen derzeit nicht genügend Quoten zur Verfügung.")
+            if len(moegliche_tipps) >= anzahl_wetten:
+                random.shuffle(moegliche_tipps)
+                
+                ausgewaehlte_spiele = set()
+                kombi_auswahl = []
+                
+                for tipp in moegliche_tipps:
+                    if tipp['Begegnung'] not in ausgewaehlte_spiele:
+                        kombi_auswahl.append(tipp)
+                        ausgewaehlte_spiele.add(tipp['Begegnung'])
+                    if len(kombi_auswahl) == anzahl_wetten:
+                        break
+                
+                st.session_state['kombi_auswahl'] = kombi_auswahl
+                st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
+                st.session_state['gewaehlter_spieltag'] = gewaehlter_spieltag_gen
+            else:
+                st.warning(f"Für die gewählten Ligen stehen derzeit nur {len(moegliche_tipps)} verwertbare Quoten zur Verfügung.")
 
     # --- SCHEIN ANZEIGEN UND RECHNER BEREITSTELLEN ---
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
