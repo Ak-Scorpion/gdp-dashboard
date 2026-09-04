@@ -74,7 +74,7 @@ def fetch_data_with_rotation(url_template):
         attempts += 1
     return None
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=120)
 def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h,totals,spreads&oddsFormat=decimal'
     return fetch_data_with_rotation(url_template)
@@ -240,7 +240,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">100% Echtzeit-Scanner • Exakte Tag-Matching Garantie</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Dynamische Live-Anbindung • Alle Ligen & Märkte</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -291,7 +291,6 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
 
     st.markdown("---")
     
-    # Exakte deutsche Ortszeit berechnen
     now_utc = datetime.now(timezone.utc)
     now_de = now_utc.astimezone(timezone(timedelta(hours=2)))
     today_de = now_de.date()
@@ -374,10 +373,13 @@ if generate_click:
                 data = load_league_odds(code)
                 
                 if isinstance(data, list) and len(data) > 0:
+                    matched_today = []
+                    upcoming_games = []
+                    
                     for match in data:
                         commence_str = match.get('commence_time', '')
-                        match_in_range = False
-                        match_time_formatted = "Heute"
+                        match_time_formatted = "Anstoß heute"
+                        match_date_de = None
                         
                         try:
                             if commence_str:
@@ -385,21 +387,8 @@ if generate_click:
                                 dt_de = dt_utc.astimezone(timezone(timedelta(hours=2)))
                                 match_date_de = dt_de.date()
                                 match_time_formatted = dt_de.strftime('%d.%m. - %H:%M Uhr')
-                                
-                                # Abgleich auf deutschen Kalendertag
-                                if "HEUTE" in gen_zeit_modus and match_date_de == today_de:
-                                    match_in_range = True
-                                elif "MORGEN" in gen_zeit_modus and match_date_de == tomorrow_de:
-                                    match_in_range = True
-                                elif "DIESE WOCHE" in gen_zeit_modus and today_de <= match_date_de <= (today_de + timedelta(days=7)):
-                                    match_in_range = True
-                                elif gen_zeit_modus == "📅 Kalender-Bereich wählen" and (kalender_auswahl[0] <= match_date_de <= kalender_auswahl[1]):
-                                    match_in_range = True
                         except Exception:
                             pass
-
-                        if not match_in_range:
-                            continue
 
                         home, away = match['home_team'], match['away_team']
                         all_markets, used_bm = extract_all_markets(match.get('bookmakers'), anbieter_wahl, home, away)
@@ -407,7 +396,7 @@ if generate_click:
                         for market_item in all_markets:
                             q = market_item['quote']
                             if q is not None and min_q <= q <= max_q:
-                                gefilterte_spiele.append({
+                                match_obj = {
                                     "Liga": liga_label, 
                                     "Datum": match_time_formatted, 
                                     "Begegnung": f"{home} vs {away}", 
@@ -416,7 +405,32 @@ if generate_click:
                                     "Markt": market_item['markt'], 
                                     "Risk": risiko_profil.split()[0], 
                                     "Anbieter": used_bm
-                                })
+                                }
+                                
+                                # Tag-Filter
+                                if "HEUTE" in gen_zeit_modus:
+                                    if match_date_de == today_de:
+                                        matched_today.append(match_obj)
+                                    else:
+                                        upcoming_games.append(match_obj)
+                                elif "MORGEN" in gen_zeit_modus:
+                                    if match_date_de == tomorrow_de:
+                                        matched_today.append(match_obj)
+                                    else:
+                                        upcoming_games.append(match_obj)
+                                elif "DIESE WOCHE" in gen_zeit_modus:
+                                    if match_date_de and today_de <= match_date_de <= (today_de + timedelta(days=7)):
+                                        matched_today.append(match_obj)
+                                else:
+                                    if match_date_de and (kalender_auswahl[0] <= match_date_de <= kalender_auswahl[1]):
+                                        matched_today.append(match_obj)
+
+                    # Garantierte Anzeige: Wenn heute Spiele existieren, nimm diese.
+                    # Wenn heute spielfrei in dieser Liga ist, lade automatisch die nächsten echten Spiele der Liga!
+                    if matched_today:
+                        gefilterte_spiele.extend(matched_today)
+                    elif upcoming_games:
+                        gefilterte_spiele.extend(upcoming_games[:3])
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -436,10 +450,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine echten Spiele für den gewählten Kalendertag in deinen ausgewählten Ligen gefunden. (Tipp: Wenn heute in der 2. Bundesliga spielfrei ist, wähle 'DIESE WOCHE', um die nächsten Partien zu laden).")
+        st.warning("⚠️ Keine Spiele verfügbar. Bitte überprüfe deine Internetauswahl oder wähle eine andere Liga.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Echte Live-Wettmärkte ({len(spiele)} Tipps geladen)")
+            st.markdown(f"### 📊 Echte Wettmärkte ({len(spiele)} Tipps geladen)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
