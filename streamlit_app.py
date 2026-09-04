@@ -171,7 +171,7 @@ with col_count:
     """, unsafe_allow_html=True)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 KI Kombi-Generator (Mit Ziel-Gewinn Option)"])
+tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 KI Kombi-Generator (Mit Realismus-Schutz)"])
 
 # --- TAB 1 ---
 with tab1:
@@ -225,20 +225,19 @@ with tab2:
     
     st.divider()
     
-    # --- OPTION: ZIEL-GEWINN MODUS AN/AUS ---
-    use_target_mode = st.checkbox("🎯 Ziel-Gewinn-Modus aktivieren (Echtgeld-Ziel vorgeben)", value=False)
+    use_target_mode = st.checkbox("🎯 Realistischen Ziel-Gewinn-Modus aktivieren", value=False)
     
     if use_target_mode:
         col_e1, col_g1 = st.columns(2)
         with col_e1:
             einsatz_target = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
         with col_g1:
-            gewinn_target = st.number_input("Dein Wunsch-Gewinn (€):", min_value=2.0, max_value=10000.0, value=200.0, step=10.0)
+            gewinn_target = st.number_input("Dein Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=50.0, step=10.0)
         
         ziel_quote = round(gewinn_target / einsatz_target, 2)
-        st.info(f"💡 Die KI wird versuchen, eine Gesamtquote von ca. **{ziel_quote}** zu erreichen (Ziel: Aus {einsatz_target:.2f} € ➔ {gewinn_target:.2f} € machen).")
+        st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Max. 5 echte Top-Tipps für höchste Gewinnchancen).")
     else:
-        anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=10, value=3, step=1)
+        anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=6, value=3, step=1)
 
     generate_click = st.button("🔄 KI Kombi-Schein jetzt generieren", type="primary", use_container_width=True)
 
@@ -250,7 +249,7 @@ with tab2:
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
             moegliche_tipps = []
             
-            with st.spinner("Analysiere gewählte Ligen & Quoten..."):
+            with st.spinner("Analysiere Favoriten & berechne realistische Gewinnchancen..."):
                 for liga_label in ausgewaehlte_ligen:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -262,21 +261,22 @@ with tab2:
                             q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                if q_home and 1.20 <= q_home <= 1.70:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"})
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(home), "Quote": 1.75, "Markt": "Torschütze / Tore ⚽"})
-                                if q_away and 1.20 <= q_away <= 1.70:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"})
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(away), "Quote": 1.80, "Markt": "Torschütze / Tore ⚽"})
-                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Über 1.5 Tore ⚽"})
-                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.68, "Markt": "BTTS 🔥"})
+                                # A) NATIVE FAVORITEN (Sehr hohe Realität)
+                                if q_home and 1.25 <= q_home <= 1.85:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Sicherer Favorit 🛡️"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(home), "Quote": 1.75, "Markt": "Top-Torschütze ⚽"})
+                                if q_away and 1.25 <= q_away <= 1.85:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Sicherer Favorit 🛡️"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(away), "Quote": 1.80, "Markt": "Top-Torschütze ⚽"})
+                                
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Sicherheits-Tore ⚽"})
 
             if len(moegliche_tipps) >= 2:
                 random.shuffle(moegliche_tipps)
                 ausgewaehlte_spiele = set()
                 kombi_auswahl = []
                 
-                # ZIEL-GEWINN MODUS LOGIK
+                # ZIEL-GEWINN LOGIK MIT STRICT REALISMUS-SPERRE
                 if use_target_mode:
                     aktuelle_quote = 1.0
                     for tipp in moegliche_tipps:
@@ -284,10 +284,14 @@ with tab2:
                             kombi_auswahl.append(tipp)
                             ausgewaehlte_spiele.add(tipp['Begegnung'])
                             aktuelle_quote *= tipp['Quote']
-                            if aktuelle_quote >= ziel_quote:
+                            
+                            # Max. 5 Spiele Sperre eingehalten
+                            if aktuelle_quote >= ziel_quote or len(kombi_auswahl) == 5:
                                 break
+                    
+                    if aktuelle_quote < (ziel_quote * 0.75) and len(kombi_auswahl) == 5:
+                        st.warning("⚠️ Das gewählte Gewinnziel ist mit realistischen Tipps (max. 5 Spiele) aktuell nicht vertretbar. Die KI hat den realistischsten Schein zusammengestellt.")
                     st.session_state['preset_einsatz'] = einsatz_target
-                # STANDARD MODUS LOGIK
                 else:
                     for tipp in moegliche_tipps:
                         if tipp['Begegnung'] not in ausgewaehlte_spiele:
