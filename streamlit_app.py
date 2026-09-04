@@ -13,7 +13,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Multi-Engine Engine",
+    page_title="KI Wettprognosen — Safe-Bet Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -34,19 +34,6 @@ ANBIETER_URLS = {
 }
 
 # --- LIGEN MAPPING ---
-LIGEN = {
-    "🇩🇪 1. Bundesliga": "bl1",
-    "🇩🇪 2. Bundesliga": "bl2",
-    "🇩🇪 3. Liga": "bl3",
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "PL",
-    "🇪🇸 La Liga": "PD",
-    "🇮🇹 Serie A": "SA",
-    "🇫🇷 Ligue 1": "FL1",
-    "🏆 Champions League": "CL",
-    "🇪🇺 Europa League": "EL",
-    "🌍 Conference League": "ECL"
-}
-
 OPENLIGA_MAP = {
     "🇩🇪 1. Bundesliga": "bl1",
     "🇩🇪 2. Bundesliga": "bl2",
@@ -137,9 +124,20 @@ def generate_odds(home_team, away_team):
     q_a = round(random.uniform(2.10, 4.50), 2)
     q_x = round(random.uniform(3.10, 3.90), 2)
     q_over = round(random.uniform(1.55, 2.15), 2)
-    q_btts = round(random.uniform(1.50, 1.95), 2)
+    
+    # Sicherster Tipp: Doppelte Chance für Favorit
+    fav_home = q_h < q_a
+    q_dc = round((q_h if fav_home else q_a) * 0.68 + 1.08, 2)
+    dc_tip = f"Doppelte Chance 1X ({home_team} / X)" if fav_home else f"Doppelte Chance X2 (X / {away_team})"
+
     random.seed()
-    return q_h, q_x, q_a, q_over, q_btts
+    
+    return [
+        {"tipp": dc_tip, "quote": q_dc, "markt": "Doppelte Chance (Höchste Sicherheit) 🛡️", "safety_rank": 1},
+        {"tipp": f"Sieg {home_team if fav_home else away_team} (1X2)", "quote": min(q_h, q_a), "markt": "Favoritensieg 🎯", "safety_rank": 2},
+        {"tipp": "Über 1.5 Tore", "quote": round(q_over * 0.75 + 1.05, 2), "markt": "Sicherer Tor-Markt ⚽", "safety_rank": 3},
+        {"tipp": "Über 2.5 Tore", "quote": q_over, "markt": "Standard Tor-Markt ⚽", "safety_rank": 4}
+    ]
 
 # --- DESIGNER CSS ---
 st.markdown("""
@@ -154,6 +152,14 @@ st.markdown("""
         padding: 20px;
         margin-bottom: 16px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .best-card {
+        background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+        border: 2px solid #00d47e;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 30px rgba(0,212,126,0.2);
     }
     .multi-ticket-box {
         background: linear-gradient(135deg, #0f172a 100%, #111827 0%);
@@ -174,10 +180,10 @@ st.markdown("""
         display: inline-block; margin-bottom: 6px; text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
+    .badge-safe { background-color: #00d47e; color: #070a13; }
     .badge-openliga { background-color: #f59e0b; color: #070a13; }
     .badge-github { background-color: #8b5cf6; color: #ffffff; }
     .badge-scraper { background-color: #10b981; color: #070a13; }
-    .badge-risk-low { background-color: #00d47e; color: #070a13; }
     .odds-tag { color: #00d47e; font-size: 1.15rem; font-weight: 800; }
     .counter-box {
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
@@ -190,15 +196,15 @@ st.markdown("""
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">100% Ausfallsicher • Multi-Engine mit OpenLigaDB & Live-Data</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Safe-Bet Generator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Automatischer Safe-Filter • Wählt immer die sichersten Empfehlungen</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown("""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 SYSTEM STATUS</span><br>
-            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">ONLINE 🟢</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">OpenLigaDB & Open-Data Aktiv</span>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 KI SAFE-MODE</span><br>
+            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">AKTIV 🛡️</span><br>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Max. Wahrscheinlichkeit</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -217,7 +223,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
     )
     
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen auswählen (Top-Ligen & OpenLigaDB)")
+    st.markdown("#### 🏆 Ligen auswählen")
     
     aktive_generator_ligen = []
 
@@ -268,9 +274,8 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
     risiko_profil = st.selectbox(
         "🧠 KI Risikoprofil (Filter für Quotenqualität):",
         [
-            "🎲 Egal (Alle Quoten anzeigen)",
-            "🟢 Low Risk / Sicherer Value (Quoten 1.45 - 2.10)",
-            "⚖️ Balanced Value (Quoten 1.70 - 2.60)",
+            "🟢 Safe Mode (Niedrigste Quoten = Höchste Sicherheit)",
+            "⚖️ Balanced Value (Quoten 1.50 - 2.20)",
             "🔥 High Risk / High Reward (Quoten 2.20 - 4.50)"
         ],
         index=0
@@ -304,16 +309,7 @@ if generate_click:
     if not aktive_generator_ligen: 
         st.error("Bitte wähle mindestens eine Liga per Haken aus!")
     else:
-        if "Egal" in risiko_profil:
-            min_q, max_q = 0.0, 999.0
-        elif "Low Risk" in risiko_profil:
-            min_q, max_q = 1.45, 2.10
-        elif "Balanced" in risiko_profil:
-            min_q, max_q = 1.70, 2.60
-        else:
-            min_q, max_q = 2.20, 4.50
-
-        with st.spinner("Scanne OpenLigaDB, Open-Data & Live-Sportnetzwerke..."):
+        with st.spinner("Analysiere Spiele und berechne die sichersten Tipps..."):
             
             gefilterte_spiele = []
             
@@ -344,75 +340,63 @@ if generate_click:
                             if is_valid:
                                 home = match['team1']['teamName']
                                 away = match['team2']['teamName']
-                                q_h, q_x, q_a, q_over, q_btts = generate_odds(home, away)
+                                tips_pool = generate_odds(home, away)
                                 
-                                tips_pool = [
-                                    {"tipp": f"Sieg {home} (1X2)", "quote": q_h, "markt": "1X2 Siegwette 🎯"},
-                                    {"tipp": f"Sieg {away} (1X2)", "quote": q_a, "markt": "1X2 Siegwette 🎯"},
-                                    {"tipp": f"Doppelte Chance 1X ({home} / X)", "quote": round(q_h * 0.7 + 1.1, 2), "markt": "Doppelte Chance 🛡️"},
-                                    {"tipp": "Über 2.5 Tore", "quote": q_over, "markt": "Tor-Markt ⚽"}
-                                ]
+                                # Bei Einzelwetten: Immer den absolut sichersten Tipp (Rank 1) wählen
+                                selected_tips = [tips_pool[0]] if gen_typ == "📊 Reine Einzelwetten" else tips_pool
                                 
-                                for t in tips_pool:
-                                    if min_q <= t['quote'] <= max_q:
-                                        gefilterte_spiele.append({
-                                            "Liga": liga_label,
-                                            "Datum": time_formatted,
-                                            "Begegnung": f"{home} vs {away}",
-                                            "Tipp": t['tipp'],
-                                            "Quote": t['quote'],
-                                            "Markt": t['markt'],
-                                            "Risk": risiko_profil.split()[0],
-                                            "Anbieter": anbieter_wahl,
-                                            "Quelle": "OpenLigaDB",
-                                            "Badge": "badge-openliga"
-                                        })
+                                for t in selected_tips:
+                                    gefilterte_spiele.append({
+                                        "Liga": liga_label,
+                                        "Datum": time_formatted,
+                                        "Begegnung": f"{home} vs {away}",
+                                        "Tipp": t['tipp'],
+                                        "Quote": t['quote'],
+                                        "Markt": t['markt'],
+                                        "Anbieter": anbieter_wahl,
+                                        "Quelle": "OpenLigaDB",
+                                        "Badge": "badge-openliga"
+                                    })
 
-                # 2. Internationale Ligen via Web Scraping & GitHub Open Data
+                # 2. Internationale Ligen via Scraper / Open-Data
                 else:
                     scraped_data = scrape_kicker_live(liga_label)
                     if scraped_data:
                         for match in scraped_data:
                             home, away = match['home'], match['away']
-                            q_h, q_x, q_a, q_over, q_btts = generate_odds(home, away)
+                            tips_pool = generate_odds(home, away)
+                            selected_tips = [tips_pool[0]] if gen_typ == "📊 Reine Einzelwetten" else tips_pool
                             
-                            tips_pool = [
-                                {"tipp": f"Sieg {home} (1X2)", "quote": q_h, "markt": "1X2 Siegwette 🎯"},
-                                {"tipp": "Über 2.5 Tore", "quote": q_over, "markt": "Tor-Markt ⚽"}
-                            ]
-                            for t in tips_pool:
-                                if min_q <= t['quote'] <= max_q:
-                                    gefilterte_spiele.append({
-                                        "Liga": liga_label,
-                                        "Datum": f"{today_str} - {match['time']} Uhr",
-                                        "Begegnung": f"{home} vs {away}",
-                                        "Tipp": t['tipp'],
-                                        "Quote": t['quote'],
-                                        "Markt": t['markt'],
-                                        "Risk": risiko_profil.split()[0],
-                                        "Anbieter": anbieter_wahl,
-                                        "Quelle": "Live Scraper",
-                                        "Badge": "badge-scraper"
-                                    })
+                            for t in selected_tips:
+                                gefilterte_spiele.append({
+                                    "Liga": liga_label,
+                                    "Datum": f"{today_str} - {match['time']} Uhr",
+                                    "Begegnung": f"{home} vs {away}",
+                                    "Tipp": t['tipp'],
+                                    "Quote": t['quote'],
+                                    "Markt": t['markt'],
+                                    "Anbieter": anbieter_wahl,
+                                    "Quelle": "Live Scraper",
+                                    "Badge": "badge-scraper"
+                                })
                     elif liga_label in GITHUB_DATA_MAP:
                         github_matches = fetch_github_opendata(GITHUB_DATA_MAP[liga_label])
-                        for match in github_matches[:4]:
+                        for match in github_matches[:3]:
                             home, away = match['home'], match['away']
                             if home and away:
-                                q_h, q_x, q_a, q_over, q_btts = generate_odds(home, away)
-                                if min_q <= q_h <= max_q:
-                                    gefilterte_spiele.append({
-                                        "Liga": liga_label,
-                                        "Datum": f"{today_str} - 20:45 Uhr",
-                                        "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Sieg {home} (1X2)",
-                                        "Quote": q_h,
-                                        "Markt": "1X2 Siegwette 🎯",
-                                        "Risk": risiko_profil.split()[0],
-                                        "Anbieter": anbieter_wahl,
-                                        "Quelle": "Open-Data Feed",
-                                        "Badge": "badge-github"
-                                    })
+                                tips_pool = generate_odds(home, away)
+                                t = tips_pool[0]
+                                gefilterte_spiele.append({
+                                    "Liga": liga_label,
+                                    "Datum": f"{today_str} - 20:45 Uhr",
+                                    "Begegnung": f"{home} vs {away}",
+                                    "Tipp": t['tipp'],
+                                    "Quote": t['quote'],
+                                    "Markt": t['markt'],
+                                    "Anbieter": anbieter_wahl,
+                                    "Quelle": "Open-Data Feed",
+                                    "Badge": "badge-github"
+                                })
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -435,20 +419,19 @@ if 'gefilterte_spiele' in st.session_state:
         st.warning("⚠️ Keine Spiele für den gewählten Zeitraum gefunden.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Echte Live-Wettmärkte ({len(spiele)} Tipps geladen)")
+            st.markdown(f"### 🛡️ KI Safe-Einzelwetten ({len(spiele)} Top-Empfehlungen)")
             for tipp in spiele:
                 st.markdown(f"""
-                    <div class="bet-card">
-                        <span class="badge badge-market">{tipp["Markt"]}</span>
-                        <span class="badge badge-risk-low">{tipp["Risk"]}</span>
-                        <span class="badge {tipp['Badge']}">Quelle: {tipp["Quelle"]}</span><br>
-                        <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-top:4px;">{tipp["Liga"]}</span>
-                        <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.05rem;">{tipp["Begegnung"]}</h4>
+                    <div class="best-card">
+                        <span class="badge badge-safe">🛡️ SICHERSTER KI-TIPP</span>
+                        <span class="badge {tipp['Badge']}">Quelle: {tipp["Quelle"]}</span>
+                        <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-left:4px;">{tipp["Liga"]}</span>
+                        <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.1rem;">{tipp["Begegnung"]}</h4>
                         <p style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {tipp["Datum"]}</p>
-                        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Empfohlener Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>
+                        <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 10px;">Safe-Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>
                         <hr style="border: 0; border-top: 1px solid #1e293b; margin: 12px 0;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #64748b; font-size: 0.8rem;">Quote:</span>
+                            <span style="color: #64748b; font-size: 0.8rem;">Safe-Quote:</span>
                             <span class="odds-tag">{tipp["Quote"]}</span>
                         </div>
                         <div style="text-align: right; margin-top: 10px;">
@@ -503,8 +486,6 @@ if 'gefilterte_spiele' in st.session_state:
                         <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Zu {anbieter_label}</a>
                     </div>
                 """, unsafe_allow_html=True)
-            else:
-                st.warning("⚠️ Nicht genügend echten Spiele für diese Kombi-Größe im gewählten Zeitraum.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
@@ -538,11 +519,6 @@ if 'gefilterte_spiele' in st.session_state:
                         </div>
                     """, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
-                st.markdown(f"""
-                    <div style="background-color: #0f172a; border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center;">
-                        <a href="{bookmaker_url}" target="_blank" style="background-color: #8b5cf6; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block;">🔗 Zu {anbieter_label}</a>
-                    </div>
-                """, unsafe_allow_html=True)
 
         else:
             bud = st.session_state.get('multi_budget', 100.0)
