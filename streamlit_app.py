@@ -4,15 +4,22 @@ import math
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+# Deutsche Zeitzone (Europe/Berlin) für automatischen Datumswechsel um 00:00 Uhr
+try:
+    from zoneinfo import ZoneInfo
+    tz_de = ZoneInfo("Europe/Berlin")
+except ImportError:
+    tz_de = timezone(timedelta(hours=2))
+
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Variabler Multi-Markt Generator",
+    page_title="KI Wettprognosen — Dynamische Live Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- SESSION STATE ---
+# --- SESSION STATE INITIALISIERUNG ---
 if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
 if 'matches_cache' not in st.session_state:
@@ -47,7 +54,7 @@ ESPN_LEAGUE_CODES = {
 }
 
 # --- KEYLESS FETCH ENGINES ---
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=180)
 def fetch_openliga_matches(shortcut):
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
     try:
@@ -58,7 +65,7 @@ def fetch_openliga_matches(shortcut):
         pass
     return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=180)
 def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
     url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={start_date_str}-{end_date_str}"
     try:
@@ -217,21 +224,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ZEITRAUM BERECHNUNGEN (DEUTSCHE ZEITZONE) ---
-now_utc = datetime.now(timezone.utc)
-tz_de = timezone(timedelta(hours=2))
-now_de = now_utc.astimezone(tz_de)
+# --- DYNAMISCHE ZEITRAUM BERECHNUNG ---
+now_de = datetime.now(tz_de)
 today_de = now_de.date()
 tomorrow_de = today_de + timedelta(days=1)
 
-weekday_num = today_de.weekday()
-if weekday_num == 5:
+weekday_num = today_de.weekday() # 0 = Mo, 5 = Sa, 6 = So
+if weekday_num == 5: # Samstag
     sat_de = today_de
     sun_de = today_de + timedelta(days=1)
-elif weekday_num == 6:
+elif weekday_num == 6: # Sonntag
     sat_de = today_de - timedelta(days=1)
     sun_de = today_de
-else:
+else: # Montag bis Freitag
     days_to_sat = 5 - weekday_num
     sat_de = today_de + timedelta(days=days_to_sat)
     sun_de = sat_de + timedelta(days=1)
@@ -249,11 +254,11 @@ with col_head:
     st.markdown('<div class="sub-title">Multi-Markt KI • Gemischte Tipps (DC, 1X2, Tore & BTTS) • Quotenvergleich</div>', unsafe_allow_html=True)
 
 with col_count:
-    st.markdown("""
+    st.markdown(f"""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 SYSTEM FEED</span><br>
-            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">GEMISCHT 🔀</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Variations-Filter</span>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📅 HEUTIGER TAG</span><br>
+            <span style="color: #00d47e; font-size: 1.1rem; font-weight: 800;">{today_str}</span><br>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Automatische Zeitzone</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -349,9 +354,9 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🚀 Live-Daten laden & gemischte Wettscheine berechnen", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Live-Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
 
-# --- ZEITRAUM BERECHNUNG ---
+# --- ZEITRAUM UND DATUMS-EVALUATION ---
 if "HEUTE" in gen_zeit_modus:
     dt_from, dt_to = today_de, today_de
 elif "MORGEN" in gen_zeit_modus:
@@ -380,49 +385,62 @@ if generate_click or 'matches_cache' not in st.session_state:
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
+                # 1. Deutsche Ligen via OpenLigaDB
                 if liga_label in OPENLIGA_SHORTCUTS:
                     shortcut = OPENLIGA_SHORTCUTS[liga_label]
                     raw_openliga = fetch_openliga_matches(shortcut)
                     for m in raw_openliga:
                         dt_str = m.get('matchDateTime')
                         if dt_str:
-                            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                            de_dt = dt.astimezone(tz_de)
-                            m_date = de_dt.date()
-                            
-                            if dt_from <= m_date <= dt_to:
-                                home = m['team1']['teamName']
-                                away = m['team2']['teamName']
-                                p_markets = calculate_poisson_markets(1.55, 1.15)
-                                all_loaded_matches.append({
-                                    "liga": liga_label,
-                                    "home": home,
-                                    "away": away,
-                                    "date": m_date,
-                                    "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
-                                    "markets": p_markets
-                                })
+                            try:
+                                dt = datetime.fromisoformat(dt_str)
+                                if dt.tzinfo is None:
+                                    dt = dt.replace(tzinfo=tz_de)
+                                else:
+                                    dt = dt.astimezone(tz_de)
+                                m_date = dt.date()
+                                
+                                if dt_from <= m_date <= dt_to:
+                                    home = m['team1']['teamName']
+                                    away = m['team2']['teamName']
+                                    p_markets = calculate_poisson_markets(1.55, 1.15)
+                                    all_loaded_matches.append({
+                                        "liga": liga_label,
+                                        "home": home,
+                                        "away": away,
+                                        "date": m_date,
+                                        "time_str": dt.strftime("%d.%m. - %H:%M Uhr"),
+                                        "markets": p_markets
+                                    })
+                            except Exception:
+                                continue
 
+                # 2. Internationale Ligen via ESPN API
                 elif liga_label in ESPN_LEAGUE_CODES:
                     code = ESPN_LEAGUE_CODES[liga_label]
                     raw_matches = fetch_espn_keyless_matches(code, start_str_espn, end_str_espn)
                     for m in raw_matches:
-                        utc_dt = datetime.fromisoformat(m['utc_date'].replace('Z', '+00:00'))
-                        de_dt = utc_dt.astimezone(tz_de)
-                        m_date = de_dt.date()
-                        
-                        if dt_from <= m_date <= dt_to:
-                            home = m['home']
-                            away = m['away']
-                            p_markets = calculate_poisson_markets(1.65, 1.20)
-                            all_loaded_matches.append({
-                                "liga": liga_label,
-                                "home": home,
-                                "away": away,
-                                "date": m_date,
-                                "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
-                                "markets": p_markets
-                            })
+                        utc_str = m.get('utc_date')
+                        if utc_str:
+                            try:
+                                utc_dt = datetime.fromisoformat(utc_str.replace('Z', '+00:00'))
+                                de_dt = utc_dt.astimezone(tz_de)
+                                m_date = de_dt.date()
+                                
+                                if dt_from <= m_date <= dt_to:
+                                    home = m['home']
+                                    away = m['away']
+                                    p_markets = calculate_poisson_markets(1.65, 1.20)
+                                    all_loaded_matches.append({
+                                        "liga": liga_label,
+                                        "home": home,
+                                        "away": away,
+                                        "date": m_date,
+                                        "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
+                                        "markets": p_markets
+                                    })
+                            except Exception:
+                                continue
 
             st.session_state['matches_cache'] = all_loaded_matches
             st.session_state['gen_typ'] = gen_typ
@@ -434,10 +452,8 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
-    # Hash-Seed für dieses exakte Spiel (sorgt für stabile, aber unterschiedliche Ergebnisse)
     match_seed = int(hashlib.md5(f"{home}_{away}_{profile}".encode()).hexdigest(), 16)
     
-    # Alle verfügbaren Märkte sammeln
     candidates = [
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1"},
         {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_2"},
@@ -448,24 +464,19 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
         {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts"}
     ]
     
-    # Risikoprofil-Grenzwerte anwenden
     if "Safe Mode" in profile:
-        # Nur Optionen mit hoher Wahrscheinlichkeit (> 62%)
         valid = [c for c in candidates if c['prob'] >= 62.0]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:2]
     elif "High Risk" in profile:
-        # Höhere Quoten (Quote >= 2.00)
         valid = [c for c in candidates if c['base_q'] >= 2.00]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:2]
-    else: # Balanced Value
-        # Ausgewogene Quoten (1.40 bis 2.20)
+    else:
         valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
         if not valid:
             valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:3]
             
-    # Aus den passenden Kandidaten spielspezifisch abwechseln
     selected = valid[match_seed % len(valid)]
 
     base_q = selected['base_q']
@@ -488,7 +499,7 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
 
 # --- ERGEBNISSE ANZEIGEN ---
 if not matches:
-    st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.')} - {dt_to.strftime('%d.%m.')}) in den gewählten Ligen gefunden.")
+    st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.%Y')} - {dt_to.strftime('%d.%m.%Y')}) in den gewählten Ligen gefunden.")
 else:
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
