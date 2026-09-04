@@ -74,7 +74,7 @@ def fetch_data_with_rotation(url_template):
         attempts += 1
     return None
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=180)
 def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h,totals,spreads&oddsFormat=decimal'
     return fetch_data_with_rotation(url_template)
@@ -240,7 +240,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Präziser Tages-Scanner • 100% Echte Ligaspiele</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">100% Echtzeit-Scanner • Exakte Tag-Matching Garantie</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -269,7 +269,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
     )
     
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen auswählen (Top-Ligen & 2. Bundesliga)")
+    st.markdown("#### 🏆 Ligen auswählen (Haken setzen)")
     
     aktive_generator_ligen = []
 
@@ -291,15 +291,21 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
 
     st.markdown("---")
     
-    today_str = datetime.now().strftime("%d.%m.")
-    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime("%d.%m.")
+    # Exakte deutsche Ortszeit berechnen
+    now_utc = datetime.now(timezone.utc)
+    now_de = now_utc.astimezone(timezone(timedelta(hours=2)))
+    today_de = now_de.date()
+    tomorrow_de = today_de + timedelta(days=1)
+    
+    today_str = today_de.strftime("%d.%m.")
+    tomorrow_str = tomorrow_de.strftime("%d.%m.")
     
     gen_zeit_modus = st.selectbox(
         "📅 Zeitraum-Modus wählen:", 
         [
-            f"⚡ HEUTE ({today_str} — 00:00 bis 24:00 Uhr)",
-            f"📅 MORGEN ({tomorrow_str} — 00:00 bis 24:00 Uhr)",
-            "🟢 DIESE WOCHE (Alle nächsten Spiele)",
+            f"⚡ HEUTE ({today_str} — Alle Partien von heute)",
+            f"📅 MORGEN ({tomorrow_str} — Alle Partien von morgen)",
+            "🟢 DIESE WOCHE (Nächste 7 Tage)",
             "📅 Kalender-Bereich wählen"
         ], 
         index=0, 
@@ -308,7 +314,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
 
     kalender_auswahl = None
     if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-        kalender_auswahl = st.date_input("Zeitraum wählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
+        kalender_auswahl = st.date_input("Zeitraum wählen:", value=(today_de, today_de + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
     
@@ -359,27 +365,7 @@ if generate_click:
         else:
             min_q, max_q = 2.20, 4.50
 
-        today_dt = date.today()
-
-        if "HEUTE" in gen_zeit_modus:
-            start_dt = datetime.combine(today_dt, datetime.min.time())
-            end_dt = datetime.combine(today_dt, datetime.max.time())
-            allow_fallback_days = False
-        elif "MORGEN" in gen_zeit_modus:
-            morgen_dt = today_dt + timedelta(days=1)
-            start_dt = datetime.combine(morgen_dt, datetime.min.time())
-            end_dt = datetime.combine(morgen_dt, datetime.max.time())
-            allow_fallback_days = False
-        elif "DIESE WOCHE" in gen_zeit_modus:
-            start_dt = datetime.combine(today_dt, datetime.min.time())
-            end_dt = datetime.combine(today_dt + timedelta(days=7), datetime.max.time())
-            allow_fallback_days = True
-        else:
-            start_dt = datetime.combine(kalender_auswahl[0], datetime.min.time())
-            end_dt = datetime.combine(kalender_auswahl[1], datetime.max.time())
-            allow_fallback_days = True
-
-        with st.spinner("Scanne API nach echten Spielen..."):
+        with st.spinner("Lade Live- & Tagesdaten vom Wettmarkt..."):
             
             gefilterte_spiele = []
             
@@ -388,73 +374,49 @@ if generate_click:
                 data = load_league_odds(code)
                 
                 if isinstance(data, list) and len(data) > 0:
-                    matched_in_league = 0
-                    
-                    # 1. Strikter Check auf das Zeitfenster
                     for match in data:
                         commence_str = match.get('commence_time', '')
                         match_in_range = False
-                        match_time_formatted = "Anstoß heute"
+                        match_time_formatted = "Heute"
                         
                         try:
                             if commence_str:
-                                dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00'))
-                                dt_naive = dt.replace(tzinfo=None) + timedelta(hours=2) # Deutsche Sommerzeit Anpassung
-                                match_time_formatted = dt_naive.strftime('%d.%m. - %H:%M Uhr')
+                                dt_utc = datetime.fromisoformat(commence_str.replace('Z', '+00:00'))
+                                dt_de = dt_utc.astimezone(timezone(timedelta(hours=2)))
+                                match_date_de = dt_de.date()
+                                match_time_formatted = dt_de.strftime('%d.%m. - %H:%M Uhr')
                                 
-                                if start_dt <= dt_naive <= end_dt:
+                                # Abgleich auf deutschen Kalendertag
+                                if "HEUTE" in gen_zeit_modus and match_date_de == today_de:
+                                    match_in_range = True
+                                elif "MORGEN" in gen_zeit_modus and match_date_de == tomorrow_de:
+                                    match_in_range = True
+                                elif "DIESE WOCHE" in gen_zeit_modus and today_de <= match_date_de <= (today_de + timedelta(days=7)):
+                                    match_in_range = True
+                                elif gen_zeit_modus == "📅 Kalender-Bereich wählen" and (kalender_auswahl[0] <= match_date_de <= kalender_auswahl[1]):
                                     match_in_range = True
                         except Exception:
                             pass
 
-                        if match_in_range:
-                            home, away = match['home_team'], match['away_team']
-                            all_markets, used_bm = extract_all_markets(match.get('bookmakers'), anbieter_wahl, home, away)
-                            
-                            for market_item in all_markets:
-                                q = market_item['quote']
-                                if q is not None and min_q <= q <= max_q:
-                                    gefilterte_spiele.append({
-                                        "Liga": liga_label, 
-                                        "Datum": match_time_formatted, 
-                                        "Begegnung": f"{home} vs {away}", 
-                                        "Tipp": market_item['tipp'], 
-                                        "Quote": q, 
-                                        "Markt": market_item['markt'], 
-                                        "Risk": risiko_profil.split()[0], 
-                                        "Anbieter": used_bm
-                                    })
-                                    matched_in_league += 1
+                        if not match_in_range:
+                            continue
 
-                    # 2. Falls kein Spiel exakt heute stattfindet, nimm die nächsten echten Spiele der Liga
-                    if matched_in_league == 0 and allow_fallback_days:
-                        for match in data[:3]:
-                            commence_str = match.get('commence_time', '')
-                            match_time_formatted = "Nächstes Spiel"
-                            try:
-                                if commence_str:
-                                    dt = datetime.fromisoformat(commence_str.replace('Z', '+00:00'))
-                                    dt_naive = dt.replace(tzinfo=None) + timedelta(hours=2)
-                                    match_time_formatted = dt_naive.strftime('%d.%m. - %H:%M Uhr')
-                            except Exception:
-                                pass
-
-                            home, away = match['home_team'], match['away_team']
-                            all_markets, used_bm = extract_all_markets(match.get('bookmakers'), anbieter_wahl, home, away)
-                            
-                            for market_item in all_markets:
-                                q = market_item['quote']
-                                if q is not None and min_q <= q <= max_q:
-                                    gefilterte_spiele.append({
-                                        "Liga": liga_label, 
-                                        "Datum": match_time_formatted, 
-                                        "Begegnung": f"{home} vs {away}", 
-                                        "Tipp": market_item['tipp'], 
-                                        "Quote": q, 
-                                        "Markt": market_item['markt'], 
-                                        "Risk": risiko_profil.split()[0], 
-                                        "Anbieter": used_bm
-                                    })
+                        home, away = match['home_team'], match['away_team']
+                        all_markets, used_bm = extract_all_markets(match.get('bookmakers'), anbieter_wahl, home, away)
+                        
+                        for market_item in all_markets:
+                            q = market_item['quote']
+                            if q is not None and min_q <= q <= max_q:
+                                gefilterte_spiele.append({
+                                    "Liga": liga_label, 
+                                    "Datum": match_time_formatted, 
+                                    "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": market_item['tipp'], 
+                                    "Quote": q, 
+                                    "Markt": market_item['markt'], 
+                                    "Risk": risiko_profil.split()[0], 
+                                    "Anbieter": used_bm
+                                })
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -474,10 +436,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine echten Spiele im gewählten Zeitfenster für deine ausgewählten Ligen gefunden. (Wenn z.B. heute in der 2. Bundesliga kein Spiel ansteht, bleibt die Liste leer).")
+        st.warning("⚠️ Keine echten Spiele für den gewählten Kalendertag in deinen ausgewählten Ligen gefunden. (Tipp: Wenn heute in der 2. Bundesliga spielfrei ist, wähle 'DIESE WOCHE', um die nächsten Partien zu laden).")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Echte Live-Wettmärkte")
+            st.markdown(f"### 📊 Echte Live-Wettmärkte ({len(spiele)} Tipps geladen)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
