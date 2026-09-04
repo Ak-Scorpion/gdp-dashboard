@@ -14,17 +14,17 @@ st.set_page_config(
 
 # --- DEINE 11 API-KEYS ---
 API_KEYS = [
-    '9fa7390d10404cdab8fd77d2445655e0',  # Key 1
-    '64a606e404d1d1ea44af7823b6214bad',  # Key 2
-    '172b8d5c79d13d232032db7bea17a2b1',  # Key 3
-    'ae8d21a5099d547c1ac27008e4dc56ec',  # Key 4
-    '1e7838f2acd74658387ae5b9363bd88d',  # Key 5
-    '96ad8fdc309e50c2eb3e0efc83faed2e',  # Key 6
-    '669dec926fa65d341d87a7d2e1f152ba',  # Key 7
-    '54f78da0521be9e4e95c00550a03abe0',  # Key 8
-    'b26e2774a0d1e273d5bba986154bc336',  # Key 9
-    '25388e5649b0f1411e246ca8e22b6d82',  # Key 10
-    '734d7f2cf27ced001dff32ee47fc59c1'   # Key 11
+    '9fa7390d10404cdab8fd77d2445655e0',
+    '64a606e404d1d1ea44af7823b6214bad',
+    '172b8d5c79d13d232032db7bea17a2b1',
+    'ae8d21a5099d547c1ac27008e4dc56ec',
+    '1e7838f2acd74658387ae5b9363bd88d',
+    '96ad8fdc309e50c2eb3e0efc83faed2e',
+    '669dec926fa65d341d87a7d2e1f152ba',
+    '54f78da0521be9e4e95c00550a03abe0',
+    'b26e2774a0d1e273d5bba986154bc336',
+    '25388e5649b0f1411e246ca8e22b6d82',
+    '734d7f2cf27ced001dff32ee47fc59c1'
 ]
 
 if 'current_key_index' not in st.session_state:
@@ -79,14 +79,12 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (TASTATUR GESPERRT & TIPICO-STYLE DESIGN) ---
+# --- DESIGNER CSS (TASTATUR GESPERRT & KOMPAKT) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
-    
     header[data-testid="stHeader"] { display: none !important; }
     
-    /* HANDY-TASTATUR VOLLSTÄNDIG BLOCKIEREN */
     input, textarea, select, 
     [data-baseweb="input"] input, 
     [data-baseweb="base-input"] input, 
@@ -181,7 +179,7 @@ DEUTSCHE_ANBIETER = {
     "Bet365 (DE)": "bet365", "Oddset": "bwin", "Neo.bet": "bwin", "Bet-at-home": "betathome"
 }
 
-def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter, match_index, total_matches):
+def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter, match_index):
     if not date_str: return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -203,43 +201,56 @@ def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter
                 if start_date and end_date:
                     start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
                     end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-                    ist_passend = (dt >= start_dt) and (dt <= end_dt)
-                    return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+                    return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
             elif isinstance(datum_auswahl, date):
                 start_dt = datetime.combine(datum_auswahl, datetime.min.time()).replace(tzinfo=timezone.utc)
                 end_dt = datetime.combine(datum_auswahl, datetime.max.time()).replace(tzinfo=timezone.utc)
-                ist_passend = (dt >= start_dt) and (dt <= end_dt)
-                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), True
+            
+        elif zeit_modus == "📌 Heute":
+            start_dt = datetime.combine(heute_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(heute_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            
+        elif zeit_modus == "📌 Morgen":
+            morgen_date = heute_date + timedelta(days=1)
+            start_dt = datetime.combine(morgen_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(morgen_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            
+        elif zeit_modus == "📌 Sonntag":
+            tage_bis_sonntag = (6 - heute_date.weekday()) % 7
+            if tage_bis_sonntag == 0 and dt.date() > heute_date: 
+                sonntag_date = heute_date
+            else:
+                sonntag_date = heute_date + timedelta(days=(6 - heute_date.weekday()) % 7 if heute_date.weekday() <= 6 else 0)
+            start_dt = datetime.combine(sonntag_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(sonntag_date, datetime.max.time()).replace(tzinfo=timezone.utc)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
             
         elif zeit_modus == "⚡ Wochenende (Freitag – Sonntag)":
             tage_bis_freitag = (4 - heute_date.weekday()) % 7
             freitag = heute_date + timedelta(days=tage_bis_freitag)
             sonntag = freitag + timedelta(days=2)
-            
             start_dt = datetime.combine(freitag, datetime.min.time()).replace(tzinfo=timezone.utc)
             end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            ist_passend = (dt >= start_dt) and (dt <= end_dt)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
             
         elif zeit_modus == "🟢 Ganze Woche (Montag – Sonntag)":
             montag = heute_date - timedelta(days=heute_date.weekday())
             sonntag = montag + timedelta(days=6)
-            
             start_dt = datetime.combine(montag, datetime.min.time()).replace(tzinfo=timezone.utc)
             end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            ist_passend = (dt >= start_dt) and (dt <= end_dt)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
             
-        else: # Nächste Woche (Montag bis Sonntag)
+        else: 
             aktueller_montag = heute_date - timedelta(days=heute_date.weekday())
             naechster_montag = aktueller_montag + timedelta(days=7)
             naechster_sonntag = naechster_montag + timedelta(days=6)
-            
             start_dt = datetime.combine(naechster_montag, datetime.min.time()).replace(tzinfo=timezone.utc)
             end_dt = datetime.combine(naechster_sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            ist_passend = (dt >= start_dt) and (dt <= end_dt)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
     except Exception: 
         return date_str, True
 
@@ -256,18 +267,12 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
     is_value = q_home and avg_price and (q_home > avg_price * 1.05)
     return q_home, q_away, q_draw, is_value
 
-def get_risk_label(prob):
-    if prob >= 45: return "🟢 Low Risk (Sehr sicher)"
-    elif prob >= 25: return "🟡 Medium Risk (Solide Chance)"
-    elif prob >= 12: return "🟠 High Risk (Risikoreich)"
-    else: return "🔴 Harakiri / Verrückt"
-
 # --- HEADER & COUNTER ---
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Tipico-Style • Ligen direkt unter Wettanbieter • Tastatur gesperrt</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Heute, Morgen & Sonntag • Saubere Einzelwetten • Tastatur gesperrt</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -286,12 +291,12 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- SIDEBAR ---
 with st.sidebar:
     st.markdown("### 🎛️ Steuerungs-Info")
-    st.markdown("Alle Einstellungen für Anbieter, Spieltage, Zeiträume und Ligen befinden sich übersichtlich auf der Hauptseite.")
+    st.markdown("Alle Einstellungen für Anbieter, Ligen, Spieltage und Zeiträume befinden sich auf der Hauptseite.")
 
 # --- HAUPTSEITE ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & Zeitraum)", expanded=True):
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & Filter)", expanded=True):
     
     # 1. WETTANBIETER
     st.markdown("#### 🏢 1. Wettanbieter wählen")
@@ -304,11 +309,12 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & 
     
     st.markdown("---")
     
-    # 2. LIGEN (JETZT DIREKT UNTER DEM WETTANBIETER IM HAKEN-SYSTEM)
-    st.markdown("#### 🏆 2. Ligen-Auswahl (Haken-System mit Aufklapp-Menüs)")
+    # 2. LIGEN (HAKEN-SYSTEM MIT KORREKTER ZUORDNUNG)
+    st.markdown("#### 🏆 2. Ligen-Auswahl (Haken setzen)")
     
-    schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen (Bundesliga, Premier League, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top1")
+    schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen", value=True, key="chk_schnell_top1")
 
+    # Wir sammeln die Ligen direkt dynamisch aus den Checkboxen ein
     aktive_generator_ligen = []
 
     if schnellwahl_top1:
@@ -320,7 +326,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & 
             "🇫🇷 Ligue 1"
         ])
 
-    st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke auf die Länder, um Unterligen (2. & 3. Ligen) per Haken hinzuzufügen:</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke auf die Länder, um Unterligen per Haken zu aktivieren:</p>", unsafe_allow_html=True)
 
     with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=False):
         if st.checkbox("🇩🇪 1. Bundesliga", value=schnellwahl_top1, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
@@ -355,7 +361,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & 
 
     st.markdown("---")
     
-    # 3. SPIELTAG & ZEITRAUM
+    # 3. SPIELTAG & ZEITRAUM (MIT HEUTE, MORGEN, SONNTAG)
     st.markdown("#### 🔢 3. Spieltag & Zeitraum")
     col_s1, col_s2 = st.columns(2)
     with col_s1:
@@ -369,6 +375,9 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & 
         gen_zeit_modus = st.selectbox(
             "Zeitraum-Modus:", 
             [
+                "📌 Heute",
+                "📌 Morgen",
+                "📌 Sonntag",
                 "⚡ Wochenende (Freitag – Sonntag)", 
                 "🟢 Ganze Woche (Montag – Sonntag)", 
                 "⏭️ Nächste Woche (Montag – Sonntag)", 
@@ -389,10 +398,10 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & 
     gen_typ = st.selectbox(
         "Wett-Typ wählen:",
         [
+            "📊 Einzelwetten & Value-Bets (Tabelle)",
             "🛡️ Multi-Ticket System (3 separate Scheine)", 
             "🎁 Freebet-Modus (Gratiswette maximieren)", 
-            "🎯 Standard Kombiwette (Freie Anzahl Spiele)",
-            "📊 Einzelwetten & Value-Bets (Tabelle)"
+            "🎯 Standard Kombiwette (Freie Anzahl Spiele)"
         ],
         index=0
     )
@@ -413,7 +422,7 @@ if generate_click:
     else:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         
-        with st.spinner(f"Analysiere Quoten bei {anbieter_wahl} (Spieltag {spieltag_auswahl if spieltag_auswahl > 0 else 'Alle'})..."):
+        with st.spinner(f"Analysiere Quoten bei {anbieter_wahl}..."):
             
             if gen_typ == "📊 Einzelwetten & Value-Bets (Tabelle)":
                 spiele_liste = []
@@ -423,16 +432,22 @@ if generate_click:
                     if isinstance(data, list):
                         total_m = len(data)
                         for idx, match in enumerate(data):
-                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                            prob_h = round((1 / q_home) * 100) if q_home else 0
-                            spiele_liste.append({
-                                "Liga": liga_label, "Anstoßzeit": match_time, "Heim": home, "Auswärts": away,
-                                "Quote 1": q_home, "Quote X": q_draw, "Quote 2": q_away,
-                                "Heim-Chance": f"{prob_h}%", "Status": "🔥 VALUE-BET" if is_value else "Standard"
-                            })
+                            
+                            # Nur saubere Wetten ohne "Quatsch" hinzufügen
+                            if q_home:
+                                spiele_liste.append({
+                                    "Liga": liga_label, "Anstoß": match_time, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {home}", "Quote": q_home, "Status": "🔥 VALUE" if is_value else "Standard"
+                                })
+                            if q_away:
+                                spiele_liste.append({
+                                    "Liga": liga_label, "Anstoß": match_time, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Status": "Standard"
+                                })
                 st.session_state['mode_type'] = 'einzel'
                 st.session_state['einzel_tabelle'] = spiele_liste
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl
@@ -445,7 +460,7 @@ if generate_click:
                     if isinstance(data, list):
                         total_m = len(data)
                         for idx, match in enumerate(data):
-                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -468,7 +483,7 @@ if generate_click:
                     st.session_state['kombi_auswahl'] = kombi_auswahl
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    st.warning("Nicht genügend Spiele für eine Kombi in dieser Anzahl im gewählten Spieltag/Zeitraum gefunden.")
+                    st.warning("Nicht genügend Spiele für eine Kombi in dieser Anzahl im gewählten Zeitraum gefunden.")
 
             elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
                 moegliche_tipps = []
@@ -478,7 +493,7 @@ if generate_click:
                     if isinstance(data, list):
                         total_m = len(data)
                         for idx, match in enumerate(data):
-                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -504,7 +519,7 @@ if generate_click:
                     st.session_state['freebet_kombi'] = freebet_kombi
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    st.warning("Keine Freebet-Spiele für diesen Spieltag/Zeitraum gefunden.")
+                    st.warning("Keine Freebet-Spiele für diesen Zeitraum gefunden.")
 
             else:
                 alle_spiele_pool = []
@@ -514,7 +529,7 @@ if generate_click:
                     if isinstance(data, list):
                         total_m = len(data)
                         for idx, match in enumerate(data):
-                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -552,7 +567,7 @@ if generate_click:
                     else:
                         st.warning("Nicht genügend Spiele für das Multi-Ticket-System verfügbar.")
                 else:
-                    st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Spieltag/Zeitraum.")
+                    st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Zeitraum.")
 
 # --- ERGEBNISSE ---
 mode = st.session_state.get('mode_type', None)
@@ -564,7 +579,7 @@ if mode == 'einzel' and 'einzel_tabelle' in st.session_state:
     if st.session_state['einzel_tabelle']:
         st.dataframe(pd.DataFrame(st.session_state['einzel_tabelle']), use_container_width=True, hide_index=True)
     else:
-        st.info("Keine Spiele für diesen Spieltag/Zeitraum gefunden.")
+        st.info("Keine Spiele für diesen Zeitraum gefunden.")
 
 elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
     kombi_auswahl = st.session_state['kombi_auswahl']
@@ -663,7 +678,7 @@ elif mode == 'multi' and 'multi_tickets' in st.session_state:
         </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0;'>", unsafe_app=True)
 st.markdown("### 🗂️ Gespeicherte Wettscheine")
 if not st.session_state['saved_tickets']:
     st.info("Bisher keine Scheine hinterlegt.")
