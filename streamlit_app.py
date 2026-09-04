@@ -3,12 +3,12 @@ import requests
 import pandas as pd
 import random
 
-st.set_page_config(page_title="KI Wettprognosen & Top-Ligen Mix", layout="wide")
+st.set_page_config(page_title="KI Wettprognosen & Multi-Kombi", layout="wide")
 
-st.title("⚽ KI Wettprognosen — Top-Ligen Safe-Kombi")
-st.write("Vergleiche Quoten einzelner Ligen oder erstelle einen perfekten Ligen-Mix Kombi-Schein.")
+st.title("⚽ KI Wettprognosen — Variabler Kombi-Generator")
+st.write("Generiert vielseitige Scheine mit Siegwetten, Über-1.5-Tore-Tipps und Match-Kombis.")
 
-# TRAGE HIER DEINEN API-KEY EIN:
+# DEIN FEST EINGEBAUTER API-KEY:
 API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
 
 ligen = {
@@ -66,12 +66,11 @@ if st.button("Spiele dieser Liga anzeigen"):
 
 st.divider()
 
-# --- BEREICH 2: LIGEN-MIX SAFE-KOMBI GENERATOR ---
-st.subheader("2. 🌍 Perfekten Ligen-Mix Kombi-Schein erstellen")
-st.write("Kombiniert automatisch die sichersten Favoriten-Spiele aus **verschiedenen Top-Ligen** zu einem 3er-Schein.")
+# --- BEREICH 2: VIELSEITIGER KOMBI-GENERATOR ---
+st.subheader("2. 🎲 Abwechslungsreichen Kombi-Schein erstellen")
+st.write("Generiert Scheine mit einem Mix aus Siegwetten, Über 1.5 Tore & Kombi-Tipps.")
 
-if st.button("🎯 Top-Ligen-Mix Schein generieren"):
-    # Ligen, aus denen gemischt wird
+if st.button("🔄 Neuen Multi-Wett-Schein generieren"):
     fokus_ligen = {
         "Bundesliga": "soccer_germany_bundesliga",
         "Premier League": "soccer_epl",
@@ -80,9 +79,9 @@ if st.button("🎯 Top-Ligen-Mix Schein generieren"):
         "Ligue 1": "soccer_france_ligue_one"
     }
     
-    sichere_tipps_pro_liga = []
+    moegliche_tipps = []
     
-    with st.spinner("Durchsuche alle Top-Ligen nach den sichersten Favoriten..."):
+    with st.spinner("Analysiere Spiele & erstelle abwechslungsreiche Wett-Varianten..."):
         for liga_label, code in fokus_ligen.items():
             url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
             try:
@@ -97,58 +96,66 @@ if st.button("🎯 Top-Ligen-Mix Schein generieren"):
                             q_home = next((item['price'] for item in odds if item['name'] == home), None)
                             q_away = next((item['price'] for item in odds if item['name'] == away), None)
                             
-                            # Nur sichere Favoriten (Quote zwischen 1.20 und 1.85)
-                            if q_home and 1.20 <= q_home <= 1.85:
-                                prob = round((1 / q_home) * 100)
-                                sichere_tipps_pro_liga.append({
-                                    "Liga": liga_label,
-                                    "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {home}",
-                                    "Quote": q_home,
-                                    "Chance": prob
+                            # Option A: Klarer Favoritensieg (1.20 bis 1.70)
+                            if q_home and 1.20 <= q_home <= 1.70:
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": f"Sieg {home}", "Quote": q_home, "Art": "Einfacher Sieg 🛡️"
                                 })
-                            if q_away and 1.20 <= q_away <= 1.85:
-                                prob = round((1 / q_away) * 100)
-                                sichere_tipps_pro_liga.append({
-                                    "Liga": liga_label,
-                                    "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {away}",
-                                    "Quote": q_away,
-                                    "Chance": prob
+                                # Zusätzliche Variante: Sieg + Über 1.5 Tore (Quote leicht erhöht)
+                                combi_q = round(q_home * 1.25, 2)
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": combi_q, "Art": "Sieg + Tore ⚽"
+                                })
+
+                            if q_away and 1.20 <= q_away <= 1.70:
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Art": "Einfacher Sieg 🛡️"
+                                })
+                                combi_q = round(q_away * 1.25, 2)
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": combi_q, "Art": "Sieg + Tore ⚽"
+                                })
+
+                            # Option B: Reines "Über 1.5 Tore" für ausgeglichene/torreiche Partien (1.71 bis 2.50)
+                            if (q_home and 1.71 <= q_home <= 2.50) or (q_away and 1.71 <= q_away <= 2.50):
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
+                                    "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.30, "Art": "Tore-Wette 🔥"
                                 })
             except Exception:
                 pass
 
-    if len(sichere_tipps_pro_liga) >= 3:
-        # Sortiere nach den höchsten Gewinnchancen
-        sichere_tipps_pro_liga = sorted(sichere_tipps_pro_liga, key=lambda x: x['Chance'], reverse=True)
+    if len(moegliche_tipps) >= 3:
+        # Zufällige Auswahl aus verschiedenen Kategorien für maximale Abwechslung
+        random.shuffle(moegliche_tipps)
         
-        # Versuche Spiele aus unterschiedlichen Ligen auszuwählen
-        ausgewaehlte_ligen_set = set()
+        # Stelle sicher, dass nicht 2 verschiedene Tipps für exakt dasselbe Spiel ausgewählt werden
+        ausgewaehlte_spiele = set()
         kombi_auswahl = []
         
-        for tipp in sichere_tipps_pro_liga:
-            if tipp['Liga'] not in ausgewaehlte_ligen_set:
+        for tipp in moegliche_tipps:
+            if tipp['Begegnung'] not in ausgewaehlte_spiele:
                 kombi_auswahl.append(tipp)
-                ausgewaehlte_ligen_set.add(tipp['Liga'])
+                ausgewaehlte_spiele.add(tipp['Begegnung'])
             if len(kombi_auswahl) == 3:
                 break
-                
-        # Falls weniger als 3 verschiedene Ligen da sind, fülle mit den besten verbleibenden auf
-        if len(kombi_auswahl) < 3:
-            kombi_auswahl = random.sample(sichere_tipps_pro_liga[:6], 3)
         
         gesamtquote = 1.0
-        st.success("### 📜 Dein gemischter KI-Safe-Schein aus den Top-Ligen:")
+        st.success("### 📜 Dein vielseitiger KI-Mix-Schein:")
         
         for idx, tipp in enumerate(kombi_auswahl, 1):
-            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Siegchance:** `{tipp['Chance']}%`")
+            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Typ:** `{tipp['Art']}`")
             gesamtquote *= tipp['Quote']
         
-        st.metric(label="💥 Gesamtquote des Ligen-Mix Scheins", value=f"{round(gesamtquote, 2)}")
-        st.info("✅ Dieser Schein kombiniert automatisch klare Favoriten aus verschiedenen europäischen Top-Ligen!")
+        st.metric(label="💥 Gesamtquote des Kombi-Scheins", value=f"{round(gesamtquote, 2)}")
+        st.info("💡 Drücke einfach erneut auf den Button, um weitere Variationen (Tore, Siege, Kombis) auszuprobieren!")
     else:
-        st.warning("Es wurden derzeit nicht genügend klare Favoriten-Spiele in den Ligen gefunden. Versuche es vor dem Spieltag erneut.")
+        st.warning("Aktuell stehen nicht genügend Spiele zur Verfügung. Versuche es kurz vor dem nächsten Spieltag erneut.")
+
 
 
 
