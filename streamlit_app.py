@@ -184,7 +184,7 @@ def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         jetzt = datetime.now(timezone.utc)
         
-        if dt < jetzt - timedelta(hours=2):
+        if dt < jetzt - timedelta(hours=3):
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
             
         if spieltag_filter > 0:
@@ -577,7 +577,7 @@ if mode == 'einzel' and 'einzel_tipps' in st.session_state:
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Keine Spiele für die gewählten Ligen und den Zeitraum gefunden. (Tipp: Falls heute keine Spiele anstehen, teste 'Ganze Woche' oder 'Wochenende').")
+        st.warning("⚠️ Keine Spiele für diesen Tag gefunden. (Hinweis: Unter der Woche oder am heutigen Tag haben Ligen oft Spielpause oder die Quoten werden erst kurz vor Anpfiff geladen. Probiere es mit 'Wochenende' oder 'Ganze Woche').")
 
 elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
     kombi_auswahl = st.session_state['kombi_auswahl']
@@ -686,4 +686,3 @@ else:
         if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
             st.session_state['saved_tickets'].pop(idx)
             st.rerun()
-
