@@ -171,7 +171,7 @@ DEUTSCHE_ANBIETER = {
     "Bet365 (DE)": "bet365", "Oddset": "bwin", "Neo.bet": "bwin", "Bet-at-home": "betathome"
 }
 
-def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
+def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter, match_index, total_matches):
     if not date_str: return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -180,6 +180,13 @@ def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
         if dt <= jetzt:
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
             
+        if spieltag_filter > 0:
+            erwarteter_spieltag = (match_index // 10) + 1
+            if erwarteter_spieltag != spieltag_filter:
+                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
+
+        heute_date = jetzt.date()
+
         if zeit_modus == "📅 Kalender-Bereich wählen":
             if isinstance(datum_auswahl, tuple) and len(datum_auswahl) == 2:
                 start_date, end_date = datum_auswahl
@@ -194,10 +201,34 @@ def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
                 ist_passend = (dt >= start_dt) and (dt <= end_dt)
                 return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), True
-        else:
-            start_woche = jetzt
-            end_woche = start_woche + timedelta(days=7)
-            ist_passend = (dt >= start_woche) and (dt < end_woche)
+            
+        elif zeit_modus == "⚡ Wochenende (Freitag – Sonntag)":
+            tage_bis_freitag = (4 - heute_date.weekday()) % 7
+            freitag = heute_date + timedelta(days=tage_bis_freitag)
+            sonntag = freitag + timedelta(days=2)
+            
+            start_dt = datetime.combine(freitag, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
+            ist_passend = (dt >= start_dt) and (dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+            
+        elif zeit_modus == "🟢 Ganze Woche (Montag – Sonntag)":
+            montag = heute_date - timedelta(days=heute_date.weekday())
+            sonntag = montag + timedelta(days=6)
+            
+            start_dt = datetime.combine(montag, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
+            ist_passend = (dt >= start_dt) and (dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+            
+        else: # Nächste Woche (Montag bis Sonntag)
+            aktueller_montag = heute_date - timedelta(days=heute_date.weekday())
+            naechster_montag = aktueller_montag + timedelta(days=7)
+            naechster_sonntag = naechster_montag + timedelta(days=6)
+            
+            start_dt = datetime.combine(naechster_montag, datetime.min.time()).replace(tzinfo=timezone.utc)
+            end_dt = datetime.combine(naechster_sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
+            ist_passend = (dt >= start_dt) and (dt <= end_dt)
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
     except Exception: 
         return date_str, True
@@ -226,7 +257,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Alles auf einer Seite • Inkl. DAZN Bet, Anbieter-Wahl & Kalender</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Inkl. DAZN Bet, Spieltag-Filter, Nächste-Woche-Modus & Kalender</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -245,14 +276,13 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- SIDEBAR (LEER / MINIMAL) ---
 with st.sidebar:
     st.markdown("### 🎛️ Info")
-    st.markdown("Alle Einstellungen (inkl. Wettanbieter & DAZN Bet) befinden sich nun direkt zentral auf der Hauptseite.")
+    st.markdown("Alle Einstellungen (Wettanbieter, Spieltag, Zeitraum & Strategien) befinden sich zentral auf der Hauptseite.")
 
 # --- HAUPTSEITE (ALLES IN EINEM BEREICH) ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Wettanbieter, Zeitraum, Ligen & Wett-Modus einstellen (Hier klicken)", expanded=True):
+with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hier klicken)", expanded=True):
     
-    # NEU: Wettanbieter-Auswahl direkt auf der Hauptseite als Reiter/Radio
     st.markdown("#### 🏢 1. Wettanbieter auswählen (Inkl. DAZN Bet)")
     anbieter_wahl = st.radio(
         "Wähle deinen Wettanbieter:",
@@ -262,9 +292,28 @@ with st.expander("⚙️ Wettanbieter, Zeitraum, Ligen & Wett-Modus einstellen (
     )
     
     st.markdown("---")
+    st.markdown("#### 🔢 2. Spieltag auswählen (Optional)")
+    spieltag_auswahl = st.selectbox(
+        "Spieltag wählen (0 = Alle Spieltage ignorieren):",
+        [0] + list(range(1, 39)),
+        format_func=lambda x: "Alle Spieltage (Standard)" if x == 0 else f"Spieltag {x}",
+        key="spieltag_select"
+    )
+
+    st.markdown("---")
     col_e1, col_e2 = st.columns(2)
     with col_e1:
-        gen_zeit_modus = st.radio("Zeitraum-Modus:", ["📅 Kalender-Bereich wählen", "🟢 Ganze Woche wählen"], index=0, key="gen_zeit_mode")
+        gen_zeit_modus = st.radio(
+            "Zeitraum-Modus:", 
+            [
+                "⚡ Wochenende (Freitag – Sonntag)", 
+                "🟢 Ganze Woche (Montag – Sonntag)", 
+                "⏭️ Nächste Woche (Montag – Sonntag)", 
+                "📅 Kalender-Bereich wählen"
+            ], 
+            index=0, 
+            key="gen_zeit_mode"
+        )
     with col_e2:
         gen_typ = st.selectbox(
             "Wett-Typ & Strategie wählen:",
@@ -315,7 +364,7 @@ if generate_click:
     else:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         
-        with st.spinner(f"Analysiere Quoten bei {anbieter_wahl}..."):
+        with st.spinner(f"Analysiere Quoten bei {anbieter_wahl} (Spieltag {spieltag_auswahl if spieltag_auswahl > 0 else 'Alle'})..."):
             
             # 1. EINZELWETTEN / VALUE-BETS MODUS
             if gen_typ == "📊 Einzelwetten & Value-Bets (Tabelle)":
@@ -324,8 +373,9 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        for match in data:
-                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                        total_m = len(data)
+                        for idx, match in enumerate(data):
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -346,8 +396,9 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        for match in data:
-                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                        total_m = len(data)
+                        for idx, match in enumerate(data):
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -370,7 +421,7 @@ if generate_click:
                     st.session_state['kombi_auswahl'] = kombi_auswahl
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    st.warning("Nicht genügend Spiele für eine Kombi im gewählten Zeitraum gefunden.")
+                    st.warning("Nicht genügend Spiele für eine Kombi im gewählten Spieltag/Zeitraum gefunden.")
 
             # 3. FREEBET MODUS
             elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
@@ -379,8 +430,9 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        for match in data:
-                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                        total_m = len(data)
+                        for idx, match in enumerate(data):
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -406,7 +458,7 @@ if generate_click:
                     st.session_state['freebet_kombi'] = freebet_kombi
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    st.warning("Keine Freebet-Spiele für diesen Zeitraum gefunden.")
+                    st.warning("Keine Freebet-Spiele für diesen Spieltag/Zeitraum gefunden.")
 
             # 4. MULTI-TICKET SYSTEM
             else:
@@ -415,8 +467,9 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        for match in data:
-                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                        total_m = len(data)
+                        for idx, match in enumerate(data):
+                            match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx, total_m)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -454,7 +507,7 @@ if generate_click:
                     else:
                         st.warning("Nicht genügend Spiele für das Multi-Ticket-System verfügbar.")
                 else:
-                    st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Zeitraum.")
+                    st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Spieltag/Zeitraum.")
 
 # --- DARSTELLUNG DER ERGEBNISSE AUF DER HAUPTSEITE ---
 mode = st.session_state.get('mode_type', None)
@@ -466,7 +519,7 @@ if mode == 'einzel' and 'einzel_tabelle' in st.session_state:
     if st.session_state['einzel_tabelle']:
         st.dataframe(pd.DataFrame(st.session_state['einzel_tabelle']), use_container_width=True, hide_index=True)
     else:
-        st.info("Keine Spiele für diesen Zeitraum gefunden.")
+        st.info("Keine Spiele für diesen Spieltag/Zeitraum gefunden.")
 
 elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
     kombi_auswahl = st.session_state['kombi_auswahl']
