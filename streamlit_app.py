@@ -30,11 +30,16 @@ ANBIETER_URLS = {
     "Bet-at-home": "https://www.bet-at-home.com"
 }
 
-# --- KEYLESS LIGEN MAPPING (ESPN PUBLIC CODES) ---
+# --- KEYLESS LIGEN MAPPING ---
+# Deutsche Ligen über OpenLigaDB (100% stabil & schlüsselfrei)
+OPENLIGA_SHORTCUTS = {
+    "🇩🇪 1. Bundesliga": "bl1",
+    "🇩🇪 2. Bundesliga": "bl2",
+    "🇩🇪 3. Liga": "bl3"
+}
+
+# Internationale Ligen über ESPN Public Feed (100% schlüsselfrei)
 ESPN_LEAGUE_CODES = {
-    "🇩🇪 1. Bundesliga": "ger.1",
-    "🇩🇪 2. Bundesliga": "ger.2",
-    "🇩🇪 3. Liga": "ger.3",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "eng.1",
     "🇪🇸 La Liga": "esp.1",
     "🇮🇹 Serie A": "ita.1",
@@ -43,13 +48,22 @@ ESPN_LEAGUE_CODES = {
     "🇪🇺 Europa League": "uefa.europa"
 }
 
-# --- KEYLESS ESPN LIVE API FETCH ---
+# --- KEYLESS FETCH ENGINES ---
+@st.cache_data(ttl=300)
+def fetch_openliga_matches(shortcut):
+    """Laedt deutsche Ligen (1., 2. & 3. Liga) kostenlos und ohne API Key."""
+    url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return []
+
 @st.cache_data(ttl=300)
 def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
-    """
-    Fragt die kostenlose, schlüsselfreie ESPN-Schnittstelle ab.
-    Format Datum: YYYYMMDD-YYYYMMDD
-    """
+    """Laedt internationale Top-Ligen kostenlos und ohne API Key."""
     url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={start_date_str}-{end_date_str}"
     try:
         res = requests.get(url, timeout=5)
@@ -246,14 +260,14 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Keyless Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">100% ohne API Key • Alle Top-Ligen weltweit • Live Daten & Quotenvergleich</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">100% ohne API Key • Alle Ligen inkl. 3. Liga • Live Daten & Quotenvergleich</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown("""
         <div class="counter-box">
             <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 STATUS FEED</span><br>
             <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">KEYLESS ⚡</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Direkt & Automatisch</span>
+            <span style="color: #94a3b8; font-size: 0.65rem;">OpenLigaDB + ESPN</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -349,9 +363,9 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🚀 Live-Daten ohne Key laden & Wettscheine berechnen", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Live-Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
 
-# --- ZEITRAUM FORMATIERUNG FÜR ESPN (YYYYMMDD) ---
+# --- ZEITRAUM BERECHNUNG ---
 if "HEUTE" in gen_zeit_modus:
     dt_from, dt_to = today_de, today_de
 elif "MORGEN" in gen_zeit_modus:
@@ -376,14 +390,38 @@ if generate_click or 'matches_cache' not in st.session_state:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade schlüsselfreie API-Spieldaten & berechne Poisson-Prognosen..."):
+        with st.spinner("Lade schlüsselfreie Live-Daten & berechne Poisson-Prognosen..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
-                if liga_label in ESPN_LEAGUE_CODES:
+                # 1. Deutsche Ligen via OpenLigaDB (inklusive 3. Liga!)
+                if liga_label in OPENLIGA_SHORTCUTS:
+                    shortcut = OPENLIGA_SHORTCUTS[liga_label]
+                    raw_openliga = fetch_openliga_matches(shortcut)
+                    for m in raw_openliga:
+                        dt_str = m.get('matchDateTime')
+                        if dt_str:
+                            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                            de_dt = dt.astimezone(tz_de)
+                            m_date = de_dt.date()
+                            
+                            if dt_from <= m_date <= dt_to:
+                                home = m['team1']['teamName']
+                                away = m['team2']['teamName']
+                                p_markets = calculate_poisson_markets(1.50, 1.15)
+                                all_loaded_matches.append({
+                                    "liga": liga_label,
+                                    "home": home,
+                                    "away": away,
+                                    "date": m_date,
+                                    "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
+                                    "markets": p_markets
+                                })
+
+                # 2. Internationale Ligen via ESPN API
+                elif liga_label in ESPN_LEAGUE_CODES:
                     code = ESPN_LEAGUE_CODES[liga_label]
                     raw_matches = fetch_espn_keyless_matches(code, start_str_espn, end_str_espn)
-                    
                     for m in raw_matches:
                         utc_dt = datetime.fromisoformat(m['utc_date'].replace('Z', '+00:00'))
                         de_dt = utc_dt.astimezone(tz_de)
@@ -393,7 +431,6 @@ if generate_click or 'matches_cache' not in st.session_state:
                             home = m['home']
                             away = m['away']
                             p_markets = calculate_poisson_markets(1.65, 1.20)
-                            
                             all_loaded_matches.append({
                                 "liga": liga_label,
                                 "home": home,
@@ -613,3 +650,4 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0
 st.markdown("### 🗂️ Gespeicherte Wettscheine")
 if not st.session_state['saved_tickets']:
     st.info("Bisher keine Scheine hinterlegt.")
+
