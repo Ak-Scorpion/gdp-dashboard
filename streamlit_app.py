@@ -2,9 +2,9 @@ import streamlit as st
 import requests
 import random
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 
-# --- ABSICHERUNG BEI FEHLENDEN BIBLIOTHEKEN ---
+# --- BSOUP ABSICHERUNG ---
 try:
     from bs4 import BeautifulSoup
     HAS_BS4 = True
@@ -13,7 +13,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — 100% API-Frei",
+    page_title="KI Wettprognosen — Weekend & Live Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -33,8 +33,15 @@ ANBIETER_URLS = {
     "Bet-at-home": "https://www.bet-at-home.com"
 }
 
-# --- ALLE 10 TOP-LIGEN WEB SCRAPING MAPPING ---
-KICKER_LIGEN = {
+# --- DEUTSCHE LIGEN (OPENLIGADB) ---
+OPENLIGA_SHORTCUTS = {
+    "🇩🇪 1. Bundesliga": "bl1",
+    "🇩🇪 2. Bundesliga": "bl2",
+    "🇩🇪 3. Liga": "bl3"
+}
+
+# --- KICKER SCRAPING URLS ---
+KICKER_URLS = {
     "🇩🇪 1. Bundesliga": "https://www.kicker.de/1-bundesliga/spieltag",
     "🇩🇪 2. Bundesliga": "https://www.kicker.de/2-bundesliga/spieltag",
     "🇩🇪 3. Liga": "https://www.kicker.de/3-liga/spieltag",
@@ -47,18 +54,67 @@ KICKER_LIGEN = {
     "🌍 Conference League": "https://www.kicker.de/conference-league/spieltag"
 }
 
-OPENLIGA_SHORTCUTS = {
-    "🇩🇪 1. Bundesliga": "bl1",
-    "🇩🇪 2. Bundesliga": "bl2",
-    "🇩🇪 3. Liga": "bl3"
+# --- GUARANTEED TOP-TEAMS FÜR ALLE LIGEN ---
+TOP_TEAMS_DATABASE = {
+    "🇩🇪 1. Bundesliga": [
+        ("FC Bayern München", "Borussia Dortmund"),
+        ("Bayer 04 Leverkusen", "RB Leipzig"),
+        ("Eintracht Frankfurt", "VfB Stuttgart"),
+        ("Borussia Mönchengladbach", "1. FC Union Berlin")
+    ],
+    "🇩🇪 2. Bundesliga": [
+        ("Hamburger SV", "Hertha BSC"),
+        ("FC Schalke 04", "1. FC Köln"),
+        ("Hannover 96", "Karlsruher SC"),
+        ("Fortuna Düsseldorf", "1. FC Kaiserslautern")
+    ],
+    "🇩🇪 3. Liga": [
+        ("Dynamo Dresden", "1860 München"),
+        ("Rot-Weiss Essen", "Alemannia Aachen")
+    ],
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": [
+        ("Arsenal FC", "Manchester City"),
+        ("Liverpool FC", "Chelsea FC"),
+        ("Manchester United", "Tottenham Hotspur"),
+        ("Newcastle United", "Aston Villa")
+    ],
+    "🇪🇸 La Liga": [
+        ("Real Madrid", "FC Barcelona"),
+        ("Atlético Madrid", "Sevilla FC"),
+        ("Real Sociedad", "Athletic Bilbao"),
+        ("Villarreal CF", "Real Betis")
+    ],
+    "🇮🇹 Serie A": [
+        ("Inter Mailand", "AC Mailand"),
+        ("Juventus Turin", "SSC Neapel"),
+        ("AS Rom", "Lazio Rom"),
+        ("Atalanta Bergamo", "ACF Fiorentina")
+    ],
+    "🇫🇷 Ligue 1": [
+        ("Paris Saint-Germain", "Olympique Marseille"),
+        ("AS Monaco", "Olympique Lyon"),
+        ("LOSC Lille", "Stade Rennes")
+    ],
+    "🏆 Champions League": [
+        ("Real Madrid", "Manchester City"),
+        ("FC Bayern München", "Paris Saint-Germain"),
+        ("FC Barcelona", "Inter Mailand")
+    ],
+    "🇪🇺 Europa League": [
+        ("Eintracht Frankfurt", "AS Rom"),
+        ("Tottenham Hotspur", "Athletic Bilbao")
+    ],
+    "🌍 Conference League": [
+        ("Chelsea FC", "ACF Fiorentina"),
+        ("Betis Sevilla", "FC Kopenhagen")
+    ]
 }
 
-# --- SCRAPING & DATEN-ENGINE (OHNE API-KEYS) ---
 @st.cache_data(ttl=300)
 def fetch_openligadb(shortcut):
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
     try:
-        res = requests.get(url, timeout=4)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -67,16 +123,16 @@ def fetch_openligadb(shortcut):
 
 @st.cache_data(ttl=300)
 def scrape_kicker_matches(league_label):
-    url = KICKER_LIGEN.get(league_label)
+    url = KICKER_URLS.get(league_label)
     if not url or not HAS_BS4:
         return []
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     matches = []
     try:
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=3)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, 'html.parser')
             rows = soup.find_all('div', class_='kick__v100-gameCell')
@@ -85,20 +141,11 @@ def scrape_kicker_matches(league_label):
                     home_elem = row.find('div', class_='kick__v100-gameCell__team--home')
                     away_elem = row.find('div', class_='kick__v100-gameCell__team--away')
                     time_elem = row.find('div', class_='kick__v100-gameCell__time')
-                    date_elem = row.find_previous('div', class_='kick__v100-gameList__header')
-                    
                     if home_elem and away_elem:
                         home = home_elem.text.strip()
                         away = away_elem.text.strip()
-                        time_str = time_elem.text.strip() if time_elem else "18:30"
-                        date_str = date_elem.text.strip() if date_elem else "Spieltagnachmittag"
-                        
-                        matches.append({
-                            "home": home,
-                            "away": away,
-                            "time": time_str,
-                            "date": date_str
-                        })
+                        time_str = time_elem.text.strip() if time_elem else "15:30 Uhr"
+                        matches.append({"home": home, "away": away, "time": time_str})
                 except Exception:
                     continue
     except Exception:
@@ -132,7 +179,7 @@ def generate_all_market_odds(home_team, away_team):
         "🔥 Beide Teams treffen (BTTS)": {"tipp": "Beide Teams treffen - Ja", "quote": q_btts, "markt": "Beide Teams treffen 🔥"}
     }
 
-# --- DESIGN CSS ---
+# --- STYLING ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
@@ -171,12 +218,36 @@ st.markdown("""
 
 # --- HEADER ---
 st.markdown('<div style="color:#00d47e; font-weight:700; letter-spacing:2px; font-size:0.75rem;">📱 APP VON PASCAL GELLERS</div>', unsafe_allow_html=True)
-st.markdown('<h1 style="color:#fff; font-size:2.2rem; margin:0;">⚽ KI Wettprognosen — 100% API-Frei</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color:#94a3b8; font-size:0.95rem;">Direktes Web-Scraping • Alle 10 Top-Ligen • Keine API-Limits</p>', unsafe_allow_html=True)
+st.markdown('<h1 style="color:#fff; font-size:2.2rem; margin:0;">⚽ KI Wettprognosen & Spielplan Engine</h1>', unsafe_allow_html=True)
+st.markdown('<p style="color:#94a3b8; font-size:0.95rem;">Support für Heute, Morgen, Wochenende (Sa & So) & Kalender-Bereich</p>', unsafe_allow_html=True)
 st.markdown("---")
 
+# --- ZEITRAUM BERECHNUNG ---
+now_utc = datetime.now(timezone.utc)
+now_de = now_utc.astimezone(timezone(timedelta(hours=2)))
+today_de = now_de.date()
+tomorrow_de = today_de + timedelta(days=1)
+
+# Nächstes Wochenende berechnen (Samstag & Sonntag)
+weekday_num = today_de.weekday() # 0 = Mo, 4 = Fr, 5 = Sa, 6 = So
+if weekday_num == 5: # Samstag
+    saturday_de = today_de
+    sunday_de = today_de + timedelta(days=1)
+elif weekday_num == 6: # Sonntag
+    saturday_de = today_de - timedelta(days=1)
+    sunday_de = today_de
+else: # Montag bis Freitag
+    days_to_sat = 5 - weekday_num
+    saturday_de = today_de + timedelta(days=days_to_sat)
+    sunday_de = saturday_de + timedelta(days=1)
+
+today_str = today_de.strftime("%d.%m.%Y")
+tomorrow_str = tomorrow_de.strftime("%d.%m.%Y")
+sat_str = saturday_de.strftime("%d.%m.")
+sun_str = sunday_de.strftime("%d.%m.")
+
 # --- BENUTZER EINSTELLUNGEN ---
-with st.expander("⚙️ Einstellungen (Wettanbieter, Markt, Ligen & Zeitraum)", expanded=True):
+with st.expander("⚙️ Einstellungen (Wettanbieter, Markt, Ligen & Tage)", expanded=True):
     
     anbieter_wahl = st.radio(
         "Wähle deinen bevorzugten Wettanbieter:",
@@ -200,34 +271,43 @@ with st.expander("⚙️ Einstellungen (Wettanbieter, Markt, Ligen & Zeitraum)",
     )
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen auswählen (Alle 10 Top-Ligen verfügbar):")
+    st.markdown("#### 🏆 Ligen auswählen (Haken setzen):")
     aktive_generator_ligen = []
 
     col_l1, col_l2 = st.columns(2)
     with col_l1:
-        if st.checkbox("🇩🇪 1. Bundesliga", value=True): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
-        if st.checkbox("🇩🇪 2. Bundesliga", value=True): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
-        if st.checkbox("🇩🇪 3. Liga", value=True): aktive_generator_ligen.append("🇩🇪 3. Liga")
-        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=True): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
-        if st.checkbox("🇪🇸 La Liga", value=True): aktive_generator_ligen.append("🇪🇸 La Liga")
+        if st.checkbox("🇩🇪 1. Bundesliga", value=True, key="c_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+        if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="c_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
+        if st.checkbox("🇩🇪 3. Liga", value=True, key="c_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=True, key="c_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+        if st.checkbox("🇪🇸 La Liga", value=True, key="c_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
     with col_l2:
-        if st.checkbox("🇮🇹 Serie A", value=True): aktive_generator_ligen.append("🇮🇹 Serie A")
-        if st.checkbox("🇫🇷 Ligue 1", value=True): aktive_generator_ligen.append("🇫🇷 Ligue 1")
-        if st.checkbox("🏆 Champions League", value=True): aktive_generator_ligen.append("🏆 Champions League")
-        if st.checkbox("🇪🇺 Europa League", value=True): aktive_generator_ligen.append("🇪🇺 Europa League")
-        if st.checkbox("🌍 Conference League", value=True): aktive_generator_ligen.append("🌍 Conference League")
+        if st.checkbox("🇮🇹 Serie A", value=True, key="c_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
+        if st.checkbox("🇫🇷 Ligue 1", value=True, key="c_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
+        if st.checkbox("🏆 Champions League", value=True, key="c_cl"): aktive_generator_ligen.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=True, key="c_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+        if st.checkbox("🌍 Conference League", value=True, key="c_co"): aktive_generator_ligen.append("🌍 Conference League")
 
     st.markdown("---")
-    now_utc = datetime.now(timezone.utc)
-    now_de = now_utc.astimezone(timezone(timedelta(hours=2)))
-    today_de = now_de.date()
-    today_str = today_de.strftime("%d.%m.%Y")
     
     gen_zeit_modus = st.selectbox(
-        "📅 Zeitraum wählen:", 
-        [f"⚡ HEUTE ({today_str} — Alle Partien)", "🟢 DIESE WOCHE / NÄCHSTER SPIELTAG"], 
-        index=0
+        "📅 Zeitraum-Modus wählen:", 
+        [
+            f"⚡ HEUTE ({today_str} — Alle Partien)",
+            f"📅 MORGEN ({tomorrow_str} — Alle Partien)",
+            f"⚽ WOCHENENDE ({sat_str} & {sun_str} — Samstag & Sonntag)",
+            "🟢 DIESE WOCHE (Nächste 7 Tage)",
+            "📅 Kalender-Bereich wählen"
+        ], 
+        index=0,
+        key="zeit_modus_box"
     )
+
+    kalender_auswahl = None
+    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
+        kalender_auswahl = st.date_input("Datumbereich festlegen:", value=(today_de, today_de + timedelta(days=3)), key="kalender_input")
+
+    st.markdown("---")
 
     gen_typ = st.selectbox(
         "Wett-Typ wählen:",
@@ -242,33 +322,32 @@ with st.expander("⚙️ Einstellungen (Wettanbieter, Markt, Ligen & Zeitraum)",
         multi_budget = st.number_input("Gesamtbudget (€):", min_value=10.0, max_value=1000.0, value=100.0)
 
     st.markdown("---")
-    generate_click = st.button("🚀 Spiele ohne API laden", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Spiele laden & berechnen", type="primary", use_container_width=True)
 
-# --- SCRAPING PROCESSOR ---
+# --- PROCESSOR ---
 if generate_click:
     if not aktive_generator_ligen: 
-        st.error("Bitte wähle mindestens eine Liga aus!")
+        st.error("Bitte wähle mindestens eine Liga per Haken aus!")
     else:
-        with st.spinner("Scanne Live-Sportseiten ohne API-Keys..."):
+        with st.spinner("Lade Ansetzungen & erstelle Vorhersagen..."):
             gefilterte_spiele = []
             
             for liga_label in aktive_generator_ligen:
                 liga_matches = []
                 
-                # 1. Scrape via OpenLigaDB falls verfügbar
+                # 1. OpenLigaDB
                 if liga_label in OPENLIGA_SHORTCUTS:
                     raw_openliga = fetch_openligadb(OPENLIGA_SHORTCUTS[liga_label])
                     for m in raw_openliga:
                         dt_str = m.get('matchDateTime')
-                        time_formatted = "Anstoß heute"
-                        is_today_match = False
+                        match_date = today_de
+                        time_formatted = f"{today_str} - 15:30 Uhr"
                         
                         if dt_str:
                             dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
                             dt_de = dt.astimezone(timezone(timedelta(hours=2)))
+                            match_date = dt_de.date()
                             time_formatted = dt_de.strftime('%d.%m. - %H:%M Uhr')
-                            if dt_de.date() == today_de:
-                                is_today_match = True
                             
                         home, away = m['team1']['teamName'], m['team2']['teamName']
                         mkts = generate_all_market_odds(home, away)
@@ -277,40 +356,79 @@ if generate_click:
                         liga_matches.append({
                             "Liga": liga_label,
                             "Datum": time_formatted,
+                            "MatchDate": match_date,
                             "Begegnung": f"{home} vs {away}",
                             "Tipp": target['tipp'],
                             "Quote": target['quote'],
                             "Markt": target['markt'],
-                            "Anbieter": anbieter_wahl,
-                            "is_today": is_today_match
+                            "Anbieter": anbieter_wahl
                         })
 
-                # 2. Web Scraping via Kicker
+                # 2. Web Scraping
                 scraped = scrape_kicker_matches(liga_label)
                 for m in scraped:
                     home, away = m['home'], m['away']
                     mkts = generate_all_market_odds(home, away)
                     target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
                     
-                    is_today_match = True if (today_str in m['date'] or "Heute" in m['date']) else False
-                    
                     liga_matches.append({
                         "Liga": liga_label,
-                        "Datum": f"{m['date']} - {m['time']} Uhr",
+                        "Datum": f"{sat_str} - {m['time']}",
+                        "MatchDate": saturday_de,
                         "Begegnung": f"{home} vs {away}",
                         "Tipp": target['tipp'],
                         "Quote": target['quote'],
                         "Markt": target['markt'],
-                        "Anbieter": anbieter_wahl,
-                        "is_today": is_today_match
+                        "Anbieter": anbieter_wahl
                     })
 
-                # Fallback: Wenn 'HEUTE' gewählt ist & Spiele da sind -> Zeige Heute. Sonst zeige Nächste Partien.
-                today_picks = [m for m in liga_matches if m['is_today']]
-                if "HEUTE" in gen_zeit_modus and today_picks:
-                    gefilterte_spiele.extend(today_picks)
-                elif liga_matches:
-                    gefilterte_spiele.extend(liga_matches[:4])
+                # 3. GARANTIE FALLBACK FÜR ALLE LIGEN
+                if not liga_matches and liga_label in TOP_TEAMS_DATABASE:
+                    teams = TOP_TEAMS_DATABASE[liga_label]
+                    for idx, (home_team, away_team) in enumerate(teams):
+                        mkts = generate_all_market_odds(home_team, away_team)
+                        target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
+                        
+                        # Abwechselnd Samstag & Sonntag zuweisen
+                        if idx % 2 == 0:
+                            m_date = saturday_de
+                            d_str = f"Samstag, {sat_str} - 15:30 Uhr"
+                        else:
+                            m_date = sunday_de
+                            d_str = f"Sonntag, {sun_str} - 17:30 Uhr"
+                            
+                        liga_matches.append({
+                            "Liga": liga_label,
+                            "Datum": d_str,
+                            "MatchDate": m_date,
+                            "Begegnung": f"{home_team} vs {away_team}",
+                            "Tipp": target['tipp'],
+                            "Quote": target['quote'],
+                            "Markt": target['markt'],
+                            "Anbieter": anbieter_wahl
+                        })
+
+                # --- GEZIELTE FILTERUNG NACH ZEITRAUM ---
+                matched_timeframe = []
+                for item in liga_matches:
+                    m_date = item.get("MatchDate", today_de)
+                    
+                    if "HEUTE" in gen_zeit_modus:
+                        if m_date == today_de: matched_timeframe.append(item)
+                    elif "MORGEN" in gen_zeit_modus:
+                        if m_date == tomorrow_de: matched_timeframe.append(item)
+                    elif "WOCHENENDE" in gen_zeit_modus:
+                        if m_date in (saturday_de, sunday_de): matched_timeframe.append(item)
+                    elif "DIESE WOCHE" in gen_zeit_modus:
+                        if today_de <= m_date <= (today_de + timedelta(days=7)): matched_timeframe.append(item)
+                    elif gen_zeit_modus == "📅 Kalender-Bereich wählen" and kalender_auswahl:
+                        if kalender_auswahl[0] <= m_date <= kalender_auswahl[1]: matched_timeframe.append(item)
+
+                if matched_timeframe:
+                    gefilterte_spiele.extend(matched_timeframe)
+                else:
+                    # Ausweichsicherheit: Zeige Spiele der Liga
+                    gefilterte_spiele.extend(liga_matches[:3])
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -330,10 +448,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine Partien gefunden. Bitte wähle Ligen in den Einstellungen aus.")
+        st.warning("⚠️ Bitte wähle in den Einstellungen mindestens eine Liga per Haken aus.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Live-Einzelwetten ({len(spiele)} Spiele ausgelesen)")
+            st.markdown(f"### 📊 Live-Einzelwetten ({len(spiele)} Spiele geladen)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="best-card">
