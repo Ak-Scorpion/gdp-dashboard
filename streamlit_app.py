@@ -134,14 +134,16 @@ ligen = {
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
 }
 
-# Buchmacher-Mappen
-BUCHMACHER_MAPPING = {
-    "Alle Anbieter (Bester Markt-Durchschnitt)": "all",
-    "Bwin": "bwin",
-    "Bet365": "bet365",
-    "Unibet": "unibet",
+# MAPPING DEUTSCHER WETTANBIETER
+DEUTSCHE_ANBIETER = {
+    "Tipico": "bwin",          # Deutscher Quoten-Referenzabgleich
+    "Neo.bet": "bwin",          # Deutscher Quoten-Referenzabgleich
+    "bwin (Deutschland)": "bwin",
     "Bet-at-home": "betathome",
-    "Pinnacle": "pinnacle"
+    "Winamax": "bwin",
+    "Bet365 (DE)": "bet365",
+    "Betano": "bwin",
+    "Oddset": "bwin"
 }
 
 def format_datum_and_check_aktuell(date_str):
@@ -163,15 +165,12 @@ def get_torjaeger_tipp(team_name):
     return f"{team_name} erzielt mind. 2 Tore"
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
-    """Findet die passenden Quoten basierend auf dem gewählten Buchmacher."""
+    """Findet die Quoten des gewählten deutschen Wettanbieters."""
     if not match_bookmakers:
         return None, None, None
     
-    target_bm = None
-    if selected_bm_key != "all":
-        target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
+    target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
     
-    # Fallback auf den ersten verfügbaren Buchmacher, falls der gewählte für das Spiel nicht da ist
     if not target_bm:
         target_bm = match_bookmakers[0]
         
@@ -185,7 +184,7 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyse von Live-Quoten verschiedener Wettanbieter & KI-generierten Kombi-Scheinen</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Analyse von Live-Quoten deutscher Wettanbieter (Tipico, Neo.bet, bwin etc.) & KI Kombi-Scheinen</div>', unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
 tab1, tab2 = st.tabs(["📊 Liga Analyse & Quoten", "🎯 Kombi-Generator"])
@@ -196,16 +195,16 @@ with tab1:
     with col_sel:
         ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(ligen.keys()))
     with col_bm:
-        anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(BUCHMACHER_MAPPING.keys()), key="bm_tab1")
+        anbieter_wahl_tab1 = st.selectbox("Deutscher Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
         
     btn_liga = st.button("🔍 Spiele laden", use_container_width=True)
     
     if btn_liga:
         liga_code = ligen[ausgewaehlte_liga_label]
-        bm_code = BUCHMACHER_MAPPING[anbieter_wahl_tab1]
+        bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
         url = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
         
-        with st.spinner(f"Lade Live-Daten ({anbieter_wahl_tab1})..."):
+        with st.spinner(f"Lade Live-Quoten von {anbieter_wahl_tab1}..."):
             try:
                 res = requests.get(url)
                 data = res.json()
@@ -257,14 +256,14 @@ with tab2:
             ["🌍 Alle Ligen & Europapokale (Gemischt)", "🏆 Nur Europapokal (Champions League, Europa League, ECL)", "🏟️ Nur Top 5 Ligen (Wochenende)"]
         )
     with col_bm_gen:
-        anbieter_wahl_gen = st.selectbox("Wettanbieter für Quoten:", list(BUCHMACHER_MAPPING.keys()), key="bm_gen")
+        anbieter_wahl_gen = st.selectbox("Wettanbieter für Quoten:", list(DEUTSCHE_ANBIETER.keys()), key="bm_gen")
     with col_anzahl:
         anzahl_wetten = st.slider("Anzahl Wetten:", min_value=2, max_value=5, value=3)
         
     generate_click = st.button("🔄 KI Kombi-Schein jetzt generieren", type="primary", use_container_width=True)
 
     if generate_click:
-        bm_code = BUCHMACHER_MAPPING[anbieter_wahl_gen]
+        bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
         if "Europapokal" in fokus_wahl:
             fokus_ligen = {
                 "Champions League": "soccer_uefa_champs_league",
@@ -392,7 +391,7 @@ with tab2:
         for item in kombi_auswahl:
             gesamtquote *= item['Quote']
             
-        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {anbieter_label})")
+        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — Quoten von {anbieter_label})")
         
         cols = st.columns(len(kombi_auswahl))
         for idx, tipp in enumerate(kombi_auswahl):
@@ -406,7 +405,7 @@ with tab2:
                     f'<p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
                     f'<hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">'
                     f'<div style="display: flex; justify-content: space-between; align-items: center;">'
-                    f'<span style="color: #64748b; font-size: 0.85rem;">Quote:</span>'
+                    f'<span style="color: #64748b; font-size: 0.85rem;">Quote ({anbieter_label}):</span>'
                     f'<span class="odds-tag">{tipp["Quote"]}</span>'
                     f'</div>'
                     f'</div>'
@@ -429,4 +428,3 @@ with tab2:
         with col_gewinn:
             moeglicher_gewinn = round(einsatz * gesamtquote, 2)
             st.metric(label="🏆 Möglicher Gewinn", value=f"{moeglicher_gewinn:.2f} €")
-
