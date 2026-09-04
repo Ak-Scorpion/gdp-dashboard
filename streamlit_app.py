@@ -172,7 +172,6 @@ def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         jetzt = datetime.now(timezone.utc)
         
-        # Vergangene / laufende Spiele ausschließen
         if dt <= jetzt:
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
             
@@ -185,14 +184,12 @@ def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
                     ist_passend = (dt >= start_dt) and (dt <= end_dt)
                     return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
             elif isinstance(datum_auswahl, date):
-                # Nur ein einzelner Tag ausgewählt
                 start_dt = datetime.combine(datum_auswahl, datetime.min.time()).replace(tzinfo=timezone.utc)
                 end_dt = datetime.combine(datum_auswahl, datetime.max.time()).replace(tzinfo=timezone.utc)
                 ist_passend = (dt >= start_dt) and (dt <= end_dt)
                 return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), True
         else:
-            # Fallback ganze Woche
             start_woche = jetzt
             end_woche = start_woche + timedelta(days=7)
             ist_passend = (dt >= start_woche) and (dt < end_woche)
@@ -224,7 +221,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Kalender-Filter & Multi-Ticket System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Touch-freundlicher Kalender & Multi-Ticket System</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -245,7 +242,7 @@ with st.sidebar:
     st.markdown("### 🎛️ Steuerungs-Panel")
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
     st.markdown("---")
-    st.markdown("💡 Wähle deine Tage direkt im Kalender in Tab 2 aus.")
+    st.markdown("💡 Wähle deine Tage im Kalender in Tab 2 aus.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -292,9 +289,9 @@ with tab2:
         
         kalender_auswahl = None
         if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Wähle einen Start- und Endtag im Kalender (oder klicke zweimal auf denselben Tag für exakt einen Tag):</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke einfach auf den Kalender und wähle deinen Zeitraum aus (ohne Tastatur):</p>", unsafe_allow_html=True)
             kalender_auswahl = st.date_input(
-                "Zeitraum für Wetten:",
+                "Zeitraum für Wetten auswählen:",
                 value=(date.today(), date.today() + timedelta(days=3)),
                 key="kalender_input"
             )
