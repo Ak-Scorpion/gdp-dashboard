@@ -1,19 +1,18 @@
 import streamlit as st
 import requests
 import math
-import random
 import hashlib
 from datetime import datetime, timedelta, timezone
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Safe-Bet & Live Engine",
+    page_title="KI Wettprognosen — Keyless Live Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- SESSION STATE INITIALISIERUNG ---
+# --- SESSION STATE ---
 if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
 if 'matches_cache' not in st.session_state:
@@ -31,32 +30,61 @@ ANBIETER_URLS = {
     "Bet-at-home": "https://www.bet-at-home.com"
 }
 
-# --- LIGEN MAPPING ---
-FOOTBALL_DATA_LEAGUES = {
-    "🇩🇪 1. Bundesliga": "BL1",
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "PL",
-    "🇪🇸 La Liga": "PD",
-    "🇮🇹 Serie A": "SA",
-    "🇫🇷 Ligue 1": "FL1",
-    "🏆 Champions League": "CL"
+# --- KEYLESS LIGEN MAPPING (ESPN PUBLIC CODES) ---
+ESPN_LEAGUE_CODES = {
+    "🇩🇪 1. Bundesliga": "ger.1",
+    "🇩🇪 2. Bundesliga": "ger.2",
+    "🇩🇪 3. Liga": "ger.3",
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "eng.1",
+    "🇪🇸 La Liga": "esp.1",
+    "🇮🇹 Serie A": "ita.1",
+    "🇫🇷 Ligue 1": "fra.1",
+    "🏆 Champions League": "uefa.champions",
+    "🇪🇺 Europa League": "uefa.europa"
 }
 
-OPENLIGA_SHORTCUTS = {
-    "🇩🇪 1. Bundesliga": "bl1",
-    "🇩🇪 2. Bundesliga": "bl2",
-    "🇩🇪 3. Liga": "bl3"
-}
+# --- KEYLESS ESPN LIVE API FETCH ---
+@st.cache_data(ttl=300)
+def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
+    """
+    Fragt die kostenlose, schlüsselfreie ESPN-Schnittstelle ab.
+    Format Datum: YYYYMMDD-YYYYMMDD
+    """
+    url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={start_date_str}-{end_date_str}"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            events = data.get('events', [])
+            matches = []
+            for event in events:
+                utc_date_str = event.get('date')
+                competitions = event.get('competitions', [])
+                if competitions:
+                    competitors = competitions[0].get('competitors', [])
+                    home_team, away_team = "", ""
+                    for comp in competitors:
+                        if comp.get('homeAway') == 'home':
+                            home_team = comp.get('team', {}).get('displayName', '')
+                        else:
+                            away_team = comp.get('team', {}).get('displayName', '')
+                    
+                    if home_team and away_team and utc_date_str:
+                        matches.append({
+                            "home": home_team,
+                            "away": away_team,
+                            "utc_date": utc_date_str
+                        })
+            return matches
+    except Exception:
+        pass
+    return []
 
 # --- MATH ENGINE: POISSON BERECHNUNG ---
 def poisson_pmf(lmbda, k):
-    """Berechnet die Poisson-Wahrscheinlichkeit für k Tore bei Erwartungswert lambda."""
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
 def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
-    """
-    Erstellt eine exakte Tor-Matrix (0 bis 5 Tore je Team)
-    und berechnet mathematisch fundierte Wahrscheinlichkeiten & Quoten.
-    """
     matrix = [[0.0 for _ in range(6)] for _ in range(6)]
     for h in range(6):
         for a in range(6):
@@ -73,7 +101,7 @@ def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
     p_dc_1x = p_home + p_draw
     p_dc_x2 = p_away + p_draw
     
-    margin = 1.06  # 6% Buchmacher-Marge
+    margin = 1.06
     
     def prob_to_odds(p):
         if p <= 0.01: return 99.00
@@ -124,30 +152,6 @@ def get_best_bookmaker_odds(base_quote, home_team, away_team, market_key, checke
     best_bm = max(bm_odds, key=bm_odds.get)
     best_quote = bm_odds[best_bm]
     return best_bm, best_quote, bm_odds
-
-# --- ECHTE API FETCH ENGINES ---
-@st.cache_data(ttl=300)
-def fetch_football_data_matches(api_key, league_code, date_from_str, date_to_str):
-    url = f"https://api.football-data.org/v4/competitions/{league_code}/matches?dateFrom={date_from_str}&dateTo={date_to_str}"
-    headers = {"X-Auth-Token": api_key}
-    try:
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            return res.json().get('matches', [])
-    except Exception:
-        pass
-    return []
-
-@st.cache_data(ttl=300)
-def fetch_openliga_matches(shortcut):
-    url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
-    try:
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
-            return res.json()
-    except Exception:
-        pass
-    return []
 
 # --- DESIGNER CSS ---
 st.markdown("""
@@ -241,15 +245,15 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Safe-Bet Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Automatischer Poisson-Filter • Quotenvergleich aller Anbieter • Live API Daten</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Keyless Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">100% ohne API Key • Alle Top-Ligen weltweit • Live Daten & Quotenvergleich</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown("""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 KI POISSON ENGINE</span><br>
-            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">AKTIV 🛡️</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Max. Präzision & Value</span>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 STATUS FEED</span><br>
+            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">KEYLESS ⚡</span><br>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Direkt & Automatisch</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -258,22 +262,9 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- HAUPTSEITE EINSTELLUNGEN EXPANDER ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Zeitraum)", expanded=True):
-    
-    st.markdown("#### 🔑 API Konfiguration & Quoten-Vergleich")
-    col_api, col_dummy = st.columns([2, 1])
-    with col_api:
-        api_key = st.text_input(
-            "football-data.org API Key (Optional für weltweite Ligen):", 
-            type="password", 
-            help="Kostenloser Key unter football-data.org liefert PL, BL1, La Liga, Serie A, Ligue 1 & CL."
-        )
-    if not api_key:
-        st.info("💡 Ohne Key werden 1., 2. & 3. Bundesliga direkt über OpenLigaDB geladen.")
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)", expanded=True):
 
-    st.markdown("---")
     st.markdown("#### 🏪 Wettanbieter für Quotenvergleich auswählen (Haken setzen):")
-    
     aktive_anbieter = []
     col_b1, col_b2, col_b3, col_b4 = st.columns(4)
     with col_b1:
@@ -291,7 +282,6 @@ with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Z
 
     st.markdown("---")
     st.markdown("#### 🏆 Ligen auswählen:")
-    
     aktive_generator_ligen = []
     col_l1, col_l2 = st.columns(2)
     with col_l1:
@@ -304,9 +294,9 @@ with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Z
         if st.checkbox("🇮🇹 Serie A", value=True, key="h_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
         if st.checkbox("🇫🇷 Ligue 1", value=True, key="h_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
         if st.checkbox("🏆 Champions League", value=True, key="h_cl"): aktive_generator_ligen.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=True, key="h_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
 
     st.markdown("---")
-    
     gen_zeit_modus = st.selectbox(
         "📅 Zeitraum-Modus wählen:", 
         [
@@ -325,7 +315,6 @@ with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Z
         kalender_auswahl = st.date_input("Datumbereich festlegen:", value=(today_de, today_de + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
-    
     risiko_profil = st.selectbox(
         "🧠 KI Risikoprofil & Markt-Fokus:",
         [
@@ -337,7 +326,6 @@ with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Z
     )
 
     st.markdown("---")
-    
     gen_typ = st.selectbox(
         "Wett-Typ wählen:",
         [
@@ -361,9 +349,9 @@ with st.expander("⚙️ Einstellungen öffnen (API Key, Wettanbieter, Ligen & Z
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🚀 Live-Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Live-Daten ohne Key laden & Wettscheine berechnen", type="primary", use_container_width=True)
 
-# --- ZEITRAUM BERECHNUNG ---
+# --- ZEITRAUM FORMATIERUNG FÜR ESPN (YYYYMMDD) ---
 if "HEUTE" in gen_zeit_modus:
     dt_from, dt_to = today_de, today_de
 elif "MORGEN" in gen_zeit_modus:
@@ -378,8 +366,8 @@ else:
     else:
         dt_from, dt_to = today_de, today_de + timedelta(days=3)
 
-str_from = dt_from.strftime("%Y-%m-%d")
-str_to = dt_to.strftime("%Y-%m-%d")
+start_str_espn = dt_from.strftime("%Y%m%d")
+end_str_espn = dt_to.strftime("%Y%m%d")
 
 # --- GENERATOR ENGINE ---
 if generate_click or 'matches_cache' not in st.session_state:
@@ -388,23 +376,24 @@ if generate_click or 'matches_cache' not in st.session_state:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Frage API-Datenbanken an & berechne Poisson-Prognosen..."):
+        with st.spinner("Lade schlüsselfreie API-Spieldaten & berechne Poisson-Prognosen..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
-                # 1. Football-Data.org
-                if liga_label in FOOTBALL_DATA_LEAGUES and api_key:
-                    code = FOOTBALL_DATA_LEAGUES[liga_label]
-                    raw_matches = fetch_football_data_matches(api_key, code, str_from, str_to)
+                if liga_label in ESPN_LEAGUE_CODES:
+                    code = ESPN_LEAGUE_CODES[liga_label]
+                    raw_matches = fetch_espn_keyless_matches(code, start_str_espn, end_str_espn)
+                    
                     for m in raw_matches:
-                        utc_dt = datetime.fromisoformat(m['utcDate'].replace('Z', '+00:00'))
+                        utc_dt = datetime.fromisoformat(m['utc_date'].replace('Z', '+00:00'))
                         de_dt = utc_dt.astimezone(tz_de)
                         m_date = de_dt.date()
                         
                         if dt_from <= m_date <= dt_to:
-                            home = m['homeTeam']['name']
-                            away = m['awayTeam']['name']
+                            home = m['home']
+                            away = m['away']
                             p_markets = calculate_poisson_markets(1.65, 1.20)
+                            
                             all_loaded_matches.append({
                                 "liga": liga_label,
                                 "home": home,
@@ -413,30 +402,6 @@ if generate_click or 'matches_cache' not in st.session_state:
                                 "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
                                 "markets": p_markets
                             })
-
-                # 2. OpenLigaDB Fallback
-                elif liga_label in OPENLIGA_SHORTCUTS:
-                    shortcut = OPENLIGA_SHORTCUTS[liga_label]
-                    raw_openliga = fetch_openliga_matches(shortcut)
-                    for m in raw_openliga:
-                        dt_str = m.get('matchDateTime')
-                        if dt_str:
-                            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                            de_dt = dt.astimezone(tz_de)
-                            m_date = de_dt.date()
-                            
-                            if dt_from <= m_date <= dt_to:
-                                home = m['team1']['teamName']
-                                away = m['team2']['teamName']
-                                p_markets = calculate_poisson_markets(1.50, 1.15)
-                                all_loaded_matches.append({
-                                    "liga": liga_label,
-                                    "home": home,
-                                    "away": away,
-                                    "date": m_date,
-                                    "time_str": de_dt.strftime("%d.%m. - %H:%M Uhr"),
-                                    "markets": p_markets
-                                })
 
             st.session_state['matches_cache'] = all_loaded_matches
             st.session_state['gen_typ'] = gen_typ
@@ -449,7 +414,6 @@ def get_profile_pick(match, profile, checked_bookmakers):
     home, away = match['home'], match['away']
     
     if "Safe Mode" in profile:
-        # Doppelte Chance oder Safe Über 1.5
         safe_dc = mkts['Safe_DC']
         base_q = safe_dc['base_quote']
         tipp_str = f"Doppelte Chance ({home if 'Heim' in safe_dc['tip'] else away} / X)"
@@ -457,7 +421,6 @@ def get_profile_pick(match, profile, checked_bookmakers):
         mkt_name = "Safe Mode 🛡️"
         m_key = "safe_dc"
     elif "High Risk" in profile:
-        # Direct Win or Over 2.5
         p_h = mkts['1X2 Siegwette']['1']['prob']
         p_a = mkts['1X2 Siegwette']['2']['prob']
         if p_h >= p_a:
@@ -491,7 +454,7 @@ def get_profile_pick(match, profile, checked_bookmakers):
 
 # --- ERGEBNISSE ANZEIGEN ---
 if not matches:
-    st.warning(f"⚠️ Keine Spiele für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.')} - {dt_to.strftime('%d.%m.')}) in den gewählten Ligen gefunden.")
+    st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.')} - {dt_to.strftime('%d.%m.')}) in den gewählten Ligen gefunden.")
 else:
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
