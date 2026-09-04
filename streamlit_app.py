@@ -2,8 +2,7 @@ import streamlit as st
 import requests
 import random
 import hashlib
-import re
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 
 # --- BSOUP ABSICHERUNG (Verhindert Absturz, falls bs4 fehlt) ---
 try:
@@ -14,7 +13,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Hybrid Multi-Engine",
+    page_title="KI Wettprognosen — Hybrid Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -94,7 +93,7 @@ def fetch_github_opendata(url):
 @st.cache_data(ttl=180)
 def scrape_kicker_live(league_label):
     url = KICKER_URLS.get(league_label)
-    if not url:
+    if not url or not HAS_BS4:
         return []
     
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -102,21 +101,20 @@ def scrape_kicker_live(league_label):
     try:
         res = requests.get(url, headers=headers, timeout=5)
         if res.status_code == 200:
-            if HAS_BS4:
-                soup = BeautifulSoup(res.text, 'html.parser')
-                rows = soup.find_all('div', class_='kick__v100-gameCell')
-                for row in rows:
-                    try:
-                        home_elem = row.find('div', class_='kick__v100-gameCell__team--home')
-                        away_elem = row.find('div', class_='kick__v100-gameCell__team--away')
-                        time_elem = row.find('div', class_='kick__v100-gameCell__time')
-                        if home_elem and away_elem:
-                            home = home_elem.text.strip()
-                            away = away_elem.text.strip()
-                            time_str = time_elem.text.strip() if time_elem else "18:30"
-                            matches.append({"home": home, "away": away, "time": time_str})
-                    except Exception:
-                        continue
+            soup = BeautifulSoup(res.text, 'html.parser')
+            rows = soup.find_all('div', class_='kick__v100-gameCell')
+            for row in rows:
+                try:
+                    home_elem = row.find('div', class_='kick__v100-gameCell__team--home')
+                    away_elem = row.find('div', class_='kick__v100-gameCell__team--away')
+                    time_elem = row.find('div', class_='kick__v100-gameCell__time')
+                    if home_elem and away_elem:
+                        home = home_elem.text.strip()
+                        away = away_elem.text.strip()
+                        time_str = time_elem.text.strip() if time_elem else "18:30"
+                        matches.append({"home": home, "away": away, "time": time_str})
+                except Exception:
+                    continue
     except Exception:
         pass
     return matches
@@ -140,21 +138,11 @@ def generate_all_market_odds(home_team, away_team):
     random.seed()
     
     return {
-        "🎯 1X2 Siegwette (Direkter Sieg)": {
-            "tipp": sieg_tip, "quote": min(q_h, q_a), "markt": "1X2 Siegwette 🎯"
-        },
-        "🛡️ Doppelte Chance (1X / X2 - Höchste Sicherheit)": {
-            "tipp": dc_tip, "quote": q_dc, "markt": "Doppelte Chance 🛡️"
-        },
-        "⚽ Tor-Markt (Über 2.5 Tore)": {
-            "tipp": "Über 2.5 Tore", "quote": q_over25, "markt": "Tor-Markt (Über 2.5) ⚽"
-        },
-        "⚽ Tor-Markt (Über 1.5 Tore - Safe)": {
-            "tipp": "Über 1.5 Tore", "quote": q_over15, "markt": "Tor-Markt (Über 1.5) 🛡️"
-        },
-        "🔥 Beide Teams treffen (BTTS)": {
-            "tipp": "Beide Teams treffen - Ja", "quote": q_btts, "markt": "Beide Teams treffen 🔥"
-        }
+        "🎯 1X2 Siegwette (Direkter Sieg)": {"tipp": sieg_tip, "quote": min(q_h, q_a), "markt": "1X2 Siegwette 🎯"},
+        "🛡️ Doppelte Chance (1X / X2 - Höchste Sicherheit)": {"tipp": dc_tip, "quote": q_dc, "markt": "Doppelte Chance 🛡️"},
+        "⚽ Tor-Markt (Über 2.5 Tore)": {"tipp": "Über 2.5 Tore", "quote": q_over25, "markt": "Tor-Markt (Über 2.5) ⚽"},
+        "⚽ Tor-Markt (Über 1.5 Tore - Safe)": {"tipp": "Über 1.5 Tore", "quote": q_over15, "markt": "Tor-Markt (Über 1.5) 🛡️"},
+        "🔥 Beide Teams treffen (BTTS)": {"tipp": "Beide Teams treffen - Ja", "quote": q_btts, "markt": "Beide Teams treffen 🔥"}
     }
 
 # --- STYLING ---
@@ -191,7 +179,7 @@ st.markdown("""
 # --- HEADER ---
 st.markdown('<div style="color:#00d47e; font-weight:700; letter-spacing:2px; font-size:0.75rem;">📱 APP VON PASCAL GELLERS</div>', unsafe_allow_html=True)
 st.markdown('<h1 style="color:#fff; font-size:2.2rem; margin:0;">⚽ KI Wettprognosen & Kombi Generator</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color:#94a3b8; font-size:0.95rem;">Fehlerfreie Multi-Engine • OpenLigaDB + GitHub Open-Data + Web Scraping</p>', unsafe_allow_html=True)
+st.markdown('<p style="color:#94a3b8; font-size:0.95rem;">Garantierte Anzeige • OpenLigaDB + GitHub Open-Data + Web Scraping</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # --- BENUTZER EINSTELLUNGEN ---
@@ -244,7 +232,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Markt & Zeitraum)"
     
     gen_zeit_modus = st.selectbox(
         "📅 Zeitraum wählen:", 
-        [f"⚡ HEUTE ({today_str} — Alle Partien)", "🟢 DIESE WOCHE (Nächste 7 Tage)"], 
+        [f"⚡ HEUTE ({today_str} — Alle Partien)", "🟢 DIESE WOCHE / NÄCHSTER SPIELTAG"], 
         index=0
     )
 
@@ -254,7 +242,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Markt & Zeitraum)"
     )
 
     st.markdown("---")
-    generate_click = st.button("🔄 Hybrid Multi-Engine starten", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Hybrid Multi-Engine starten", type="primary", use_container_width=True)
 
 # --- EXECUTION ENGINE ---
 if generate_click:
@@ -265,27 +253,35 @@ if generate_click:
             gefilterte_spiele = []
             
             for liga_label in aktive_generator_ligen:
+                liga_matches = []
+                
                 # 1. OpenLigaDB
                 if liga_label in OPENLIGA_MAP:
                     raw = fetch_openligadb(OPENLIGA_MAP[liga_label])
                     for m in raw:
                         dt_str = m.get('matchDateTime')
+                        time_formatted = "Anstoß heute"
+                        is_today_match = False
+                        
                         if dt_str:
                             dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
                             dt_de = dt.astimezone(timezone(timedelta(hours=2)))
-                            if "HEUTE" in gen_zeit_modus and dt_de.date() != today_de:
-                                continue
+                            time_formatted = dt_de.strftime('%d.%m. - %H:%M Uhr')
+                            if dt_de.date() == today_de:
+                                is_today_match = True
                             
-                            home, away = m['team1']['teamName'], m['team2']['teamName']
-                            mkts = generate_all_market_odds(home, away)
-                            target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
-                            
-                            gefilterte_spiele.append({
-                                "Liga": liga_label, "Datum": dt_de.strftime('%d.%m. - %H:%M Uhr'),
-                                "Begegnung": f"{home} vs {away}", "Tipp": target['tipp'],
-                                "Quote": target['quote'], "Markt": target['markt'],
-                                "Anbieter": anbieter_wahl, "Quelle": "OpenLigaDB", "Badge": "badge-openliga"
-                            })
+                        home, away = m['team1']['teamName'], m['team2']['teamName']
+                        mkts = generate_all_market_odds(home, away)
+                        target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
+                        
+                        item = {
+                            "Liga": liga_label, "Datum": time_formatted,
+                            "Begegnung": f"{home} vs {away}", "Tipp": target['tipp'],
+                            "Quote": target['quote'], "Markt": target['markt'],
+                            "Anbieter": anbieter_wahl, "Quelle": "OpenLigaDB", "Badge": "badge-openliga",
+                            "is_today": is_today_match
+                        }
+                        liga_matches.append(item)
 
                 # 2. Web Scraping & GitHub Open-Data
                 else:
@@ -295,11 +291,12 @@ if generate_click:
                             home, away = m['home'], m['away']
                             mkts = generate_all_market_odds(home, away)
                             target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
-                            gefilterte_spiele.append({
+                            liga_matches.append({
                                 "Liga": liga_label, "Datum": f"{today_str} - {m['time']} Uhr",
                                 "Begegnung": f"{home} vs {away}", "Tipp": target['tipp'],
                                 "Quote": target['quote'], "Markt": target['markt'],
-                                "Anbieter": anbieter_wahl, "Quelle": "Live Scraper", "Badge": "badge-scraper"
+                                "Anbieter": anbieter_wahl, "Quelle": "Live Scraper", "Badge": "badge-scraper",
+                                "is_today": True
                             })
                     elif liga_label in GITHUB_DATA_MAP:
                         gh_matches = fetch_github_opendata(GITHUB_DATA_MAP[liga_label])
@@ -308,12 +305,20 @@ if generate_click:
                             if home and away:
                                 mkts = generate_all_market_odds(home, away)
                                 target = mkts.get(gewaehlter_markt, list(mkts.values())[0])
-                                gefilterte_spiele.append({
+                                liga_matches.append({
                                     "Liga": liga_label, "Datum": f"{today_str} - 20:45 Uhr",
                                     "Begegnung": f"{home} vs {away}", "Tipp": target['tipp'],
                                     "Quote": target['quote'], "Markt": target['markt'],
-                                    "Anbieter": anbieter_wahl, "Quelle": "GitHub Open-Data", "Badge": "badge-github"
+                                    "Anbieter": anbieter_wahl, "Quelle": "GitHub Open-Data", "Badge": "badge-github",
+                                    "is_today": True
                                 })
+
+                # Smart Filter: Erst heutige Spiele versuchen, sonst nächstgelegene Ansetzungen anzeigen
+                today_only = [m for m in liga_matches if m.get('is_today')]
+                if "HEUTE" in gen_zeit_modus and today_only:
+                    gefilterte_spiele.extend(today_only)
+                else:
+                    gefilterte_spiele.extend(liga_matches[:4])
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -321,12 +326,11 @@ if generate_click:
 # --- RESULTS DISPLAY ---
 if 'gefilterte_spiele' in st.session_state:
     spiele = st.session_state['gefilterte_spiele']
-    g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
 
     if not spiele:
         st.warning("⚠️ Keine Partien für den gewählten Filter gefunden.")
     else:
-        st.markdown(f"### 📊 Live ausgelesene Spiele ({len(spiele)} Tipps geladen)")
+        st.markdown(f"### 📊 Geladene Spiele ({len(spiele)} Tipps)")
         for tipp in spiele:
             st.markdown(f"""
                 <div class="best-card">
@@ -336,7 +340,7 @@ if 'gefilterte_spiele' in st.session_state:
                     <p style="color:#00d47e; font-size:0.8rem; margin-bottom:8px;">📅 {tipp['Datum']}</p>
                     <p style="color:#94a3b8; font-size:0.9rem;">Markt: <b>{tipp['Markt']}</b> | Tipp: <b style="color:#ffffff;">{tipp['Tipp']}</b></p>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                        <span style="color:#64748b; font-size:0.8rem;">Quote:</span>
+                        <span style="color:#64748b; font-size:0.8rem;">Quote ({tipp['Anbieter']}):</span>
                         <span class="odds-tag">{tipp['Quote']}</span>
                     </div>
                 </div>
