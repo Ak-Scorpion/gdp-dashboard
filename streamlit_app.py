@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -203,16 +203,24 @@ WOCHEN_OPTIONS = {
     "⏩ In 4 Wochen (+4 Wochen)": 4
 }
 
-def check_und_format_woche(date_str, offset_wochen):
-    if not date_str: return "Unbekannt", False
+def check_und_format_woche_und_zukunft(date_str, offset_wochen):
+    if not date_str: return "Unbekannt", False, False
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
-        jetzt = datetime.utcnow()
+        # Konvertiere API-Zeitstring in ein datetime-Objekt (UTC)
+        dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        jetzt = datetime.now(timezone.utc)
+        
+        # 1. Check: Ist das Spiel JETZT SCHON VORBEI ODER LÄUFT BEREITS? (Vergangenheit ausschließen)
+        ist_in_zukunft = dt > jetzt
+        
+        # 2. Check: Gehört es in die ausgewählte Ziel-Spielwoche?
         start_zielwoche = jetzt + timedelta(weeks=offset_wochen)
         end_zielwoche = start_zielwoche + timedelta(days=7)
         ist_in_zielwoche = (dt >= start_zielwoche) and (dt < end_zielwoche)
-        return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_in_zielwoche
-    except Exception: return date_str, True
+        
+        return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (ist_in_zielwoche and ist_in_zukunft)
+    except Exception: 
+        return date_str, True
 
 def get_torjaeger_tipp(team_name):
     if team_name in TOP_STUERMER: return f"Tor durch {TOP_STUERMER[team_name]}"
@@ -250,7 +258,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Europäische Top-Ligen, Quoten-Analyse & smarte Konfigurator-Pusher</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen, Echtzeit-Live-Filter & smarte Scheine</div>', unsafe_allow_html=True)
 
 with col_count:
     active_key_num = st.session_state['current_key_index'] + 1
@@ -295,7 +303,7 @@ with st.sidebar:
         ausgewaehlte_ligen_keys = list(LIGEN.keys())
         
     st.markdown("---")
-    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um blitzschnell Ligen anzupassen.")
+    st.markdown("💡 **Hinweis:** Abgelaufene Spiele werden automatisch herausgefiltert.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -313,13 +321,14 @@ with tab1:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
         
-        with st.spinner(f"Analysiere Quoten für {Einzelne_Liga_Auswahl}..."):
+        with st.spinner(f"Analysiere anstehende Quoten für {Einzelne_Liga_Auswahl}..."):
             data = load_league_odds(liga_code)
             if isinstance(data, list) and len(data) > 0:
                 spiele_liste = []
                 for match in data:
-                    match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
-                    if not ist_in_zielwoche: continue
+                    match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                    if not ist_gueltig: continue # Bereits gespielte Partien ignorieren
+                    
                     home, away = match['home_team'], match['away_team']
                     q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                     
@@ -333,14 +342,14 @@ with tab1:
                     })
                 if spiele_liste:
                     st.dataframe(pd.DataFrame(spiele_liste), use_container_width=True, hide_index=True)
-                else: st.info("Keine Begegnungen für die gewählte Spielwoche gefunden.")
+                else: st.info("Keine anstehenden Begegnungen für die gewählte Spielwoche gefunden (abgelaufene Spiele wurden ausgeblendet).")
             else: st.error("Keine Spiele gefunden oder alle API-Keys aufgebraucht.")
 
 # ==========================================
 # TAB 2: KI KOMBI-GENERATOR
 # ==========================================
 with tab2:
-    st.markdown("### 🎯 Intelligenter KI Kombi-Generator (Mit Quoten-Pusher)")
+    st.markdown("### 🎯 Intelligenter KI Kombi-Generator (Live-Zeitfilter aktiv)")
     
     with st.expander("⚙️ Ziel-Einstellungen für den Schein (Klicken zum Öffnen)", expanded=True):
         use_target_mode = st.checkbox("🎯 Ziel-Gewinn-Modus aktivieren (Einsatz ➔ Wunsch-Gewinn)", value=False)
@@ -350,7 +359,7 @@ with tab2:
             with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
             with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=100.0, step=10.0)
             ziel_quote = round(gewinn_target / einsatz_target, 2)
-            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt smarte Konfigurator-Märkte wie *Sieg + Tore*, um deine Zielquote perfekt zu treffen).")
+            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt ausschließlich Spiele, die noch vor uns liegen).")
         else:
             anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3):", min_value=2, max_value=3, value=3, step=1)
 
@@ -372,14 +381,15 @@ with tab2:
             else:
                 q_min, q_max = (1.40, 2.10)
             
-            with st.spinner("Durchsuche ausgewählte Ligen nach effizienten Quoten & Konfigurator-Märkten..."):
+            with st.spinner("Durchsuche nur zukünftige, anstehende Spiele nach Top-Quoten..."):
                 for liga_label in ausgewaehlte_ligen_keys:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
                         for match in data:
-                            match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
-                            if not ist_in_zielwoche: continue
+                            match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                            if not ist_gueltig: continue # WICHTIG: Vergangene / laufende Spiele ignorieren!
+                            
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
@@ -428,7 +438,7 @@ with tab2:
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
             else: 
-                st.warning(f"Für die gewählten Ligen stehen derzeit nur {len(moegliche_tipps)} verwertbare Quoten zur Verfügung.")
+                st.warning(f"Für die gewählten Ligen stehen derzeit keine weiteren anstehenden Spiele zur Verfügung (bereits gestartete Spiele wurden automatisch ausgeschlossen).")
 
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
