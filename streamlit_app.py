@@ -79,10 +79,16 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS ---
+# --- DESIGNER CSS (INKL. TASTATUR-SPERRE FÜR DEN KALENDER) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
+    
+    /* Unterdrückt die manuelle Tastatur-Eingabe beim Kalender-Feld komplett */
+    input[aria-label*="Zeitraum"], input[aria-label*="Datum"] {
+        pointer-events: none !important;
+    }
+
     .bet-card {
         background: linear-gradient(135deg, #111827 0%, #0d1320 100%);
         border: 1px solid #1e293b;
@@ -221,7 +227,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Touch-freundlicher Kalender & Multi-Ticket System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Reiner Kalender-Modus (Ohne Tastatur) & Multi-Ticket System</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -289,7 +295,7 @@ with tab2:
         
         kalender_auswahl = None
         if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke einfach auf den Kalender und wähle deinen Zeitraum aus (ohne Tastatur):</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Tippe auf den Kalender, um deinen Zeitraum auszuwählen (Tastatur bleibt deaktiviert):</p>", unsafe_allow_html=True)
             kalender_auswahl = st.date_input(
                 "Zeitraum für Wetten auswählen:",
                 value=(date.today(), date.today() + timedelta(days=3)),
