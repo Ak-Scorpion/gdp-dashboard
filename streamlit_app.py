@@ -20,7 +20,6 @@ API_KEYS = [
     'ae8d21a5099d547c1ac27008e4dc56ec'   # Key 4
 ]
 
-# State für aktiven Key-Index initialisieren
 if 'current_key_index' not in st.session_state:
     st.session_state['current_key_index'] = 0
 if 'api_remaining' not in st.session_state:
@@ -29,15 +28,10 @@ if 'api_used' not in st.session_state:
     st.session_state['api_used'] = "0"
 
 def get_active_api_key():
-    """Gibt den aktuell aktiven API-Key zurück."""
     idx = st.session_state['current_key_index']
     return API_KEYS[idx]
 
 def fetch_data_with_rotation(url_template):
-    """
-    Führt API-Anfrage aus. Wenn ein Key voll/leer ist, 
-    wechselt die App automatisch zum nächsten Key!
-    """
     attempts = 0
     max_attempts = len(API_KEYS)
     
@@ -49,13 +43,11 @@ def fetch_data_with_rotation(url_template):
             res = requests.get(url)
             headers = res.headers
             
-            # API Counter im State aktualisieren
             if 'x-requests-remaining' in headers:
                 st.session_state['api_remaining'] = headers['x-requests-remaining']
             if 'x-requests-used' in headers:
                 st.session_state['api_used'] = headers['x-requests-used']
                 
-            # Wenn Key abgelaufen/leer ist (HTTP 401 oder 0 remaining), wechsle zum nächsten!
             remaining = int(headers.get('x-requests-remaining', 1))
             if res.status_code == 401 or remaining <= 0:
                 st.session_state['current_key_index'] = (st.session_state['current_key_index'] + 1) % len(API_KEYS)
@@ -72,7 +64,6 @@ def fetch_data_with_rotation(url_template):
         
     return None
 
-# --- CACHING FÜR 15 MINUTEN (SPART EXTREM VIEL GUTHABEN) ---
 @st.cache_data(ttl=900)
 def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu&markets=h2h'
@@ -180,7 +171,7 @@ with col_count:
     """, unsafe_allow_html=True)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 Individueller Kombi-Generator"])
+tab1, tab2, tab3 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 Individueller Kombi-Generator", "🚀 Ziel-Gewinn Generator (Challenge)"])
 
 # --- TAB 1 ---
 with tab1:
@@ -281,29 +272,3 @@ with tab2:
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Anbieter')
         wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         gesamtquote = 1.0
-        for item in kombi_auswahl: gesamtquote *= item['Quote']
-            
-        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
-        cols = st.columns(len(kombi_auswahl))
-        for idx, tipp in enumerate(kombi_auswahl):
-            with cols[idx]:
-                card_html = (
-                    f'<div class="bet-card">'
-                    f'<span class="badge badge-market">{tipp["Markt"]}</span> '
-                    f'<span class="badge" style="background-color: #334155; color: #fff;">{tipp["Liga"]}</span>'
-                    f'<h4 style="color: #ffffff; margin: 8px 0 2px 0;">{tipp["Begegnung"]}</h4>'
-                    f'<p style="color: #00d47e; font-size: 0.8rem; margin-bottom: 10px;">📅 {tipp["Datum"]}</p>'
-                    f'<p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
-                    f'<hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">'
-                    f'<div style="display: flex; justify-content: space-between; align-items: center;">'
-                    f'<span style="color: #64748b; font-size: 0.85rem;">Quote ({anbieter_label}):</span>'
-                    f'<span class="odds-tag">{tipp["Quote"]}</span>'
-                    f'</div></div>'
-                )
-                st.markdown(card_html, unsafe_allow_html=True)
-        st.divider()
-        st.subheader(f"💰 Einsatz & Gewinn Rechner ({anbieter_label})")
-        col_q, col_einsatz, col_gewinn = st.columns([1, 1, 1.5])
-        with col_q: st.metric(label="💥 Gesamtquote", value=f"{round(gesamtquote, 2)}")
-        with col_einsatz: einsatz = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
-        with col_gewinn: st.metric(label="🏆 Möglicher Gewinn", value=f"{round(einsatz * gesamtquote, 2):.2f} €")
