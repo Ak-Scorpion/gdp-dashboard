@@ -14,7 +14,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Multi-Markt Live Engine",
+    page_title="KI Wettprognosen — Ultimate Multi-Markt Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -138,7 +138,7 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
-# --- MATH ENGINE: POISSON BERECHNUNG ---
+# --- MATH ENGINE: ERWEITERTE POISSON BERECHNUNG (ALLE WETTMÄRKTE) ---
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
@@ -188,6 +188,38 @@ def calculate_poisson_markets(home_xg, away_xg):
     ht_p_away = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if h < a)
     ht_p_over05 = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if (h + a) > 0.5)
     ht_p_over15 = sum(ht_matrix[h][a] for h in range(5) for a in range(5) if (h + a) > 1.5)
+
+    # --- NEUE MÄRKTE BERECHNEN ---
+    # 1. Eckbälle (Poisson über erfahrungsgemäße Ecken-Erwartung per xG)
+    corners_xg = (home_xg + away_xg) * 3.1 + 2.8
+    p_corners_o85 = 1.0 - sum(poisson_pmf(corners_xg, k) for k in range(9))
+    p_corners_o105 = 1.0 - sum(poisson_pmf(corners_xg, k) for k in range(11))
+    
+    # 2. Karten (Schätzung über Intensität)
+    cards_xg = 4.1
+    p_cards_o35 = 1.0 - sum(poisson_pmf(cards_xg, k) for k in range(4))
+    p_cards_o45 = 1.0 - sum(poisson_pmf(cards_xg, k) for k in range(5))
+
+    # 3. Genaues Ergebnis (Correct Score Top 4)
+    p_score_10 = matrix[1][0]
+    p_score_20 = matrix[2][0]
+    p_score_21 = matrix[2][1]
+    p_score_11 = matrix[1][1]
+    
+    # 4. Kombi-Märkte (Bet Builder)
+    p_home_and_btts = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7) if h > a)
+    p_away_and_btts = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7) if a > h)
+    p_home_and_o25 = sum(matrix[h][a] for h in range(7) for a in range(7) if h > a and (h+a) > 2.5)
+    p_away_and_o25 = sum(matrix[h][a] for h in range(7) for a in range(7) if a > h and (h+a) > 2.5)
+
+    # 5. Halbzeit / Endstand (HT/FT)
+    p_htft_11 = ht_p_home * 0.78
+    p_htft_x1 = ht_p_draw * p_home * 1.1
+    p_htft_22 = ht_p_away * 0.78
+
+    # 6. Tore in beiden Halbzeiten
+    p_2ht_over05 = 1.0 - (poisson_pmf(home_xg * 0.55, 0) * poisson_pmf(away_xg * 0.55, 0))
+    p_tore_beide_ht = ht_p_over05 * p_2ht_over05
 
     margin = 1.05
     
@@ -239,6 +271,34 @@ def calculate_poisson_markets(home_xg, away_xg):
             "1. HT Sieg Auswärts": {"base_quote": prob_to_odds(ht_p_away), "prob": round(ht_p_away * 100, 1)},
             "1. HT Über 0.5": {"base_quote": prob_to_odds(ht_p_over05), "prob": round(ht_p_over05 * 100, 1)},
             "1. HT Über 1.5": {"base_quote": prob_to_odds(ht_p_over15), "prob": round(ht_p_over15 * 100, 1)}
+        },
+        "Ecken": {
+            "Über 8.5 Ecken": {"base_quote": prob_to_odds(p_corners_o85), "prob": round(p_corners_o85 * 100, 1)},
+            "Über 10.5 Ecken": {"base_quote": prob_to_odds(p_corners_o105), "prob": round(p_corners_o105 * 100, 1)}
+        },
+        "Karten": {
+            "Über 3.5 Karten": {"base_quote": prob_to_odds(p_cards_o35), "prob": round(p_cards_o35 * 100, 1)},
+            "Über 4.5 Karten": {"base_quote": prob_to_odds(p_cards_o45), "prob": round(p_cards_o45 * 100, 1)}
+        },
+        "Ergebnis": {
+            "Ergebnis 1:0": {"base_quote": prob_to_odds(p_score_10), "prob": round(p_score_10 * 100, 1)},
+            "Ergebnis 2:0": {"base_quote": prob_to_odds(p_score_20), "prob": round(p_score_20 * 100, 1)},
+            "Ergebnis 2:1": {"base_quote": prob_to_odds(p_score_21), "prob": round(p_score_21 * 100, 1)},
+            "Ergebnis 1:1": {"base_quote": prob_to_odds(p_score_11), "prob": round(p_score_11 * 100, 1)}
+        },
+        "KombiMaerkte": {
+            "Sieg Heim & BTTS Ja": {"base_quote": prob_to_odds(p_home_and_btts), "prob": round(p_home_and_btts * 100, 1)},
+            "Sieg Auswärts & BTTS Ja": {"base_quote": prob_to_odds(p_away_and_btts), "prob": round(p_away_and_btts * 100, 1)},
+            "Sieg Heim & Über 2.5": {"base_quote": prob_to_odds(p_home_and_o25), "prob": round(p_home_and_o25 * 100, 1)},
+            "Sieg Auswärts & Über 2.5": {"base_quote": prob_to_odds(p_away_and_o25), "prob": round(p_away_and_o25 * 100, 1)}
+        },
+        "HTFT": {
+            "HT/FT: 1/1 (Heim/Heim)": {"base_quote": prob_to_odds(p_htft_11), "prob": round(p_htft_11 * 100, 1)},
+            "HT/FT: X/1 (Unentsch./Heim)": {"base_quote": prob_to_odds(p_htft_x1), "prob": round(p_htft_x1 * 100, 1)},
+            "HT/FT: 2/2 (Auswärts/Auswärts)": {"base_quote": prob_to_odds(p_htft_22), "prob": round(p_htft_22 * 100, 1)}
+        },
+        "ToreBeideHT": {
+            "Tore in beiden Halbzeiten - Ja": {"base_quote": prob_to_odds(p_tore_beide_ht), "prob": round(p_tore_beide_ht * 100, 1)}
         }
     }
 
@@ -339,8 +399,8 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Multi-Markt Wettgenerator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Frei wählbare Wettmärkte • Scheine auf Knopfdruck mischen • Echte Elo-Ratings</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Ultimate Wettgenerator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">14 Wettmärkte frei wählbar • Ecken, Karten, Ergebnis, HT/FT, Kombis & mehr</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
@@ -381,15 +441,21 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Wettmärkte, Ligen
     with col_m1:
         if st.checkbox("🎯 1X2 Siegwette", value=True, key="m_1x2"): erlaubte_maerkte.append("1X2")
         if st.checkbox("🛡️ Doppelte Chance", value=True, key="m_dc"): erlaubte_maerkte.append("DC")
-    with col_m2:
         if st.checkbox("🔄 Draw No Bet (DNB)", value=True, key="m_dnb"): erlaubte_maerkte.append("DNB")
         if st.checkbox("⚽ Tore Über/Unter", value=True, key="m_tore"): erlaubte_maerkte.append("Tore")
-    with col_m3:
-        if st.checkbox("⚽ Team-Tore (Individuell)", value=True, key="m_teamtore"): erlaubte_maerkte.append("TeamTore")
+    with col_m2:
+        if st.checkbox("⚽ Team-Tore", value=True, key="m_teamtore"): erlaubte_maerkte.append("TeamTore")
         if st.checkbox("🔥 Beide treffen (BTTS)", value=True, key="m_btts"): erlaubte_maerkte.append("BTTS")
-    with col_m4:
         if st.checkbox("⚡ Handicap (-1.5)", value=True, key="m_hc"): erlaubte_maerkte.append("Handicap")
         if st.checkbox("⏱️ 1. Halbzeit Märkte", value=True, key="m_ht"): erlaubte_maerkte.append("Halbzeit")
+    with col_m3:
+        if st.checkbox("⛳ Eckbälle Über/Unter", value=True, key="m_ecken"): erlaubte_maerkte.append("Ecken")
+        if st.checkbox("🟨 Karten Über/Unter", value=True, key="m_karten"): erlaubte_maerkte.append("Karten")
+        if st.checkbox("🎯 Genaues Ergebnis", value=False, key="m_ergebnis"): erlaubte_maerkte.append("Ergebnis")
+    with col_m4:
+        if st.checkbox("🧱 Kombi (Sieg + BTTS / Tore)", value=True, key="m_kombimaerkte"): erlaubte_maerkte.append("KombiMaerkte")
+        if st.checkbox("⏳ Halbzeit / Endstand (HT/FT)", value=False, key="m_htft"): erlaubte_maerkte.append("HTFT")
+        if st.checkbox("⏱️ Tore in beiden Halbzeiten", value=True, key="m_torebeideht"): erlaubte_maerkte.append("ToreBeideHT")
 
     st.markdown("---")
     st.markdown("#### 🏆 Ligen auswählen:")
@@ -493,7 +559,6 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
-                # 1. Deutsche Ligen via OpenLigaDB
                 if liga_label in OPENLIGA_SHORTCUTS:
                     shortcut = OPENLIGA_SHORTCUTS[liga_label]
                     raw_openliga = fetch_openliga_matches(shortcut)
@@ -526,7 +591,6 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
                             except Exception:
                                 continue
 
-                # 2. Internationale Ligen via ESPN API
                 elif liga_label in ESPN_LEAGUE_CODES:
                     code = ESPN_LEAGUE_CODES[liga_label]
                     raw_matches = fetch_espn_keyless_matches(code, start_str_espn, end_str_espn)
@@ -565,7 +629,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
 
 matches = st.session_state.get('matches_cache', [])
 
-# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE (GEFILTERT NACH ERLAUBTEN MÄRKTEN) ---
+# --- DYNAMISCHE KI MARKT-AUSWAHL ENGINE ---
 def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets):
     mkts = match['markets']
     home, away = match['home'], match['away']
@@ -574,19 +638,22 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets):
     seed_raw = f"{home}_{away}_{profile}_{reroll}_{random.randint(1, 100000)}"
     match_seed = int(hashlib.md5(seed_raw.encode()).hexdigest(), 16)
     
-    # Alle Kandidaten mit ihrer Markt-Kategorie ("kat")
     all_candidates = [
+        # 1X2
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1", "kat": "1X2"},
         {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_2", "kat": "1X2"},
         {"tipp": "Unentschieden (X)", "prob": mkts['1X2']['X']['prob'], "base_q": mkts['1X2']['X']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_x", "kat": "1X2"},
         
+        # DC
         {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_1x", "kat": "DC"},
         {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_x2", "kat": "DC"},
         {"tipp": f"Doppelte Chance 12 ({home} / {away})", "prob": mkts['DC']['12']['prob'], "base_q": mkts['DC']['12']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_12", "kat": "DC"},
         
+        # DNB
         {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_1", "kat": "DNB"},
         {"tipp": f"Sieg {away} (Draw No Bet)", "prob": mkts['DNB']['2 DNB']['prob'], "base_q": mkts['DNB']['2 DNB']['base_quote'], "markt": "Head-to-Head (DNB) 🔄", "key": "dnb_2", "kat": "DNB"},
         
+        # Tore
         {"tipp": "Über 0.5 Tore", "prob": mkts['Tore']['Über 0.5']['prob'], "base_q": mkts['Tore']['Über 0.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o05", "kat": "Tore"},
         {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o15", "kat": "Tore"},
         {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "o25", "kat": "Tore"},
@@ -594,21 +661,53 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers, allowed_markets):
         {"tipp": "Unter 2.5 Tore", "prob": mkts['Tore']['Unter 2.5']['prob'], "base_q": mkts['Tore']['Unter 2.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u25", "kat": "Tore"},
         {"tipp": "Unter 3.5 Tore", "prob": mkts['Tore']['Unter 3.5']['prob'], "base_q": mkts['Tore']['Unter 3.5']['base_quote'], "markt": "Tor-Markt ⚽", "key": "u35", "kat": "Tore"},
         
+        # TeamTore
         {"tipp": f"{home} Über 0.5 Tore", "prob": mkts['TeamTore']['Heim Über 0.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho05", "kat": "TeamTore"},
         {"tipp": f"{home} Über 1.5 Tore", "prob": mkts['TeamTore']['Heim Über 1.5']['prob'], "base_q": mkts['TeamTore']['Heim Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ho15", "kat": "TeamTore"},
         {"tipp": f"{away} Über 0.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 0.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 0.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao05", "kat": "TeamTore"},
         {"tipp": f"{away} Über 1.5 Tore", "prob": mkts['TeamTore']['Auswärts Über 1.5']['prob'], "base_q": mkts['TeamTore']['Auswärts Über 1.5']['base_quote'], "markt": "Team-Tore ⚽", "key": "ao15", "kat": "TeamTore"},
         
+        # BTTS
         {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_ja", "kat": "BTTS"},
         {"tipp": "Beide Teams treffen - Nein", "prob": mkts['BTTS']['Nein']['prob'], "base_q": mkts['BTTS']['Nein']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts_nein", "kat": "BTTS"},
         
+        # Handicap
         {"tipp": f"{home} Handicap -1.5", "prob": mkts['Handicap']['Heim -1.5']['prob'], "base_q": mkts['Handicap']['Heim -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_h15", "kat": "Handicap"},
         {"tipp": f"{away} Handicap -1.5", "prob": mkts['Handicap']['Auswärts -1.5']['prob'], "base_q": mkts['Handicap']['Auswärts -1.5']['base_quote'], "markt": "Handicap (-1.5) ⚡", "key": "hc_a15", "kat": "Handicap"},
         
+        # Halbzeit
         {"tipp": f"1. Halbzeit: Sieg {home}", "prob": mkts['Halbzeit']['1. HT Sieg Heim']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Heim']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_1", "kat": "Halbzeit"},
         {"tipp": "1. Halbzeit: Unentschieden", "prob": mkts['Halbzeit']['1. HT Unentschieden']['prob'], "base_q": mkts['Halbzeit']['1. HT Unentschieden']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_x", "kat": "Halbzeit"},
         {"tipp": f"1. Halbzeit: Sieg {away}", "prob": mkts['Halbzeit']['1. HT Sieg Auswärts']['prob'], "base_q": mkts['Halbzeit']['1. HT Sieg Auswärts']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "ht_2", "kat": "Halbzeit"},
-        {"tipp": "1. Halbzeit: Über 0.5 Tore", "prob": mkts['Halbzeit']['1. HT Über 0.5']['prob'], "base_q": mkts['Halbzeit']['1. HT Über 0.5']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "hto05", "kat": "Halbzeit"}
+        {"tipp": "1. Halbzeit: Über 0.5 Tore", "prob": mkts['Halbzeit']['1. HT Über 0.5']['prob'], "base_q": mkts['Halbzeit']['1. HT Über 0.5']['base_quote'], "markt": "1. Halbzeit ⏱️", "key": "hto05", "kat": "Halbzeit"},
+        
+        # Ecken
+        {"tipp": "Über 8.5 Eckbälle", "prob": mkts['Ecken']['Über 8.5 Ecken']['prob'], "base_q": mkts['Ecken']['Über 8.5 Ecken']['base_quote'], "markt": "Eckbälle ⛳", "key": "crn85", "kat": "Ecken"},
+        {"tipp": "Über 10.5 Eckbälle", "prob": mkts['Ecken']['Über 10.5 Ecken']['prob'], "base_q": mkts['Ecken']['Über 10.5 Ecken']['base_quote'], "markt": "Eckbälle ⛳", "key": "crn105", "kat": "Ecken"},
+        
+        # Karten
+        {"tipp": "Über 3.5 Karten", "prob": mkts['Karten']['Über 3.5 Karten']['prob'], "base_q": mkts['Karten']['Über 3.5 Karten']['base_quote'], "markt": "Karten 🟨", "key": "crd35", "kat": "Karten"},
+        {"tipp": "Über 4.5 Karten", "prob": mkts['Karten']['Über 4.5 Karten']['prob'], "base_q": mkts['Karten']['Über 4.5 Karten']['base_quote'], "markt": "Karten 🟨", "key": "crd45", "kat": "Karten"},
+        
+        # Ergebnis
+        {"tipp": "Exaktes Ergebnis 1:0", "prob": mkts['Ergebnis']['Ergebnis 1:0']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 1:0']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc10", "kat": "Ergebnis"},
+        {"tipp": "Exaktes Ergebnis 2:0", "prob": mkts['Ergebnis']['Ergebnis 2:0']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 2:0']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc20", "kat": "Ergebnis"},
+        {"tipp": "Exaktes Ergebnis 2:1", "prob": mkts['Ergebnis']['Ergebnis 2:1']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 2:1']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc21", "kat": "Ergebnis"},
+        {"tipp": "Exaktes Ergebnis 1:1", "prob": mkts['Ergebnis']['Ergebnis 1:1']['prob'], "base_q": mkts['Ergebnis']['Ergebnis 1:1']['base_quote'], "markt": "Genaues Ergebnis 🎯", "key": "sc11", "kat": "Ergebnis"},
+        
+        # Kombi-Märkte
+        {"tipp": f"Sieg {home} & Beide treffen (BTTS)", "prob": mkts['KombiMaerkte']['Sieg Heim & BTTS Ja']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Heim & BTTS Ja']['base_quote'], "markt": "Kombi (Sieg + BTTS) 🧱", "key": "hbtts", "kat": "KombiMaerkte"},
+        {"tipp": f"Sieg {away} & Beide treffen (BTTS)", "prob": mkts['KombiMaerkte']['Sieg Auswärts & BTTS Ja']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Auswärts & BTTS Ja']['base_quote'], "markt": "Kombi (Sieg + BTTS) 🧱", "key": "abtts", "kat": "KombiMaerkte"},
+        {"tipp": f"Sieg {home} & Über 2.5 Tore", "prob": mkts['KombiMaerkte']['Sieg Heim & Über 2.5']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Heim & Über 2.5']['base_quote'], "markt": "Kombi (Sieg + Tore) 🧱", "key": "ho25", "kat": "KombiMaerkte"},
+        {"tipp": f"Sieg {away} & Über 2.5 Tore", "prob": mkts['KombiMaerkte']['Sieg Auswärts & Über 2.5']['prob'], "base_q": mkts['KombiMaerkte']['Sieg Auswärts & Über 2.5']['base_quote'], "markt": "Kombi (Sieg + Tore) 🧱", "key": "ao25", "kat": "KombiMaerkte"},
+        
+        # HT/FT
+        {"tipp": f"HT/FT: Führung {home} / Sieg {home}", "prob": mkts['HTFT']['HT/FT: 1/1 (Heim/Heim)']['prob'], "base_q": mkts['HTFT']['HT/FT: 1/1 (Heim/Heim)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hf11", "kat": "HTFT"},
+        {"tipp": f"HT/FT: Unentschieden HT / Sieg {home} FT", "prob": mkts['HTFT']['HT/FT: X/1 (Unentsch./Heim)']['prob'], "base_q": mkts['HTFT']['HT/FT: X/1 (Unentsch./Heim)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hfx1", "kat": "HTFT"},
+        {"tipp": f"HT/FT: Führung {away} / Sieg {away}", "prob": mkts['HTFT']['HT/FT: 2/2 (Auswärts/Auswärts)']['prob'], "base_q": mkts['HTFT']['HT/FT: 2/2 (Auswärts/Auswärts)']['base_quote'], "markt": "Halbzeit/Endstand ⏳", "key": "hf22", "kat": "HTFT"},
+        
+        # Tore in beiden Halbzeiten
+        {"tipp": "Tore in beiden Halbzeiten - Ja", "prob": mkts['ToreBeideHT']['Tore in beiden Halbzeiten - Ja']['prob'], "base_q": mkts['ToreBeideHT']['Tore in beiden Halbzeiten - Ja']['base_quote'], "markt": "Tore in beiden HT ⏱️", "key": "tbht", "kat": "ToreBeideHT"}
     ]
     
     # 1. Nach erlaubten Märkten filtern
