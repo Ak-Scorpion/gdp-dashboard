@@ -325,55 +325,11 @@ def get_best_bookmaker_odds(base_quote, home_team, away_team, market_key, checke
     best_quote = bm_odds[best_bm]
     return best_bm, best_quote, bm_odds
 
-# --- DESIGNER CSS ---
+# --- CLEAN STREAMLIT DESIGN CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0f19; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     header[data-testid="stHeader"] { display: none !important; }
-    
-    .main-header-card {
-        background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
-        border: 1px solid #1e293b;
-        border-radius: 16px;
-        padding: 20px 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-    }
-    .bet-card-pro {
-        background: linear-gradient(135deg, #131c2e 0%, #0d1322 100%);
-        border: 1px solid #1e293b;
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 16px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-    }
-    .owner-tag {
-        color: #00d47e; font-weight: 700; letter-spacing: 2px;
-        text-transform: uppercase; font-size: 0.7rem; margin-bottom: 2px;
-    }
-    .badge {
-        padding: 3px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 800;
-        display: inline-block; margin-right: 4px; margin-bottom: 4px; text-transform: uppercase;
-    }
-    .badge-market { background-color: #2563eb; color: #ffffff; }
-    .badge-safe { background-color: #00d47e; color: #070a13; }
-    .badge-bookie { background-color: #f59e0b; color: #070a13; }
-    .badge-ev { background-color: #10b981; color: #ffffff; font-weight: 800; }
-    
-    .odds-highlight {
-        color: #00d47e; font-size: 1.35rem; font-weight: 800;
-    }
-    .bookie-btn {
-        background-color: #00d47e;
-        color: #0b0f19 !important;
-        padding: 6px 14px;
-        border-radius: 6px;
-        font-weight: 800;
-        font-size: 0.75rem;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .bookie-btn:hover { background-color: #00b368; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -390,22 +346,11 @@ fri_str = fri_de.strftime("%d.%m.")
 sun_str = sun_de.strftime("%d.%m.")
 last_update_str = now_de.strftime("%H:%M:%S Uhr")
 
-# --- KOMPAKTER HEADER ---
-st.markdown(f"""
-    <div class="main-header-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-            <div>
-                <div class="owner-tag">📱 App von Pascal Gellers</div>
-                <h1 style="color: #ffffff; font-size: 1.8rem; font-weight: 800; margin: 0;">⚽ KI Professional Wett-Engine</h1>
-                <p style="color: #94a3b8; font-size: 0.85rem; margin: 4px 0 0 0;">Dixon-Coles • EV+ Valuebet • Kelly-Einsatz • Auto-Refresh aktiv</p>
-            </div>
-            <div style="background-color: #0b0f19; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 14px; text-align: center; margin-top: 8px;">
-                <span style="color: #64748b; font-size: 0.65rem; font-weight: 700;">🔄 LETZTES UPDATE</span><br>
-                <span style="color: #00d47e; font-size: 1rem; font-weight: 800;">{last_update_str}</span>
-            </div>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
+# --- HEADER BEREICH ---
+st.caption("📱 APP VON PASCAL GELLERS")
+st.title("⚽ KI Professional Wett-Engine")
+st.markdown(f"**Dixon-Coles Modell • EV+ Valuebet • Kelly-Einsatz** | 🔄 **Letztes Update:** `{last_update_str}` (Auto-Refresh alle 20 Min)")
+st.markdown("---")
 
 # --- EINSTELLUNGEN EXPANDER ---
 with st.expander("⚙️ Einstellungen & Filter (Wettanbieter, Märkte, Bankroll)", expanded=False):
@@ -708,7 +653,7 @@ elif not erlaubte_maerkte:
 else:
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
-        st.markdown(f"### 🛡️ Aktuelle KI-Tipps ({len(matches)} Partien geladen)")
+        st.subheader(f"🛡️ Aktuelle KI-Tipps ({len(matches)} Partien)")
     with col_t_btn:
         if st.button("🎲 Neue Tipps mischen", type="primary", use_container_width=True, key="btn_shuffle"):
             st.session_state['reroll_key'] += 1
@@ -726,40 +671,25 @@ else:
             pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter, erlaubte_maerkte, total_bankroll, max_kelly_pct)
             current_picks.append((match, pick))
             
-            ev_badge = f'<span class="badge badge-ev">💎 +{pick["ev"]}% EV</span>' if pick['ev'] > 0 else f'<span class="badge" style="background:#334155; color:#fff;">{pick["ev"]}% EV</span>'
-            
-            st.markdown(f"""
-                <div class="bet-card-pro">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div>
-                            <span class="badge badge-safe">DIXON-COLES</span>
-                            <span class="badge badge-market">{pick['markt']}</span>
-                            {ev_badge}
-                        </div>
-                        <span style="color: #94a3b8; font-size: 0.75rem;">{match['liga']}</span>
-                    </div>
-                    <div style="font-size: 1.1rem; font-weight: 800; color: #ffffff; margin-bottom: 2px;">
-                        {match['home']} vs {match['away']}
-                    </div>
-                    <div style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {match['time_str']}</div>
-                    
-                    <div style="background:#0b0f19; border:1px solid #1e293b; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <span style="color:#94a3b8; font-size:0.75rem;">Empfehlung & Einsatz:</span><br>
-                            <b style="color:#ffffff; font-size:0.95rem;">{pick['tipp']}</b><br>
-                            <span style="color:#00d47e; font-size:0.8rem; font-weight:700;">💡 Kelly: {pick['kelly_stake']} €</span>
-                        </div>
-                        <div style="text-align:right;">
-                            <span class="odds-highlight">{pick['quote']}</span><br>
-                            <span style="color:#94a3b8; font-size:0.7rem;">Prob: {pick['prob']}%</span>
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
-                        <span style="color:#94a3b8; font-size:0.8rem;">Bester Anbieter: <b style="color:#f59e0b;">{pick['best_bookmaker']}</b></span>
-                        <a href="{pick['bookmaker_url']}" target="_blank" class="bookie-btn">🔗 Zu {pick['best_bookmaker']}</a>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+            with st.container(border=True):
+                c_top1, c_top2 = st.columns([3, 1])
+                with c_top1:
+                    ev_text = f"💎 +{pick['ev']}% EV" if pick['ev'] > 0 else f"⚡ {pick['ev']}% EV"
+                    st.markdown(f"`{match['liga']}` &nbsp; **{pick['markt']}** &nbsp; *{ev_text}*")
+                with c_top2:
+                    st.markdown(f"<div style='text-align: right;'><b>{pick['prob']}%</b> Prob</div>", unsafe_allow_html=True)
+
+                st.markdown(f"### {match['home']} vs {match['away']}")
+                st.caption(f"📅 {match['time_str']}")
+
+                c_box1, c_box2 = st.columns([2, 1])
+                with c_box1:
+                    st.markdown(f"**Tipp:** `{pick['tipp']}`")
+                    st.markdown(f"💡 **Kelly-Einsatz:** `{pick['kelly_stake']} €`")
+                with c_box2:
+                    st.metric(label=f"Quote ({pick['best_bookmaker']})", value=f"{pick['quote']}")
+
+                st.link_button(f"🔗 Bei {pick['best_bookmaker']} platzieren", pick['bookmaker_url'], use_container_width=True)
 
     elif g_typ == "🎯 Standard Kombiwette":
         anz_w = st.session_state.get('anzahl_wetten', 3)
@@ -774,25 +704,18 @@ else:
                 gesamtq *= p['quote']
                 current_picks.append((m, p))
                 
-            st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 16px;">
-                    <span style="color: #94a3b8; font-size: 0.8rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
-                    <span style="color: #00d47e; font-size: 2rem; font-weight: 800;">{round(gesamtq, 2)}</span>
-                </div>
-            """, unsafe_allow_html=True)
+            st.metric(label="📊 GESAMTQUOTE DER KOMBI", value=f"{round(gesamtq, 2)}")
 
             for m, p in current_picks:
-                st.markdown(f"""
-                    <div class="bet-card-pro">
-                        <span class="badge badge-market">{p['markt']}</span>
-                        <span class="badge badge-bookie">{p['best_bookmaker']}</span>
-                        <div style="font-weight: 700; color: #ffffff; margin: 6px 0;">{m['home']} vs {m['away']}</div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; background:#0b0f19; padding:8px 12px; border-radius:8px;">
-                            <span style="color: #94a3b8; font-size: 0.85rem;">Tipp: <b style="color: #ffffff;">{p['tipp']}</b></span>
-                            <span style="color: #00d47e; font-weight: 800; font-size: 1.1rem;">{p['quote']}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"`{m['liga']}` &nbsp; **{p['markt']}**")
+                    st.markdown(f"#### {m['home']} vs {m['away']}")
+                    c1, c2 = st.columns([2, 1])
+                    with c1:
+                        st.markdown(f"Tipp: **{p['tipp']}** ({p['best_bookmaker']})")
+                    with c2:
+                        st.markdown(f"<div style='text-align: right; color: #00d47e; font-size: 1.2rem; font-weight: bold;'>{p['quote']}</div>", unsafe_allow_html=True)
+                    st.link_button(f"🔗 Zu {p['best_bookmaker']}", p['bookmaker_url'], use_container_width=True)
 
     elif g_typ == "🎁 Freebet-Modus":
         fb_w = st.session_state.get('freebet_wert', freebet_wert)
@@ -806,19 +729,14 @@ else:
             q_ges = round(p1['quote'] * p2['quote'], 2)
             netto = round((fb_w * q_ges) - fb_w, 2)
             
-            st.markdown(f"""
-                <div style="background: #0f172a; border: 2px solid #8b5cf6; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 16px;">
-                    <span style="color: #a78bfa; font-weight: 700;">🎁 Freebet ({fb_w:.2f} €) • Gesamtquote: {q_ges}</span><br>
-                    <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">Netto-Reingewinn: {netto:.2f} €</span>
-                </div>
-            """, unsafe_allow_html=True)
+            st.info(f"🎁 **Freebet-Wert:** {fb_w:.2f} € | 💥 **Gesamtquote:** {q_ges}")
+            st.success(f"💰 **Erwarteter Netto-Reingewinn:** {netto:.2f} €")
+
             for m, p in current_picks:
-                st.markdown(f"""
-                    <div class="bet-card-pro">
-                        <div style="font-weight: 700; color: #ffffff;">{m['home']} vs {m['away']}</div>
-                        <div style="color: #94a3b8; font-size: 0.8rem;">Tipp: <b style="color: #00d47e;">{p['tipp']}</b> @ {p['quote']} ({p['best_bookmaker']})</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"#### {m['home']} vs {m['away']}")
+                    st.markdown(f"Tipp: `{p['tipp']}` | Quote: **{p['quote']}** ({p['best_bookmaker']})")
+                    st.link_button(f"🔗 Zu {p['best_bookmaker']}", p['bookmaker_url'], use_container_width=True)
 
     else:
         bud = st.session_state.get('multi_budget', multi_budget)
@@ -844,17 +762,11 @@ else:
                     current_picks.append((m, p))
                 gewinn_schein = round(ticket['einsatz'] * q_schein, 2)
                 
-                st.markdown(f"""
-                    <div class="bet-card-pro" style="border-color: #059669;">
-                        <div style="display: flex; justify-content: space-between; font-weight: 700; color: #ffffff; margin-bottom: 6px;">
-                            <span>{ticket['name']}</span>
-                            <span style="color: #00d47e;">Einsatz: {ticket['einsatz']:.2f} €</span>
-                        </div>
-                        <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 8px;">Quote: {round(q_schein, 2)} | Möglicher Gewinn: {gewinn_schein:.2f} €</div>
-                """, unsafe_allow_html=True)
-                for m, p in ticket_picks:
-                    st.markdown(f"<div style='font-size:0.8rem; color:#f1f5f9;'>• {m['home']} vs {m['away']} -> <b>{p['tipp']}</b> ({p['quote']})</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"### {ticket['name']}")
+                    st.markdown(f"**Einsatz:** `{ticket['einsatz']:.2f} €` | **Quote:** `{round(q_schein, 2)}` | **Mögl. Gewinn:** `{gewinn_schein:.2f} €`")
+                    for m, p in ticket_picks:
+                        st.markdown(f"• {m['home']} vs {m['away']} -> **{p['tipp']}** (`{p['quote']}`)")
 
     if current_picks:
         if st.button("📌 Wettschein speichern", type="secondary", use_container_width=True):
@@ -866,8 +778,8 @@ else:
             st.session_state['saved_tickets'].append(ticket_entry)
             st.success("✅ Schein erfolgreich gespeichert!")
 
-st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 25px 0;'>", unsafe_allow_html=True)
-st.markdown("### 🗂️ Gespeicherte Scheine & Export")
+st.markdown("---")
+st.subheader("🗂️ Gespeicherte Scheine & Export")
 
 if not st.session_state['saved_tickets']:
     st.info("Bisher keine Scheine gespeichert.")
