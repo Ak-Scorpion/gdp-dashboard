@@ -26,6 +26,8 @@ if 'api_remaining' not in st.session_state:
     st.session_state['api_remaining'] = "500"
 if 'api_used' not in st.session_state:
     st.session_state['api_used'] = "0"
+if 'saved_tickets' not in st.session_state:
+    st.session_state['saved_tickets'] = []
 
 def get_active_api_key():
     idx = st.session_state['current_key_index']
@@ -66,7 +68,7 @@ def fetch_data_with_rotation(url_template):
 
 @st.cache_data(ttl=900)
 def load_league_odds(liga_code):
-    url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu&markets=h2h'
+    url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
 # --- CUSTOM CSS ---
@@ -142,14 +144,20 @@ def get_torjaeger_tipp(team_name):
     return f"{team_name} erzielt mind. 2 Tore"
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
-    if not match_bookmakers: return None, None, None
+    if not match_bookmakers: return None, None, None, None
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
     if not target_bm: target_bm = match_bookmakers[0]
+    
     odds = target_bm['markets'][0]['outcomes']
     q_home = next((item['price'] for item in odds if item['name'] == home_team), None)
     q_away = next((item['price'] for item in odds if item['name'] == away_team), None)
     q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), None)
-    return q_home, q_away, q_draw
+    
+    all_prices = [item['price'] for bm in match_bookmakers for item in bm['markets'][0]['outcomes'] if item['name'] in [home_team, away_team]]
+    avg_price = sum(all_prices) / len(all_prices) if all_prices else q_home
+    is_value = q_home and avg_price and (q_home > avg_price * 1.05)
+    
+    return q_home, q_away, q_draw, is_value
 
 # --- HEADER BEREICH ---
 col_head, col_count = st.columns([3, 1])
@@ -157,7 +165,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Präzise Wochenauswahl, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Profi-Analysen, Value-Bets, Quoten-Pusher & Optionaler Speicher</div>', unsafe_allow_html=True)
 
 with col_count:
     active_key_num = st.session_state['current_key_index'] + 1
@@ -171,7 +179,7 @@ with col_count:
     """, unsafe_allow_html=True)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 KI Kombi-Generator (Mit Spezialmärkten & Quoten-Pusher)"])
+tab1, tab2, tab3 = st.tabs(["📊 Einzelne Liga & Value-Bets", "🎯 KI Kombi-Generator & Share", "🗂️ Gespeicherte Wettscheine"])
 
 # --- TAB 1 ---
 with tab1:
@@ -180,14 +188,14 @@ with tab1:
     with col_sp: gewaehlte_woche_label_tab1 = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sp_tab1")
     with col_bm: anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
         
-    btn_liga = st.button("🔍 Spiele laden", use_container_width=True)
+    btn_liga = st.button("🔍 Spiele & Value-Bets laden", use_container_width=True)
     
     if btn_liga:
         liga_code = LIGEN[ausgewaehlte_liga_label]
         bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
         offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_tab1]
         
-        with st.spinner(f"Lade Quoten für {ausgewaehlte_liga_label}..."):
+        with st.spinner(f"Analysiere Live-Quoten für {ausgewaehlte_liga_label}..."):
             data = load_league_odds(liga_code)
             if isinstance(data, list) and len(data) > 0:
                 spiele_liste = []
@@ -195,14 +203,17 @@ with tab1:
                     match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
                     if not ist_in_zielwoche: continue
                     home, away = match['home_team'], match['away_team']
-                    q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                    q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                    
                     prob_h = round((1 / q_home) * 100) if q_home else 0
                     prob_d = round((1 / q_draw) * 100) if q_draw else 0
                     prob_a = round((1 / q_away) * 100) if q_away else 0
+                    value_anzeige = "🔥 VALUE-BET" if is_value else "Standard"
+
                     spiele_liste.append({
                         "Anstoßzeit": match_time, "Heim": home, "Auswärts": away,
                         "Quote 1": q_home, "Quote X": q_draw, "Quote 2": q_away,
-                        "Chance Heim": f"{prob_h}%", "Chance Auswärts": f"{prob_a}%"
+                        "Markt-Analyse": value_anzeige, "Chance Heim": f"{prob_h}%"
                     })
                 if spiele_liste:
                     st.dataframe(pd.DataFrame(spiele_liste), use_container_width=True, hide_index=True)
@@ -229,13 +240,10 @@ with tab2:
     
     if use_target_mode:
         col_e1, col_g1 = st.columns(2)
-        with col_e1:
-            einsatz_target = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
-        with col_g1:
-            gewinn_target = st.number_input("Dein Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=50.0, step=10.0)
-        
+        with col_e1: einsatz_target = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
+        with col_g1: gewinn_target = st.number_input("Dein Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=50.0, step=10.0)
         ziel_quote = round(gewinn_target / einsatz_target, 2)
-        st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Nutzt smarte Kombi- & Spezialmärkte für maximale Effizienz).")
+        st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}**")
     else:
         anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=6, value=3, step=1)
 
@@ -249,7 +257,7 @@ with tab2:
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
             moegliche_tipps = []
             
-            with st.spinner("Analysiere Spiele & generiere Profi-Spezialmärkte (Konfigurator-Tipps)..."):
+            with st.spinner("Analysiere Spiele & generiere Profi-Spezialmärkte..."):
                 for liga_label in ausgewaehlte_ligen:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -258,35 +266,22 @@ with tab2:
                             match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
                             if not ist_in_zielwoche: continue
                             home, away = match['home_team'], match['away_team']
-                            q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            q_home, q_away, _, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                # 1. Standard Favorit
                                 if q_home and 1.25 <= q_home <= 1.85:
                                     moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"})
                                 if q_away and 1.25 <= q_away <= 1.85:
                                     moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"})
 
-                                # 2. SPEZIALMÄRKTE / KONFIGURATOR (Quoten-Pusher)
                                 if q_home and q_home <= 1.65:
-                                    # Heimfavorit + Tore (Kombi+ Markt)
-                                    pushed_quote_h = round(q_home * 1.35, 2)
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": pushed_quote_h, "Markt": "Konfigurator: Sieg + Tore 💥"})
-                                    
-                                    # Top-Torjäger Option
-                                    torjaeger = get_torjaeger_tipp(home)
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": torjaeger, "Quote": 1.75, "Markt": "Spieler-Spezial: Torjäger ⚽"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": round(q_home * 1.35, 2), "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(home), "Quote": 1.75, "Markt": "Spieler-Spezial: Torjäger ⚽"})
 
                                 if q_away and q_away <= 1.65:
-                                    # Auswärtsfavorit + Tore
-                                    pushed_quote_a = round(q_away * 1.38, 2)
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": pushed_quote_a, "Markt": "Konfigurator: Sieg + Tore 💥"})
-                                    
-                                    # Top-Torjäger Option
-                                    torjaeger_a = get_torjaeger_tipp(away)
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": torjaeger_a, "Quote": 1.80, "Markt": "Spieler-Spezial: Torjäger ⚽"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": round(q_away * 1.38, 2), "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(away), "Quote": 1.80, "Markt": "Spieler-Spezial: Torjäger ⚽"})
 
-                                # 3. SICHERE TORE MÄRKTE
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Tormarkt: Über 1.5 ⚽"})
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.68, "Markt": "Tormarkt: BTTS 🔥"})
 
@@ -295,7 +290,6 @@ with tab2:
                 ausgewaehlte_spiele = set()
                 kombi_auswahl = []
                 
-                # ZIEL-GEWINN LOGIK
                 if use_target_mode:
                     aktuelle_quote = 1.0
                     for tipp in moegliche_tipps:
@@ -303,7 +297,6 @@ with tab2:
                             kombi_auswahl.append(tipp)
                             ausgewaehlte_spiele.add(tipp['Begegnung'])
                             aktuelle_quote *= tipp['Quote']
-                            
                             if aktuelle_quote >= ziel_quote or len(kombi_auswahl) == 5:
                                 break
                     st.session_state['preset_einsatz'] = einsatz_target
@@ -348,9 +341,70 @@ with tab2:
                     f'</div></div>'
                 )
                 st.markdown(card_html, unsafe_allow_html=True)
+        
         st.divider()
-        st.subheader(f"💰 Einsatz & Gewinn Rechner ({anbieter_label})")
-        col_q, col_einsatz, col_gewinn = st.columns([1, 1, 1.5])
+        
+        # --- OPTIONALER SPEICHER & WHATSAPP EXPORT ---
+        col_action1, col_action2 = st.columns(2)
+        
+        with col_action1:
+            st.write("🗂️ **Wettscheine-Historie:**")
+            speichern_entscheidung = st.radio("Diesen Schein in der Historie speichern?", ["Nein, nur anzeigen", "Ja, in Historie speichern"], index=0)
+            
+            if speichern_entscheidung == "Ja, in Historie speichern":
+                ticket_name = st.text_input("Name für den Schein:", value=f"Kombi ({wochen_label})")
+                if st.button("💾 Jetzt in Historie ablegen", use_container_width=True):
+                    st.session_state['saved_tickets'].append({
+                        "name": ticket_name,
+                        "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                        "anbieter": anbieter_label,
+                        "quote": round(gesamtquote, 2),
+                        "tipps": kombi_auswahl
+                    })
+                    st.success("Erfolgreich in Tab 3 gespeichert!")
+                
+        with col_action2:
+            st.write("📋 **WhatsApp / Telegram Text-Export:**")
+            share_text = f"🔥 *KI-Kombi-Schein ({anbieter_label})* 🔥\n"
+            for t in kombi_auswahl:
+                share_text += f"• {t['Begegnung']} ➔ *{t['Tipp']}* (Q: {t['Quote']})\n"
+            share_text += f"💥 *Gesamtquote:* {round(gesamtquote, 2)}\n📱 *Erstellt mit Pascal Gellers KI-App*"
+            st.code(share_text, language="markdown")
+
+        st.divider()
+        
+        # --- BANKROLL MANAGEMENT & GEWINNRECHNER ---
+        st.subheader(f"💰 Bankroll-Management & Gewinn Rechner ({anbieter_label})")
+        
+        col_q, col_bank, col_einsatz, col_gewinn = st.columns([1, 1, 1, 1.2])
+        
         with col_q: st.metric(label="💥 Gesamtquote", value=f"{round(gesamtquote, 2)}")
+        with col_bank:
+            total_bankroll = st.number_input("Dein Gesamtguthaben (€):", min_value=10.0, value=100.0, step=10.0)
+            empfohlener_einsatz = round(total_bankroll * 0.02, 2)
+            st.caption(f"💡 Bankroll-Empfehlung (2%): **{empfohlener_einsatz} €**")
         with col_einsatz: einsatz = st.number_input("Dein Einsatz (€):", min_value=1.0, max_value=1000.0, value=preset_einsatz, step=5.0, key="rechner_einsatz")
         with col_gewinn: st.metric(label="🏆 Möglicher Gewinn", value=f"{round(einsatz * gesamtquote, 2):.2f} €")
+
+# --- TAB 3: GESPEICHERTE WETTSCHEINE ---
+with tab3:
+    st.write("### 🗂️ Deine gespeicherten Wettscheine")
+    if not st.session_state['saved_tickets']:
+        st.info("Keine Scheine gespeichert. Du kannst in Tab 2 bei Bedarf frei entscheiden, ob du einen Schein ablegen möchtest.")
+    else:
+        for idx, ticket in enumerate(st.session_state['saved_tickets']):
+            st.markdown(f"""
+                <div class="bet-card">
+                    <span class="badge" style="background-color: #00d47e; color: #0e1117;">{ticket['name']}</span>
+                    <span class="badge" style="background-color: #334155; color: #fff;">Gespeichert am: {ticket['date']}</span>
+                    <h4 style="color: #ffffff; margin: 8px 0;">Anbieter: {ticket['anbieter']} | Gesamtquote: <span style="color: #00d47e;">{ticket['quote']}</span></h4>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            for t in ticket['tipps']:
+                st.write(f"• **{t['Begegnung']}** ➔ Tipp: `{t['Tipp']}` (Quote: *{t['Quote']}*)")
+            
+            if st.button(f"🗑️ Schein löschen #{idx+1}", key=f"del_{idx}"):
+                st.session_state['saved_tickets'].pop(idx)
+                st.rerun()
+            st.divider()
