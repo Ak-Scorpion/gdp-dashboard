@@ -12,12 +12,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- DEINE 4 FEST EINGEBAUTEN API-KEYS ---
+# --- DEINE 11 API-KEYS ---
 API_KEYS = [
     '9fa7390d10404cdab8fd77d2445655e0',  # Key 1
     '64a606e404d1d1ea44af7823b6214bad',  # Key 2
     '172b8d5c79d13d232032db7bea17a2b1',  # Key 3
-    'ae8d21a5099d547c1ac27008e4dc56ec'   # Key 4
+    'ae8d21a5099d547c1ac27008e4dc56ec',  # Key 4
+    '1e7838f2acd74658387ae5b9363bd88d',  # Key 5
+    '96ad8fdc309e50c2eb3e0efc83faed2e',  # Key 6
+    '669dec926fa65d341d87a7d2e1f152ba',  # Key 7
+    '54f78da0521be9e4e95c00550a03abe0',  # Key 8
+    'b26e2774a0d1e273d5bba986154bc336',  # Key 9
+    '25388e5649b0f1411e246ca8e22b6d82',  # Key 10
+    '734d7f2cf27ced001dff32ee47fc59c1'   # Key 11
 ]
 
 if 'current_key_index' not in st.session_state:
@@ -235,14 +242,14 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Europäische Top-Ligen, Gesamt-API-Tracking & Live-Filter</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen, 11 API-Keys Gesamt-Tracking & Live-Filter</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
     max_gesamt_klicks = len(API_KEYS) * 500
     st.markdown(f"""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 ALLE 4 API-KEYS GESAMT</span><br>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 ALLE 11 API-KEYS GESAMT</span><br>
             <span style="color: #00d47e; font-size: 1.3rem; font-weight: 800;">{total_rem}</span>
             <span style="color: #ffffff; font-size: 0.8rem;">/ {max_gesamt_klicks} übrig</span><br>
             <span style="color: #475569; font-size: 0.65rem;">Verbraucht: {total_used} Klicks</span>
@@ -293,7 +300,6 @@ with tab2:
     st.markdown("### 🎯 Intelligenter KI Kombi-Generator")
     
     with st.expander("⚙️ Ligen- & Ziel-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
-        # HIER KANN MAN DIE LIGEN DIREKT SEPARAT EINSTELLEN!
         generator_ligen_modus = st.radio(
             "Ligen-Auswahl für diesen Schein:",
             ["🌍 Alle europäischen Top-Ligen nutzen", "📋 Ligen manuell separat auswählen"],
