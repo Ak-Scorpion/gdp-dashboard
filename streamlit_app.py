@@ -13,7 +13,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Dynamische Live Engine",
+    page_title="KI Wettprognosen — Realistische Elo & Live Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -24,6 +24,60 @@ if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
 if 'matches_cache' not in st.session_state:
     st.session_state['matches_cache'] = []
+
+# --- TEAM STÄRKE-DATENBANK (ELO / POWER RATINGS) ---
+TEAM_RATINGS = {
+    # Deutschland Top & BL1
+    "bayern": 95, "dortmund": 87, "leverkusen": 90, "leipzig": 86, 
+    "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
+    "freiburg": 78, "union berlin": 75, "mainz": 74, "augsburg": 73,
+    "werder bremen": 75, "hoffenheim": 76, "heidenheim": 73, "st. pauli": 70,
+    "bochum": 68, "holstein kiel": 67,
+    
+    # 2. BL & 3. Liga
+    "hsv": 74, "hamburger sv": 74, "köln": 74, "hertha": 73, "schalke": 71,
+    "duesseldorf": 74, "düsseldorf": 74, "hannover": 72, "paderborn": 71,
+    "karlsruhe": 72, "kaiserslautern": 71, "dresden": 66, "aachen": 63,
+    "essen": 64, "1860 münchen": 64, "osnabrück": 65, "rostock": 65,
+    
+    # England Premier League
+    "manchester city": 95, "man city": 95, "arsenal": 92, "liverpool": 93,
+    "chelsea": 85, "manchester united": 83, "man utd": 83, "tottenham": 83,
+    "newcastle": 84, "aston villa": 84, "brighton": 79, "west ham": 78,
+    
+    # Spanien La Liga
+    "real madrid": 96, "barcelona": 93, "atletico madrid": 86, "athletic bilbao": 81,
+    "real sociedad": 81, "girona": 80, "villarreal": 80, "betis": 79, "sevilla": 77,
+    
+    # Italien Serie A
+    "inter": 91, "juventus": 86, "ac milan": 86, "milan": 86, "napoli": 86,
+    "atalanta": 85, "roma": 82, "lazio": 81, "fiorentina": 80,
+    
+    # Frankreich Ligue 1
+    "paris saint-germain": 93, "psg": 93, "monaco": 82, "marseille": 82,
+    "lille": 81, "lyon": 80, "rennes": 78, "lens": 78
+}
+
+def get_team_rating(team_name):
+    """Ermittelt das Team-Rating anhand von Keyword-Matching."""
+    name_clean = team_name.lower().strip()
+    for key, rating in TEAM_RATINGS.items():
+        if key in name_clean:
+            return rating
+    return 73 # Standard-Durchschnittsrating für unbekannte Teams
+
+def calculate_dynamic_xg(home_team, away_team):
+    """Berechnet realistische Tore-Erwartungswerte (xG) basierend auf Teamstärken."""
+    r_home = get_team_rating(home_team) + 4 # +4 Punkte Heimvorteil
+    r_away = get_team_rating(away_team)
+    
+    ratio_home = r_home / float(r_away)
+    ratio_away = r_away / float(r_home)
+    
+    xg_home = round(max(0.4, min(3.8, 1.45 * (ratio_home ** 1.8))), 2)
+    xg_away = round(max(0.4, min(3.8, 1.25 * (ratio_away ** 1.8))), 2)
+    
+    return xg_home, xg_away
 
 # --- WETTANBIETER DATENBANK & URLS ---
 ANBIETER_URLS = {
@@ -101,7 +155,7 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
-def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
+def calculate_poisson_markets(home_xg, away_xg):
     matrix = [[0.0 for _ in range(6)] for _ in range(6)]
     for h in range(6):
         for a in range(6):
@@ -118,7 +172,7 @@ def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
     p_dc_1x = p_home + p_draw
     p_dc_x2 = p_away + p_draw
     
-    margin = 1.06
+    margin = 1.05
     
     def prob_to_odds(p):
         if p <= 0.01: return 99.00
@@ -242,15 +296,15 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Gemischter Markt Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Multi-Markt KI • Gemischte Tipps (DC, 1X2, Tore & BTTS) • Quotenvergleich</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Realismus Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Dynamisches Elo-Modell • Beseitigt unfaire Favoriten-Tipps • Realistischer Quotenvergleich</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
         <div class="counter-box">
             <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📅 HEUTIGER TAG</span><br>
             <span style="color: #00d47e; font-size: 1.1rem; font-weight: 800;">{today_str}</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Automatische Zeitzone</span>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Elo-Power-Rating Aktiv</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -313,11 +367,11 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
 
     st.markdown("---")
     risiko_profil = st.selectbox(
-        "🧠 KI Risikoprofil (Bestimmt erlaubtes Quoten-Spektrum):",
+        "🧠 KI Risikoprofil (Realistische Treffer-Qualität):",
         [
-            "🟢 Safe Mode (Höchste Sicherheit / Gemischte High-Prob Tipps)",
-            "⚖️ Balanced Value (Gemischte Quoten 1.45 - 2.15)",
-            "🔥 High Risk / High Reward (Gemischte Quoten 2.10 - 4.50)"
+            "🟢 Safe Mode (Höchste Sicherheit / Nur echte Favoriten & High-Prob Märkte)",
+            "⚖️ Balanced Value (Gemischte Value-Quoten 1.45 - 2.15)",
+            "🔥 High Risk / High Reward (Risiko-Siege & Hohe Quoten)"
         ],
         index=0
     )
@@ -373,7 +427,7 @@ if generate_click or 'matches_cache' not in st.session_state:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade Live-Ansetzungen & berechne gemischte Multi-Markt Prognosen..."):
+        with st.spinner("Berechne Elo-Ratings & reale Tor-Wahrscheinlichkeiten..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
@@ -395,7 +449,11 @@ if generate_click or 'matches_cache' not in st.session_state:
                                 if dt_from <= m_date <= dt_to:
                                     home = m['team1']['teamName']
                                     away = m['team2']['teamName']
-                                    p_markets = calculate_poisson_markets(1.55, 1.15)
+                                    
+                                    # Dynamische Tore-Erwartung anhand echter Elo-Rating Stärke
+                                    home_xg, away_xg = calculate_dynamic_xg(home, away)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg)
+                                    
                                     all_loaded_matches.append({
                                         "liga": liga_label,
                                         "home": home,
@@ -422,7 +480,10 @@ if generate_click or 'matches_cache' not in st.session_state:
                                 if dt_from <= m_date <= dt_to:
                                     home = m['home']
                                     away = m['away']
-                                    p_markets = calculate_poisson_markets(1.65, 1.20)
+                                    
+                                    home_xg, away_xg = calculate_dynamic_xg(home, away)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg)
+                                    
                                     all_loaded_matches.append({
                                         "liga": liga_label,
                                         "home": home,
@@ -443,7 +504,7 @@ if generate_click or 'matches_cache' not in st.session_state:
 
 matches = st.session_state.get('matches_cache', [])
 
-# --- DYNAMISCHE, GEMISCHTE KI MARKT-AUSWAHL ENGINE ---
+# --- DYNAMISCHE, REALISTISCHE KI MARKT-AUSWAHL ENGINE ---
 def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
@@ -461,14 +522,15 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
     ]
     
     if "Safe Mode" in profile:
-        valid = [c for c in candidates if c['prob'] >= 62.0]
+        # Im Safe Mode nur echte Hohe Wahrscheinlichkeiten (>= 60.0%)
+        valid = [c for c in candidates if c['prob'] >= 60.0]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:2]
     elif "High Risk" in profile:
         valid = [c for c in candidates if c['base_q'] >= 2.00]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:2]
-    else:
+    else: # Balanced
         valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
         if not valid:
             valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:3]
@@ -500,7 +562,7 @@ else:
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
     if g_typ == "📊 Reine Einzelwetten":
-        st.markdown(f"### 🛡️ Gemischte KI-Einzelwetten mit Quotenvergleich ({len(matches)} Spiele geladen)")
+        st.markdown(f"### 🛡️ Realistische KI-Einzelwetten mit Quotenvergleich ({len(matches)} Spiele geladen)")
         for match in matches:
             pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter)
             
@@ -543,7 +605,7 @@ else:
                 gesamtq *= p['quote']
                 picks_data.append((m, p))
                 
-            st.markdown(f"### 📜 Dein gemischter Kombi-Schein ({len(ausgewaehlte)}er Kombi)")
+            st.markdown(f"### 📜 Dein realistischer Kombi-Schein ({len(ausgewaehlte)}er Kombi)")
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 20px;">
                     <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
@@ -581,7 +643,7 @@ else:
             q_ges = round(p1['quote'] * p2['quote'], 2)
             netto = round((fb_w * q_ges) - fb_w, 2)
             
-            st.markdown("### 🎁 Gemischte Freebet-Empfehlung")
+            st.markdown("### 🎁 Freebet-Empfehlung")
             st.markdown(f"""
                 <div class="multi-ticket-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
