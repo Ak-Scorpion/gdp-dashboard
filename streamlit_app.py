@@ -181,56 +181,59 @@ DEUTSCHE_ANBIETER = {
 def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter, match_index):
     if not date_str: return "Unbekannt", False
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        jetzt = datetime.now(timezone.utc)
+        # Lokale Zeitumwandlung für Deutschland (MEZ/MESZ = UTC+2 im Sommer)
+        dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        dt_local = dt_utc.astimezone(timezone(timedelta(hours=2)))
         
-        if dt < jetzt - timedelta(hours=3):
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
+        jetzt_local = datetime.now(timezone(timedelta(hours=2)))
+        
+        if dt_local < jetzt_local - timedelta(hours=4):
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), False
             
         if spieltag_filter > 0:
             erwarteter_spieltag = (match_index // 10) + 1
             if erwarteter_spieltag != spieltag_filter:
-                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
+                return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), False
 
-        spiel_datum = dt.date()
-        heute_datum = jetzt.date()
+        spiel_datum = dt_local.date()
+        heute_datum = jetzt_local.date()
 
         if zeit_modus == "📅 Kalender-Bereich wählen":
             if isinstance(datum_auswahl, tuple) and len(datum_auswahl) == 2:
                 start_date, end_date = datum_auswahl
                 if start_date and end_date:
-                    return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (start_date <= spiel_datum <= end_date)
+                    return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (start_date <= spiel_datum <= end_date)
             elif isinstance(datum_auswahl, date):
-                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == datum_auswahl)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), True
+                return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == datum_auswahl)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), True
             
         elif zeit_modus == "📌 Heute":
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == heute_datum)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == heute_datum)
             
         elif zeit_modus == "📌 Morgen":
             morgen_datum = heute_datum + timedelta(days=1)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == morgen_datum)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == morgen_datum)
             
         elif zeit_modus == "📌 Sonntag":
             sonntag_datum = heute_datum + timedelta(days=(6 - heute_datum.weekday()) % 7)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == sonntag_datum)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == sonntag_datum)
             
         elif zeit_modus == "⚡ Wochenende (Freitag – Sonntag)":
             tage_bis_freitag = (4 - heute_datum.weekday()) % 7
             freitag = heute_datum + timedelta(days=tage_bis_freitag if heute_datum.weekday() <= 4 else 0)
             sonntag = freitag + timedelta(days=2)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (freitag <= spiel_datum <= sonntag)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (freitag <= spiel_datum <= sonntag)
             
         elif zeit_modus == "🟢 Ganze Woche (Montag – Sonntag)":
             montag = heute_datum - timedelta(days=heute_datum.weekday())
             sonntag = montag + timedelta(days=6)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (montag <= spiel_datum <= sonntag)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (montag <= spiel_datum <= sonntag)
             
         else: 
             aktueller_montag = heute_datum - timedelta(days=heute_datum.weekday())
             naechster_montag = aktueller_montag + timedelta(days=7)
             naechster_sonntag = naechster_montag + timedelta(days=6)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (naechster_montag <= spiel_datum <= naechster_sonntag)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (naechster_montag <= spiel_datum <= naechster_sonntag)
     except Exception: 
         return date_str, True
 
@@ -306,7 +309,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & 
 
     with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=False):
         if st.checkbox("🇩🇪 1. Bundesliga", value=False, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
-        if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
+        if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga") # Direkt standardmäßig aktivierbar
         if st.checkbox("🇩🇪 3. Liga", value=False, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
 
     with st.expander("🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League, Championship)", expanded=False):
@@ -577,7 +580,7 @@ if mode == 'einzel' and 'einzel_tipps' in st.session_state:
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.warning("⚠️ Keine Spiele für diesen Tag gefunden. (Hinweis: Unter der Woche oder am heutigen Tag haben Ligen oft Spielpause oder die Quoten werden erst kurz vor Anpfiff geladen. Probiere es mit 'Wochenende' oder 'Ganze Woche').")
+        st.warning("⚠️ Keine Spiele für diesen Zeitraum in den aktivierten Ligen gefunden.")
 
 elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
     kombi_auswahl = st.session_state['kombi_auswahl']
