@@ -5,7 +5,7 @@ import random
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Tipico Premium UI",
+    page_title="KI Wettprognosen — Pascal Gellers",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -39,6 +39,14 @@ st.markdown("""
     }
     
     /* Header & Titel */
+    .owner-tag {
+        color: #00d47e;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        margin-bottom: 4px;
+    }
     .main-title {
         color: #ffffff;
         font-size: 2.2rem;
@@ -74,7 +82,7 @@ st.markdown("""
         font-weight: bold;
     }
     </style>
-""", unsafe_allow_html=unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- DATENBANKEN ---
 TOP_STUERGME = {
@@ -110,7 +118,8 @@ ligen = {
     "🏆 Champions League": "soccer_uefa_champs_league"
 }
 
-# --- HEADER ---
+# --- HEADER MIT DEINEM NAMEN ---
+st.markdown('<div class="owner-tag">👤 Dashboard von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Tipico Generator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Analyse von Live-Quoten, Match-Wahrscheinlichkeiten und KI-generierten Kombi-Scheinen</div>', unsafe_allow_html=True)
 
@@ -261,7 +270,6 @@ with tab2:
             gesamtquote = 1.0
             st.markdown("### 📜 Dein KI Tipico-Kombi-Schein")
             
-            # WETT-KARTEN ANZEIGEN
             cols = st.columns(3)
             for idx, tipp in enumerate(kombi_auswahl):
                 gesamtquote *= tipp['Quote']
@@ -282,7 +290,6 @@ with tab2:
             
             st.divider()
             
-            # TOTAL QUOTE HIGHLIGHT METRIC
             col_m1, col_m2 = st.columns([1, 2])
             with col_m1:
                 st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
