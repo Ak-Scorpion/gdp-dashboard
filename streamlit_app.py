@@ -79,23 +79,15 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (VOLLSTÄNDIGE TASTATUR-SPERRE FÜR DEN KALENDER) ---
+# --- DESIGNER CSS (TASTATUR-SPERRE FÜR DEN KALENDER) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
-    /* Unterdrückt jegliche manuelle und mobile Tastatur-Eingaben im Kalender-Bereich */
     input[aria-label*="Zeitraum"], input[aria-label*="Datum"], input[aria-expanded] {
         caret-color: transparent !important;
         pointer-events: auto !important;
     }
-    input[aria-label*="Zeitraum"]::-webkit-inner-spin-button,
-    input[aria-label*="Zeitraum"]::-webkit-calendar-picker-indicator {
-        opacity: 1;
-        cursor: pointer;
-    }
-    
-    /* Zwingt das Eingabefeld dazu, den Fokus der Bildschirmtastatur zu ignorieren */
     div[data-baseweb="input"] input {
         caret-color: transparent !important;
     }
@@ -146,11 +138,6 @@ st.markdown("""
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
         padding: 10px 14px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 6px; background-color: #0f172a; padding: 6px; border-radius: 12px; border: 1px solid #1e293b;
-    }
-    .stTabs [data-baseweb="tab"] { height: 42px; border-radius: 8px; color: #94a3b8; font-weight: 600; }
-    .stTabs [aria-selected="true"] { background-color: #1e293b !important; color: #00d47e !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -170,17 +157,18 @@ LIGEN = {
 
 ANBIETER_URLS = {
     "Tipico": "https://www.tipico.de",
-    "Neo.bet": "https://www.neo.bet/de",
-    "bwin (Deutschland)": "https://sports.bwin.de",
-    "Bet-at-home": "https://www.bet-at-home.com",
-    "Bet365 (DE)": "https://www.bet365.de",
+    "DAZN Bet": "https://www.daznbet.de",
     "Betano": "https://www.betano.de",
-    "Oddset": "https://www.oddset.de"
+    "bwin (Deutschland)": "https://sports.bwin.de",
+    "Bet365 (DE)": "https://www.bet365.de",
+    "Oddset": "https://www.oddset.de",
+    "Neo.bet": "https://www.neo.bet/de",
+    "Bet-at-home": "https://www.bet-at-home.com"
 }
 
 DEUTSCHE_ANBIETER = {
-    "Tipico": "bwin", "Neo.bet": "bwin", "bwin (Deutschland)": "bwin",
-    "Bet-at-home": "betathome", "Bet365 (DE)": "bet365", "Betano": "bwin", "Oddset": "bwin"
+    "Tipico": "bwin", "DAZN Bet": "bwin", "Betano": "bwin", "bwin (Deutschland)": "bwin",
+    "Bet365 (DE)": "bet365", "Oddset": "bwin", "Neo.bet": "bwin", "Bet-at-home": "betathome"
 }
 
 def check_spiel_im_kalender(date_str, zeit_modus, datum_auswahl):
@@ -238,7 +226,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Reiner Kalender-Modus (Tastatur gesperrt) & Multi-Ticket System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Alles auf einer Seite • Inkl. DAZN Bet, Anbieter-Wahl & Kalender</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -254,418 +242,339 @@ with col_count:
 
 st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- SIDEBAR (LEER / MINIMAL) ---
 with st.sidebar:
-    st.markdown("### 🎛️ Steuerungs-Panel")
-    anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
-    st.markdown("---")
-    st.markdown("💡 Wähle deine Tage im Kalender in Tab 2 aus.")
+    st.markdown("### 🎛️ Info")
+    st.markdown("Alle Einstellungen (inkl. Wettanbieter & DAZN Bet) befinden sich nun direkt zentral auf der Hauptseite.")
 
-# --- TABS ---
-tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
+# --- HAUPTSEITE (ALLES IN EINEM BEREICH) ---
+st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with tab1:
-    st.markdown("### 📊 Einzelne Liga & Analyse")
-    Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", list(LIGEN.keys()), key="l_tab1_single")
-    if st.button("🔍 Spiele laden", use_container_width=True, type="primary"):
-        liga_code = LIGEN[Einzelne_Liga_Auswahl]
-        bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
-        with st.spinner("Analysiere Quoten..."):
-            data = load_league_odds(liga_code)
-            if isinstance(data, list) and len(data) > 0:
-                spiele_liste = []
-                heute_datum = date.today()
-                for match in data:
-                    match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), "📅 Kalender-Bereich wählen", heute_datum)
-                    if not ist_gueltig: continue
-                    home, away = match['home_team'], match['away_team']
-                    q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                    prob_h = round((1 / q_home) * 100) if q_home else 0
-                    spiele_liste.append({
-                        "Anstoßzeit": match_time, "Heim": home, "Auswärts": away,
-                        "Quote 1": q_home, "Quote X": q_draw, "Quote 2": q_away,
-                        "Sieg-Chance Heim": f"{prob_h}%", "Markt-Status": "🔥 VALUE-BET" if is_value else "Standard"
-                    })
-                if spiele_liste:
-                    st.dataframe(pd.DataFrame(spiele_liste), use_container_width=True, hide_index=True)
-                else: st.info("Keine Spiele für heute gefunden.")
-            else: st.error("Keine Spiele gefunden oder API-Limit erreicht.")
-
-with tab2:
-    st.markdown("### 🎯 Intelligenter KI Kombi-Generator & Kalender-Filter")
+with st.expander("⚙️ Wettanbieter, Zeitraum, Ligen & Wett-Modus einstellen (Hier klicken)", expanded=True):
     
-    with st.expander("⚙️ Ligen-, Kalender- & Modus-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
-        
-        st.markdown("#### 📅 1. Zeitraum im Kalender markieren")
-        gen_zeit_modus = st.radio(
-            "Zeitraum-Modus:",
-            ["📅 Kalender-Bereich wählen", "🟢 Ganze Woche wählen"],
-            index=0,
-            key="gen_zeit_mode"
-        )
-        
-        kalender_auswahl = None
-        if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-            st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Tippe auf das Datumsfeld, um den reinen Kalender zu öffnen (Tastatur bleibt gesperrt):</p>", unsafe_allow_html=True)
-            kalender_auswahl = st.date_input(
-                "Zeitraum für Wetten auswählen:",
-                value=(date.today(), date.today() + timedelta(days=3)),
-                key="kalender_input"
-            )
-        
-        st.markdown("---")
-        st.markdown("#### 🏆 2. Ligen per Häkchen auswählen")
-        generator_ligen_modus = st.radio(
-            "Ligen-Auswahl:",
-            ["🌍 Alle europäischen Top-Ligen nutzen", "☑️ Ligen per Häkchen einzeln wählen"],
+    # NEU: Wettanbieter-Auswahl direkt auf der Hauptseite als Reiter/Radio
+    st.markdown("#### 🏢 1. Wettanbieter auswählen (Inkl. DAZN Bet)")
+    anbieter_wahl = st.radio(
+        "Wähle deinen Wettanbieter:",
+        list(ANBIETER_URLS.keys()),
+        horizontal=True,
+        key="main_bm_select"
+    )
+    
+    st.markdown("---")
+    col_e1, col_e2 = st.columns(2)
+    with col_e1:
+        gen_zeit_modus = st.radio("Zeitraum-Modus:", ["📅 Kalender-Bereich wählen", "🟢 Ganze Woche wählen"], index=0, key="gen_zeit_mode")
+    with col_e2:
+        gen_typ = st.selectbox(
+            "Wett-Typ & Strategie wählen:",
+            [
+                "🛡️ Multi-Ticket System (3 separate Scheine)", 
+                "🎁 Freebet-Modus (Gratiswette maximieren)", 
+                "🎯 Standard Kombiwette (2-3 Spiele)",
+                "📊 Einzelwetten & Value-Bets (Tabelle)"
+            ],
             index=0
         )
-        
-        aktive_generator_ligen = []
-        if generator_ligen_modus == "☑️ Ligen per Häkchen einzeln wählen":
-            col_cb1, col_cb2 = st.columns(2)
-            temp_selected = []
-            for i, liga_name in enumerate(LIGEN.keys()):
-                target_col = col_cb1 if i % 2 == 0 else col_cb2
-                with target_col:
-                    is_checked = st.checkbox(liga_name, value=(i < 2), key=f"chk_liga_{i}")
-                    if is_checked:
-                        temp_selected.append(liga_name)
-            aktive_generator_ligen = temp_selected
-        else:
-            aktive_generator_ligen = list(LIGEN.keys())
-            
-        st.markdown("---")
-        st.markdown("#### 💰 3. Wett-Modus wählen")
-        gen_typ = st.radio(
-            "Generator-Modus:",
-            ["🛡️ Multi-Ticket System (3 separate Scheine)", "🎁 Freebet-Modus (Gratiswette maximieren)", "Standard (Einzelner Schein nach Wunsch)"],
-            index=0
-        )
-        
-        if gen_typ == "Standard (Einzelner Schein nach Wunsch)":
-            use_target_mode = st.checkbox("🎯 Ziel-Gewinn-Modus aktivieren (Einsatz ➔ Wunsch-Gewinn)", value=False)
-            if use_target_mode:
-                col_e1, col_g1 = st.columns(2)
-                with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=20.0, step=5.0)
-                with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=100.0, step=10.0)
-                ziel_quote = round(gewinn_target / einsatz_target, 2)
-            else:
-                anzahl_wetten = st.selectbox("Anzahl der Wetten auf dem Schein:", [2, 3], index=0)
-        elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-            freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
-        else:
-            multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        generate_click = st.button("🔄 KI Wettschein(e) generieren", type="primary", use_container_width=True)
+    kalender_auswahl = None
+    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
+        st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Tippe auf das Datumsfeld, um den Kalender zu öffnen:</p>", unsafe_allow_html=True)
+        kalender_auswahl = st.date_input("Zeitraum für Wetten auswählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
 
-    if generate_click:
-        if not aktive_generator_ligen: 
-            st.error("Bitte wähle mindestens eine Liga per Häkchen aus!")
-        else:
-            bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
-            
-            with st.spinner("Durchsuche den gewählten Kalender-Zeitraum..."):
-                if gen_typ == "Standard (Einzelner Schein nach Wunsch)":
-                    moegliche_tipps = []
-                    if use_target_mode:
-                        anz_spiele = 3 if ziel_quote >= 3.5 else 2
-                        soll_einzelquote = ziel_quote ** (1 / anz_spiele)
-                        q_min = max(1.30, soll_einzelquote * 0.75)
-                        q_max = max(2.20, soll_einzelquote * 1.25)
-                    else:
-                        anz_spiele = anzahl_wetten
-                        q_min, q_max = (1.30, 1.75)
-                    
-                    for liga_label in aktive_generator_ligen:
-                        code = LIGEN[liga_label]
-                        data = load_league_odds(code)
-                        if isinstance(data, list):
-                            for match in data:
-                                match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
-                                if not ist_gueltig: continue
-                                home, away = match['home_team'], match['away_team']
-                                q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                                if q_home and q_min <= q_home <= q_max:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Sicherer Favorit 🛡️"})
-                                if q_away and q_min <= q_away <= q_max:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Sicherer Favorit 🛡️"})
-
-                    if len(moegliche_tipps) >= anz_spiele:
-                        random.shuffle(moegliche_tipps)
-                        ausgewaehlte_spiele = set()
-                        kombi_auswahl = []
-                        if use_target_mode:
-                            aktuelle_quote = 1.0
-                            for tipp in moegliche_tipps:
-                                if tipp['Begegnung'] not in ausgewaehlte_spiele:
-                                    kombi_auswahl.append(tipp)
-                                    ausgewaehlte_spiele.add(tipp['Begegnung'])
-                                    aktuelle_quote *= tipp['Quote']
-                                    if aktuelle_quote >= ziel_quote or len(kombi_auswahl) == 3:
-                                        break
-                            st.session_state['preset_einsatz'] = einsatz_target
-                        else:
-                            for tipp in moegliche_tipps:
-                                if tipp['Begegnung'] not in ausgewaehlte_spiele:
-                                    kombi_auswahl.append(tipp)
-                                    ausgewaehlte_spiele.add(tipp['Begegnung'])
-                                if len(kombi_auswahl) == anz_spiele: break
-                            st.session_state['preset_einsatz'] = 20.0
-
-                        st.session_state['mode_type'] = 'standard'
-                        st.session_state['kombi_auswahl'] = kombi_auswahl
-                        st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                    else:
-                        st.warning("Keine passenden Spiele für diesen Kalender-Zeitraum im Zielbereich gefunden.")
-                
-                elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-                    moegliche_tipps = []
-                    for liga_label in aktive_generator_ligen:
-                        code = LIGEN[liga_label]
-                        data = load_league_odds(code)
-                        if isinstance(data, list):
-                            for match in data:
-                                match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
-                                if not ist_gueltig: continue
-                                home, away = match['home_team'], match['away_team']
-                                q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                                if q_home and 1.60 <= q_home <= 2.40:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Freebet Value 🎁"})
-                                if q_away and 1.60 <= q_away <= 2.40:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Freebet Value 🎁"})
-
-                    if len(moegliche_tipps) >= 2:
-                        random.shuffle(moegliche_tipps)
-                        ausgewaehlte_spiele = set()
-                        freebet_kombi = []
-                        aktuelle_q = 1.0
-                        for tipp in moegliche_tipps:
-                            if tipp['Begegnung'] not in ausgewaehlte_spiele:
-                                freebet_kombi.append(tipp)
-                                ausgewaehlte_spiele.add(tipp['Begegnung'])
-                                aktuelle_q *= tipp['Quote']
-                                if aktuelle_q >= 2.20 or len(freebet_kombi) == 2:
-                                    break
-                        
-                        st.session_state['mode_type'] = 'freebet'
-                        st.session_state['freebet_wert'] = freebet_wert
-                        st.session_state['freebet_kombi'] = freebet_kombi
-                        st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                    else:
-                        st.warning("Keine Freebet-Spiele für diesen Kalender-Zeitraum gefunden.")
-                
-                else:
-                    alle_spiele_pool = []
-                    for liga_label in aktive_generator_ligen:
-                        code = LIGEN[liga_label]
-                        data = load_league_odds(code)
-                        if isinstance(data, list):
-                            for match in data:
-                                match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
-                                if not ist_gueltig: continue
-                                home, away = match['home_team'], match['away_team']
-                                q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                                if q_home: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home})
-                                if q_away: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away})
-
-                    if len(alle_spiele_pool) >= 6:
-                        random.shuffle(alle_spiele_pool)
-                        e1 = round(multi_budget * 0.25, 2)
-                        e2 = round(multi_budget * 0.50, 2)
-                        e3 = round(multi_budget * 0.25, 2)
-                        
-                        used_matches = set()
-                        def pick_tips(count, q_min_val, q_max_val):
-                            picked = []
-                            for s in alle_spiele_pool:
-                                if s['Begegnung'] not in used_matches and q_min_val <= s['Quote'] <= q_max_val:
-                                    picked.append(s)
-                                    used_matches.add(s['Begegnung'])
-                                    if len(picked) == count: break
-                            return picked
-
-                        s1_tipps = pick_tips(2, 1.25, 1.55)
-                        s2_tipps = pick_tips(2, 1.40, 1.75)
-                        s3_tipps = pick_tips(3, 1.45, 2.00)
-                        
-                        if s1_tipps and s2_tipps and s3_tipps:
-                            st.session_state['mode_type'] = 'multi'
-                            st.session_state['multi_tickets'] = [
-                                {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "tipps": s1_tipps},
-                                {"name": "⭐ Schein 2: Hauptgewinn-Kombi", "einsatz": e2, "tipps": s2_tipps},
-                                {"name": "🚀 Schein 3: High-Reward Tipp", "einsatz": e3, "tipps": s3_tipps}
-                            ]
-                            st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                        else:
-                            st.warning("Nicht genügend Spiele für das Multi-Ticket-System in diesem Kalender-Zeitraum verfügbar.")
-                    else:
-                        st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Zeitraum verfügbar.")
-
-    # ANZEIGE: FREEBET
-    if st.session_state.get('mode_type') == 'freebet' and 'freebet_kombi' in st.session_state:
-        fb_wert = st.session_state.get('freebet_wert', 20)
-        fb_kombi = st.session_state['freebet_kombi']
-        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
-        
-        q_gesamt = 1.0
-        for t in fb_kombi: q_gesamt *= t['Quote']
-        reingewinn = round((fb_wert * q_gesamt) - fb_wert, 2)
-        brutto_gewinn = round(fb_wert * q_gesamt, 2)
-        
-        st.markdown(f"### 🎁 Deine optimierte Freebet-Empfehlung")
-        st.markdown(f"""
-            <div class="freebet-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span class="badge badge-freebet" style="font-size: 0.9rem; padding: 6px 14px;">🎁 Gratiswette: {fb_wert} € Einsatz</span>
-                    <span class="badge" style="background-color: #00d47e; color: #070a13; font-size: 0.9rem; padding: 6px 14px;">💥 Gesamtquote: {round(q_gesamt, 2)}</span>
-                </div>
-                <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 15px;">
-                    <span style="color: #94a3b8; font-size: 0.9rem;">Erwarteter Reingewinn (Netto):</span><br>
-                    <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">{reingewinn} €</span>
-                    <span style="color: #64748b; font-size: 0.8rem;"><br>(Brutto-Auszahlung abzüglich {fb_wert} € Freebet = {brutto_gewinn} € Total)</span>
-                </div>
-        """, unsafe_allow_html=True)
-        
-        for t in fb_kombi:
-            st.markdown(f"""
-                <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <span style="color: #ffffff; font-weight: 600; font-size: 0.95rem;">⚽ {t['Begegnung']}</span><br>
-                        <span style="color: #94a3b8; font-size: 0.8rem;">📅 {t['Datum']} &nbsp;|&nbsp; Tipp: <b style="color: #00d47e;">{t['Tipp']}</b></span>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="color: #64748b; font-size: 0.75rem;">Quote</span><br>
-                        <span style="color: #00d47e; font-weight: 800; font-size: 1.05rem;">{t['Quote']}</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown(f"""
-            <div style="background-color: #0f172a; border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                <h3 style="color: #ffffff; margin-top: 0;">🚀 Jetzt Freebet bei {anbieter_label} einlösen</h3>
-                <a href="{bookmaker_url}" target="_blank" style="background-color: #8b5cf6; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Zu {anbieter_label} wechseln</a>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # ANZEIGE: MULTI-TICKET
-    elif st.session_state.get('mode_type') == 'multi' and 'multi_tickets' in st.session_state:
-        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
-        
-        st.markdown(f"### 🛡️ Dein Multi-Ticket System — 3 separate Scheine")
-        st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;'>Aufgeteilt nach perfektem Budget-Schlüssel (25% / 50% / 25%):</p>", unsafe_allow_html=True)
-        
-        gesamt_moeglicher_gewinn = 0
-        gesamt_einsatz = 0
-        
-        for ticket in st.session_state['multi_tickets']:
-            q_schein = 1.0
-            for t in ticket['tipps']: q_schein *= t['Quote']
-            gewinn_schein = ticket['einsatz'] * q_schein
-            gesamt_moeglicher_gewinn += gewinn_schein
-            gesamt_einsatz += ticket['einsatz']
-            
-            st.markdown(f"""
-                <div class="multi-ticket-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span class="badge" style="background-color: #00d47e; color: #070a13; font-size: 0.85rem; padding: 6px 12px;">{ticket['name']}</span>
-                        <span class="badge badge-market" style="font-size: 0.85rem; padding: 6px 12px;">💰 Empfohlener Einsatz: {ticket['einsatz']} €</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px; border-bottom: 1px solid #1e293b; padding-bottom: 10px;">
-                        <span>Gesamtquote: <b style="color: #00d47e; font-size: 1.1rem;">{round(q_schein, 2)}</b></span>
-                        <span>Möglicher Gewinn: <b style="color: #00d47e; font-size: 1.1rem;">{round(gewinn_schein, 2)} €</b></span>
-                    </div>
-            """, unsafe_allow_html=True)
-            
-            for t in ticket['tipps']:
-                st.markdown(f"""
-                    <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="color: #ffffff; font-weight: 600; font-size: 0.95rem;">⚽ {t['Begegnung']}</span><br>
-                            <span style="color: #94a3b8; font-size: 0.8rem;">📅 {t['Datum']} &nbsp;|&nbsp; Tipp: <b style="color: #00d47e;">{t['Tipp']}</b></span>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="color: #64748b; font-size: 0.75rem;">Quote</span><br>
-                            <span style="color: #00d47e; font-weight: 800; font-size: 1.05rem;">{t['Quote']}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-        st.markdown(f"""
-            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 20px;">
-                <span style="color: #94a3b8;">Gesamteinsatz aller 3 Scheine:</span> <b style="color: #ffffff;">{round(gesamt_einsatz, 2)} €</b> &nbsp;|&nbsp; 
-                <span style="color: #94a3b8;">Maximaler Gesamtertrag:</span> <b style="color: #00d47e;">{round(gesamt_moeglicher_gewinn, 2)} €</b>
-            </div>
-        """, unsafe_allow_html=True)
-        st.markdown(f"""
-            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                <h3 style="color: #ffffff; margin-top: 0;">🚀 Direkt zu {anbieter_label}</h3>
-                <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Jetzt {anbieter_label} öffnen & wetten</a>
-            </div>
-        """, unsafe_allow_html=True)
-
-    # ANZEIGE: STANDARD
-    elif st.session_state.get('mode_type') == 'standard' and 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
-        kombi_auswahl = st.session_state['kombi_auswahl']
-        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        preset_einsatz = st.session_state.get('preset_einsatz', 20.0)
-        
-        gesamtquote = 1.0
-        for item in kombi_auswahl: gesamtquote *= item['Quote']
-        schein_wahrscheinlichkeit = max(15, min(85, round((1 / gesamtquote) * 100 * 1.15)))
-        risk_text = get_risk_label(schein_wahrscheinlichkeit)
-        bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
-            
-        st.markdown(f"### 📜 Dein optimierter KI-Schein ({len(kombi_auswahl)}er Kombi)")
-        cols = st.columns(len(kombi_auswahl))
-        for idx, tipp in enumerate(kombi_auswahl):
-            with cols[idx]:
-                st.markdown(f"""
-                    <div class="bet-card">
-                        <span class="badge badge-market">{tipp["Markt"]}</span><br>
-                        <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-top:4px;">{tipp["Liga"]}</span>
-                        <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.05rem;">{tipp["Begegnung"]}</h4>
-                        <p style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {tipp["Datum"]}</p>
-                        <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>
-                        <hr style="border: 0; border-top: 1px solid #1e293b; margin: 12px 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #64748b; font-size: 0.8rem;">Quote:</span>
-                            <span class="odds-tag">{tipp["Quote"]}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
-                <h3 style="color: #ffffff; margin-top: 0;">🚀 Direkt zu {anbieter_label}</h3>
-                <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Jetzt {anbieter_label} öffnen & wetten</a>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("### 💰 Bankroll-Management")
-        col_q, col_prob, col_bank, col_einsatz, col_gewinn = st.columns([1, 1, 1, 1, 1.2])
-        with col_q: st.metric(label="💥 Gesamtquote", value=f"{round(gesamtquote, 2)}")
-        with col_prob: st.metric(label="📈 Chance", value=f"~{schein_wahrscheinlichkeit}%", delta=risk_text)
-        with col_bank:
-            tot_b = st.number_input("Guthaben (€):", min_value=10.0, value=100.0, step=10.0, key="std_bank")
-            st.caption(f"2%-Regel: **{round(tot_b * 0.02, 2)} €**")
-        with col_einsatz: einsatz = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=preset_einsatz, step=5.0, key="rechner_einsatz")
-        with col_gewinn: st.metric(label="🏆 Gewinn", value=f"{round(einsatz * gesamtquote, 2):.2f} €")
-
-with tab3:
-    st.markdown("### 🗂️ Deine gespeicherten Wettscheine")
-    if not st.session_state['saved_tickets']:
-        st.info("Bisher keine Scheine hinterlegt.")
+    st.markdown("---")
+    st.markdown("#### 🏆 Ligen-Auswahl per Häkchen")
+    generator_ligen_modus = st.radio("Ligen-Filter:", ["🌍 Alle europäischen Top-Ligen nutzen", "☑️ Ligen per Häkchen einzeln wählen"], index=0)
+    
+    aktive_generator_ligen = []
+    if generator_ligen_modus == "☑️ Ligen per Häkchen einzeln wählen":
+        col_cb1, col_cb2 = st.columns(2)
+        temp_selected = []
+        for i, liga_name in enumerate(LIGEN.keys()):
+            target_col = col_cb1 if i % 2 == 0 else col_cb2
+            with target_col:
+                is_checked = st.checkbox(liga_name, value=(i < 2), key=f"chk_liga_{i}")
+                if is_checked: temp_selected.append(liga_name)
+        aktive_generator_ligen = temp_selected
     else:
-        for idx, ticket in enumerate(st.session_state['saved_tickets']):
-            st.markdown(f"**{ticket['name']}** — {ticket['anbieter']} (Gesamtquote: {ticket['quote']})")
-            for t in ticket['tipps']: st.write(f"• {t['Begegnung']} ➔ {t['Tipp']} ({t['Quote']})")
-            if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
-                st.session_state['saved_tickets'].pop(idx)
-                st.rerun()
+        aktive_generator_ligen = list(LIGEN.keys())
+
+    st.markdown("---")
+    if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
+        freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
+    elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
+        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
+    elif gen_typ == "🎯 Standard Kombiwette (2-3 Spiele)":
+        anzahl_wetten = st.selectbox("Anzahl der Spiele im Kombischein:", [2, 3], index=0)
+
+    generate_click = st.button("🔄 Wetten & Quoten jetzt laden / generieren", type="primary", use_container_width=True)
+
+if generate_click:
+    if not aktive_generator_ligen: 
+        st.error("Bitte wähle mindestens eine Liga per Häkchen aus!")
+    else:
+        bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
+        
+        with st.spinner(f"Analysiere Quoten bei {anbieter_wahl}..."):
+            
+            # 1. EINZELWETTEN / VALUE-BETS MODUS
+            if gen_typ == "📊 Einzelwetten & Value-Bets (Tabelle)":
+                spiele_liste = []
+                for liga_label in aktive_generator_ligen:
+                    code = LIGEN[liga_label]
+                    data = load_league_odds(code)
+                    if isinstance(data, list):
+                        for match in data:
+                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                            if not ist_gueltig: continue
+                            home, away = match['home_team'], match['away_team']
+                            q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            prob_h = round((1 / q_home) * 100) if q_home else 0
+                            spiele_liste.append({
+                                "Liga": liga_label, "Anstoßzeit": match_time, "Heim": home, "Auswärts": away,
+                                "Quote 1": q_home, "Quote X": q_draw, "Quote 2": q_away,
+                                "Heim-Chance": f"{prob_h}%", "Status": "🔥 VALUE-BET" if is_value else "Standard"
+                            })
+                st.session_state['mode_type'] = 'einzel'
+                st.session_state['einzel_tabelle'] = spiele_liste
+                st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+
+            # 2. STANDARD KOMBIWETTE
+            elif gen_typ == "🎯 Standard Kombiwette (2-3 Spiele)":
+                moegliche_tipps = []
+                for liga_label in aktive_generator_ligen:
+                    code = LIGEN[liga_label]
+                    data = load_league_odds(code)
+                    if isinstance(data, list):
+                        for match in data:
+                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                            if not ist_gueltig: continue
+                            home, away = match['home_team'], match['away_team']
+                            q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            if q_home and 1.30 <= q_home <= 1.80:
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Kombi-Favorit 🎯"})
+                            if q_away and 1.30 <= q_away <= 1.80:
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Kombi-Favorit 🎯"})
+
+                if len(moegliche_tipps) >= anzahl_wetten:
+                    random.shuffle(moegliche_tipps)
+                    ausgewaehlte_spiele = set()
+                    kombi_auswahl = []
+                    for tipp in moegliche_tipps:
+                        if tipp['Begegnung'] not in ausgewaehlte_spiele:
+                            kombi_auswahl.append(tipp)
+                            ausgewaehlte_spiele.add(tipp['Begegnung'])
+                        if len(kombi_auswahl) == anzahl_wetten: break
+                    
+                    st.session_state['mode_type'] = 'standard'
+                    st.session_state['kombi_auswahl'] = kombi_auswahl
+                    st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+                else:
+                    st.warning("Nicht genügend Spiele für eine Kombi im gewählten Zeitraum gefunden.")
+
+            # 3. FREEBET MODUS
+            elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
+                moegliche_tipps = []
+                for liga_label in aktive_generator_ligen:
+                    code = LIGEN[liga_label]
+                    data = load_league_odds(code)
+                    if isinstance(data, list):
+                        for match in data:
+                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                            if not ist_gueltig: continue
+                            home, away = match['home_team'], match['away_team']
+                            q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            if q_home and 1.60 <= q_home <= 2.40:
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Freebet Value 🎁"})
+                            if q_away and 1.60 <= q_away <= 2.40:
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Freebet Value 🎁"})
+
+                if len(moegliche_tipps) >= 2:
+                    random.shuffle(moegliche_tipps)
+                    ausgewaehlte_spiele = set()
+                    freebet_kombi = []
+                    aktuelle_q = 1.0
+                    for tipp in moegliche_tipps:
+                        if tipp['Begegnung'] not in ausgewaehlte_spiele:
+                            freebet_kombi.append(tipp)
+                            ausgewaehlte_spiele.add(tipp['Begegnung'])
+                            aktuelle_q *= tipp['Quote']
+                            if aktuelle_q >= 2.20 or len(freebet_kombi) == 2: break
+                    
+                    st.session_state['mode_type'] = 'freebet'
+                    st.session_state['freebet_wert'] = freebet_wert
+                    st.session_state['freebet_kombi'] = freebet_kombi
+                    st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+                else:
+                    st.warning("Keine Freebet-Spiele für diesen Zeitraum gefunden.")
+
+            # 4. MULTI-TICKET SYSTEM
+            else:
+                alle_spiele_pool = []
+                for liga_label in aktive_generator_ligen:
+                    code = LIGEN[liga_label]
+                    data = load_league_odds(code)
+                    if isinstance(data, list):
+                        for match in data:
+                            match_time, ist_gueltig = check_spiel_im_kalender(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                            if not ist_gueltig: continue
+                            home, away = match['home_team'], match['away_team']
+                            q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                            if q_home: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home})
+                            if q_away: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away})
+
+                if len(alle_spiele_pool) >= 6:
+                    random.shuffle(alle_spiele_pool)
+                    e1 = round(multi_budget * 0.25, 2)
+                    e2 = round(multi_budget * 0.50, 2)
+                    e3 = round(multi_budget * 0.25, 2)
+                    
+                    used_matches = set()
+                    def pick_tips(count, q_min_val, q_max_val):
+                        picked = []
+                        for s in alle_spiele_pool:
+                            if s['Begegnung'] not in used_matches and q_min_val <= s['Quote'] <= q_max_val:
+                                picked.append(s)
+                                used_matches.add(s['Begegnung'])
+                                if len(picked) == count: break
+                        return picked
+
+                    s1_tipps = pick_tips(2, 1.25, 1.55)
+                    s2_tipps = pick_tips(2, 1.40, 1.75)
+                    s3_tipps = pick_tips(3, 1.45, 2.00)
+                    
+                    if s1_tipps and s2_tipps and s3_tipps:
+                        st.session_state['mode_type'] = 'multi'
+                        st.session_state['multi_tickets'] = [
+                            {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "tipps": s1_tipps},
+                            {"name": "⭐ Schein 2: Hauptgewinn-Kombi", "einsatz": e2, "tipps": s2_tipps},
+                            {"name": "🚀 Schein 3: High-Reward Tipp", "einsatz": e3, "tipps": s3_tipps}
+                        ]
+                        st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+                    else:
+                        st.warning("Nicht genügend Spiele für das Multi-Ticket-System verfügbar.")
+                else:
+                    st.warning("Zu wenige Spiele für 3 separate Scheine im gewählten Zeitraum.")
+
+# --- DARSTELLUNG DER ERGEBNISSE AUF DER HAUPTSEITE ---
+mode = st.session_state.get('mode_type', None)
+anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
+bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
+
+if mode == 'einzel' and 'einzel_tabelle' in st.session_state:
+    st.markdown(f"### 📊 Einzelwetten & Value-Bets bei {anbieter_label}")
+    if st.session_state['einzel_tabelle']:
+        st.dataframe(pd.DataFrame(st.session_state['einzel_tabelle']), use_container_width=True, hide_index=True)
+    else:
+        st.info("Keine Spiele für diesen Zeitraum gefunden.")
+
+elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
+    kombi_auswahl = st.session_state['kombi_auswahl']
+    gesamtquote = 1.0
+    for item in kombi_auswahl: gesamtquote *= item['Quote']
+    schein_wahrscheinlichkeit = max(15, min(85, round((1 / gesamtquote) * 100 * 1.15)))
+    risk_text = get_risk_label(schein_wahrscheinlichkeit)
+        
+    st.markdown(f"### 📜 Dein optimierter Kombi-Schein ({len(kombi_auswahl)}er Kombi) bei {anbieter_label}")
+    cols = st.columns(len(kombi_auswahl))
+    for idx, tipp in enumerate(kombi_auswahl):
+        with cols[idx]:
+            st.markdown(f"""
+                <div class="bet-card">
+                    <span class="badge badge-market">{tipp["Markt"]}</span><br>
+                    <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-top:4px;">{tipp["Liga"]}</span>
+                    <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.05rem;">{tipp["Begegnung"]}</h4>
+                    <p style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {tipp["Datum"]}</p>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>
+                    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 12px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b; font-size: 0.8rem;">Quote:</span>
+                        <span class="odds-tag">{tipp["Quote"]}</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+        <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+            <h3 style="color: #ffffff; margin-top: 0;">🚀 Jetzt bei {anbieter_label} wetten</h3>
+            <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 {anbieter_label} öffnen</a>
+        </div>
+    """, unsafe_allow_html=True)
+
+elif mode == 'freebet' and 'freebet_kombi' in st.session_state:
+    fb_wert = st.session_state.get('freebet_wert', 20)
+    fb_kombi = st.session_state['freebet_kombi']
+    q_gesamt = 1.0
+    for t in fb_kombi: q_gesamt *= t['Quote']
+    reingewinn = round((fb_wert * q_gesamt) - fb_wert, 2)
+    brutto_gewinn = round(fb_wert * q_gesamt, 2)
+    
+    st.markdown(f"### 🎁 Freebet-Empfehlung bei {anbieter_label}")
+    st.markdown(f"""
+        <div class="freebet-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span class="badge badge-freebet" style="font-size: 0.9rem; padding: 6px 14px;">🎁 Gratiswette: {fb_wert} €</span>
+                <span class="badge" style="background-color: #00d47e; color: #070a13; font-size: 0.9rem; padding: 6px 14px;">💥 Gesamtquote: {round(q_gesamt, 2)}</span>
+            </div>
+            <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 15px;">
+                <span style="color: #94a3b8; font-size: 0.9rem;">Erwarteter Reingewinn (Netto):</span><br>
+                <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">{reingewinn} €</span>
+            </div>
+    """, unsafe_allow_html=True)
+    for t in fb_kombi:
+        st.markdown(f"""
+            <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="color: #ffffff; font-weight: 600;">⚽ {t['Begegnung']}</span><br>
+                    <span style="color: #94a3b8; font-size: 0.8rem;">📅 {t['Datum']} | Tipp: <b style="color: #00d47e;">{t['Tipp']}</b></span>
+                </div>
+                <span style="color: #00d47e; font-weight: 800; font-size: 1.05rem;">{t['Quote']}</span>
+            </div>
+        """, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style="background-color: #0f172a; border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center;">
+            <a href="{bookmaker_url}" target="_blank" style="background-color: #8b5cf6; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block;">🔗 Zu {anbieter_label} wechseln</a>
+        </div>
+    """, unsafe_allow_html=True)
+
+elif mode == 'multi' and 'multi_tickets' in st.session_state:
+    st.markdown(f"### 🛡️ Multi-Ticket System bei {anbieter_label}")
+    for ticket in st.session_state['multi_tickets']:
+        q_schein = 1.0
+        for t in ticket['tipps']: q_schein *= t['Quote']
+        gewinn_schein = ticket['einsatz'] * q_schein
+        st.markdown(f"""
+            <div class="multi-ticket-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span class="badge" style="background-color: #00d47e; color: #070a13;">{ticket['name']}</span>
+                    <span class="badge badge-market">Einsatz: {ticket['einsatz']} €</span>
+                </div>
+                <div style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">
+                    Quote: <b style="color: #00d47e;">{round(q_schein, 2)}</b> | Gewinn: <b style="color: #00d47e;">{round(gewinn_schein, 2)} €</b>
+                </div>
+        """, unsafe_allow_html=True)
+        for t in ticket['tipps']:
+            st.markdown(f"""
+                <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                    <span style="color: #ffffff; font-size: 0.9rem;">⚽ {t['Begegnung']} (Tipp: <b>{t['Tipp']}</b>)</span>
+                    <span style="color: #00d47e; font-weight: 800;">{t['Quote']}</span>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center;">
+            <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block;">🔗 Jetzt bei {anbieter_label} wetten</a>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0;'>", unsafe_allow_html=True)
+st.markdown("### 🗂️ Gespeicherte Wettscheine")
+if not st.session_state['saved_tickets']:
+    st.info("Bisher keine Scheine hinterlegt.")
+else:
+    for idx, ticket in enumerate(st.session_state['saved_tickets']):
+        st.markdown(f"**{ticket['name']}** — {ticket['anbieter']} (Gesamtquote: {ticket['quote']})")
+        if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
+            st.session_state['saved_tickets'].pop(idx)
+            st.rerun()
