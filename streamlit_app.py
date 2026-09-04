@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Keyless Live Engine",
+    page_title="KI Wettprognosen — Variabler Multi-Markt Generator",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -31,14 +31,12 @@ ANBIETER_URLS = {
 }
 
 # --- KEYLESS LIGEN MAPPING ---
-# Deutsche Ligen über OpenLigaDB (100% stabil & schlüsselfrei)
 OPENLIGA_SHORTCUTS = {
     "🇩🇪 1. Bundesliga": "bl1",
     "🇩🇪 2. Bundesliga": "bl2",
     "🇩🇪 3. Liga": "bl3"
 }
 
-# Internationale Ligen über ESPN Public Feed (100% schlüsselfrei)
 ESPN_LEAGUE_CODES = {
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "eng.1",
     "🇪🇸 La Liga": "esp.1",
@@ -51,7 +49,6 @@ ESPN_LEAGUE_CODES = {
 # --- KEYLESS FETCH ENGINES ---
 @st.cache_data(ttl=300)
 def fetch_openliga_matches(shortcut):
-    """Laedt deutsche Ligen (1., 2. & 3. Liga) kostenlos und ohne API Key."""
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
     try:
         res = requests.get(url, timeout=5)
@@ -63,7 +60,6 @@ def fetch_openliga_matches(shortcut):
 
 @st.cache_data(ttl=300)
 def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
-    """Laedt internationale Top-Ligen kostenlos und ohne API Key."""
     url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={start_date_str}-{end_date_str}"
     try:
         res = requests.get(url, timeout=5)
@@ -122,17 +118,13 @@ def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
         q = round((1.0 / p) * margin, 2)
         return max(1.05, min(q, 50.00))
 
-    fav_home = p_home >= p_away
-    safe_dc_prob = p_dc_1x if fav_home else p_dc_x2
-    safe_dc_tip = f"Doppelte Chance 1X ({'Heim' if fav_home else 'Auswärts'})"
-    
     return {
-        "1X2 Siegwette": {
+        "1X2": {
             "1": {"base_quote": prob_to_odds(p_home), "prob": round(p_home * 100, 1)},
             "X": {"base_quote": prob_to_odds(p_draw), "prob": round(p_draw * 100, 1)},
             "2": {"base_quote": prob_to_odds(p_away), "prob": round(p_away * 100, 1)}
         },
-        "Doppelte Chance": {
+        "DC": {
             "1X": {"base_quote": prob_to_odds(p_dc_1x), "prob": round(p_dc_1x * 100, 1)},
             "X2": {"base_quote": prob_to_odds(p_dc_x2), "prob": round(p_dc_x2 * 100, 1)}
         },
@@ -142,11 +134,6 @@ def calculate_poisson_markets(home_xg=1.65, away_xg=1.20):
         },
         "BTTS": {
             "Ja": {"base_quote": prob_to_odds(p_btts), "prob": round(p_btts * 100, 1)}
-        },
-        "Safe_DC": {
-            "tip": safe_dc_tip,
-            "prob": round(safe_dc_prob * 100, 1),
-            "base_quote": prob_to_odds(safe_dc_prob)
         }
     }
 
@@ -210,7 +197,6 @@ st.markdown("""
     .badge-market { background-color: #2563eb; color: #ffffff; }
     .badge-safe { background-color: #00d47e; color: #070a13; }
     .badge-bookie { background-color: #f59e0b; color: #070a13; }
-    .badge-api { background-color: #8b5cf6; color: #ffffff; }
     .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
     .prob-tag { color: #94a3b8; font-size: 0.85rem; }
     .counter-box {
@@ -259,15 +245,15 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Keyless Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">100% ohne API Key • Alle Ligen inkl. 3. Liga • Live Daten & Quotenvergleich</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Gemischter Markt Generator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Multi-Markt KI • Gemischte Tipps (DC, 1X2, Tore & BTTS) • Quotenvergleich</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown("""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 STATUS FEED</span><br>
-            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">KEYLESS ⚡</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">OpenLigaDB + ESPN</span>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📊 SYSTEM FEED</span><br>
+            <span style="color: #00d47e; font-size: 1.2rem; font-weight: 800;">GEMISCHT 🔀</span><br>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Variations-Filter</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -330,11 +316,11 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
 
     st.markdown("---")
     risiko_profil = st.selectbox(
-        "🧠 KI Risikoprofil & Markt-Fokus:",
+        "🧠 KI Risikoprofil (Bestimmt erlaubtes Quoten-Spektrum):",
         [
-            "🟢 Safe Mode (Höchste Sicherheit / Doppelte Chance & Safe Tore)",
-            "⚖️ Balanced Value (Ausgewogene Quoten 1.50 - 2.20)",
-            "🔥 High Risk / High Reward (Direktsieg 1X2 & Over 2.5)"
+            "🟢 Safe Mode (Höchste Sicherheit / Gemischte High-Prob Tipps)",
+            "⚖️ Balanced Value (Gemischte Quoten 1.45 - 2.15)",
+            "🔥 High Risk / High Reward (Gemischte Quoten 2.10 - 4.50)"
         ],
         index=0
     )
@@ -363,7 +349,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Zeitraum)"
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🚀 Live-Daten laden & Wettscheine berechnen", type="primary", use_container_width=True)
+    generate_click = st.button("🚀 Live-Daten laden & gemischte Wettscheine berechnen", type="primary", use_container_width=True)
 
 # --- ZEITRAUM BERECHNUNG ---
 if "HEUTE" in gen_zeit_modus:
@@ -390,11 +376,10 @@ if generate_click or 'matches_cache' not in st.session_state:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade schlüsselfreie Live-Daten & berechne Poisson-Prognosen..."):
+        with st.spinner("Lade Live-Ansetzungen & berechne gemischte Multi-Markt Prognosen..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
-                # 1. Deutsche Ligen via OpenLigaDB (inklusive 3. Liga!)
                 if liga_label in OPENLIGA_SHORTCUTS:
                     shortcut = OPENLIGA_SHORTCUTS[liga_label]
                     raw_openliga = fetch_openliga_matches(shortcut)
@@ -408,7 +393,7 @@ if generate_click or 'matches_cache' not in st.session_state:
                             if dt_from <= m_date <= dt_to:
                                 home = m['team1']['teamName']
                                 away = m['team2']['teamName']
-                                p_markets = calculate_poisson_markets(1.50, 1.15)
+                                p_markets = calculate_poisson_markets(1.55, 1.15)
                                 all_loaded_matches.append({
                                     "liga": liga_label,
                                     "home": home,
@@ -418,7 +403,6 @@ if generate_click or 'matches_cache' not in st.session_state:
                                     "markets": p_markets
                                 })
 
-                # 2. Internationale Ligen via ESPN API
                 elif liga_label in ESPN_LEAGUE_CODES:
                     code = ESPN_LEAGUE_CODES[liga_label]
                     raw_matches = fetch_espn_keyless_matches(code, start_str_espn, end_str_espn)
@@ -445,37 +429,50 @@ if generate_click or 'matches_cache' not in st.session_state:
 
 matches = st.session_state.get('matches_cache', [])
 
-# Helper: Extrahiere Tipp basierend auf Risikoprofil + Buchmacher-Vergleich
-def get_profile_pick(match, profile, checked_bookmakers):
+# --- DYNAMISCHE, GEMISCHTE KI MARKT-AUSWAHL ENGINE ---
+def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
+    # Hash-Seed für dieses exakte Spiel (sorgt für stabile, aber unterschiedliche Ergebnisse)
+    match_seed = int(hashlib.md5(f"{home}_{away}_{profile}".encode()).hexdigest(), 16)
+    
+    # Alle verfügbaren Märkte sammeln
+    candidates = [
+        {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1"},
+        {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_2"},
+        {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_1x"},
+        {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance 🛡️", "key": "dc_x2"},
+        {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt (Over 1.5) ⚽", "key": "o15"},
+        {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt (Over 2.5) ⚽", "key": "o25"},
+        {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen 🔥", "key": "btts"}
+    ]
+    
+    # Risikoprofil-Grenzwerte anwenden
     if "Safe Mode" in profile:
-        safe_dc = mkts['Safe_DC']
-        base_q = safe_dc['base_quote']
-        tipp_str = f"Doppelte Chance ({home if 'Heim' in safe_dc['tip'] else away} / X)"
-        prob_val = safe_dc['prob']
-        mkt_name = "Safe Mode 🛡️"
-        m_key = "safe_dc"
+        # Nur Optionen mit hoher Wahrscheinlichkeit (> 62%)
+        valid = [c for c in candidates if c['prob'] >= 62.0]
+        if not valid:
+            valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:2]
     elif "High Risk" in profile:
-        p_h = mkts['1X2 Siegwette']['1']['prob']
-        p_a = mkts['1X2 Siegwette']['2']['prob']
-        if p_h >= p_a:
-            base_q = mkts['1X2 Siegwette']['1']['base_quote']
-            tipp_str = f"Sieg {home} (1)"
-            prob_val = p_h
-        else:
-            base_q = mkts['1X2 Siegwette']['2']['base_quote']
-            tipp_str = f"Sieg {away} (2)"
-            prob_val = p_a
-        mkt_name = "High Risk 1X2 🎯"
-        m_key = "high_risk"
-    else: # Balanced
-        base_q = mkts['Tore']['Über 1.5']['base_quote']
-        tipp_str = "Über 1.5 Tore"
-        prob_val = mkts['Tore']['Über 1.5']['prob']
-        mkt_name = "Balanced Value ⚽"
-        m_key = "balanced"
+        # Höhere Quoten (Quote >= 2.00)
+        valid = [c for c in candidates if c['base_q'] >= 2.00]
+        if not valid:
+            valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:2]
+    else: # Balanced Value
+        # Ausgewogene Quoten (1.40 bis 2.20)
+        valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
+        if not valid:
+            valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:3]
+            
+    # Aus den passenden Kandidaten spielspezifisch abwechseln
+    selected = valid[match_seed % len(valid)]
+
+    base_q = selected['base_q']
+    tipp_str = selected['tipp']
+    prob_val = selected['prob']
+    mkt_name = selected['markt']
+    m_key = selected['key']
 
     best_bm, best_quote, all_bm_odds = get_best_bookmaker_odds(base_q, home, away, m_key, checked_bookmakers)
     bm_url = ANBIETER_URLS.get(best_bm, "https://www.tipico.de")
@@ -496,9 +493,9 @@ else:
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
     if g_typ == "📊 Reine Einzelwetten":
-        st.markdown(f"### 🛡️ KI Einzelwetten mit Quotenvergleich ({len(matches)} Spiele geladen)")
+        st.markdown(f"### 🛡️ Gemischte KI-Einzelwetten mit Quotenvergleich ({len(matches)} Spiele geladen)")
         for match in matches:
-            pick = get_profile_pick(match, risiko_profil, aktive_anbieter)
+            pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter)
             
             st.markdown(f"""
                 <div class="best-card">
@@ -535,11 +532,11 @@ else:
             gesamtq = 1.0
             picks_data = []
             for m in ausgewaehlte:
-                p = get_profile_pick(m, risiko_profil, aktive_anbieter)
+                p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter)
                 gesamtq *= p['quote']
                 picks_data.append((m, p))
                 
-            st.markdown(f"### 📜 Dein optimierter Kombi-Schein ({len(ausgewaehlte)}er Kombi)")
+            st.markdown(f"### 📜 Dein gemischter Kombi-Schein ({len(ausgewaehlte)}er Kombi)")
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 20px;">
                     <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
@@ -571,13 +568,13 @@ else:
         if len(fb_picks) < 2:
             st.warning("⚠️ Für den Freebet-Modus werden mindestens 2 Spiele benötigt.")
         else:
-            p1 = get_profile_pick(fb_picks[0], risiko_profil, aktive_anbieter)
-            p2 = get_profile_pick(fb_picks[1], risiko_profil, aktive_anbieter)
+            p1 = get_profile_pick_mixed(fb_picks[0], risiko_profil, aktive_anbieter)
+            p2 = get_profile_pick_mixed(fb_picks[1], risiko_profil, aktive_anbieter)
             
             q_ges = round(p1['quote'] * p2['quote'], 2)
             netto = round((fb_w * q_ges) - fb_w, 2)
             
-            st.markdown("### 🎁 Freebet-Empfehlung")
+            st.markdown("### 🎁 Gemischte Freebet-Empfehlung")
             st.markdown(f"""
                 <div class="multi-ticket-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -594,7 +591,7 @@ else:
                     <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <span style="color: #ffffff; font-weight: 600;">⚽ {m['home']} vs {m['away']}</span><br>
-                            <span style="color: #94a3b8; font-size: 0.8rem;">📅 {m['time_str']} | Tipp: <b style="color: #00d47e;">{p['tipp']}</b> ({p['best_bookmaker']})</span>
+                            <span style="color: #94a3b8; font-size: 0.8rem;">📅 {m['time_str']} | Markt: <b style="color: #ffffff;">{p['markt']}</b> | Tipp: <b style="color: #00d47e;">{p['tipp']}</b> ({p['best_bookmaker']})</span>
                         </div>
                         <span style="color: #00d47e; font-weight: 800; font-size: 1.1rem;">{p['quote']}</span>
                     </div>
@@ -621,7 +618,7 @@ else:
                 q_schein = 1.0
                 ticket_picks = []
                 for m in ticket['matches']:
-                    p = get_profile_pick(m, risiko_profil, aktive_anbieter)
+                    p = get_profile_pick_mixed(m, risiko_profil, aktive_anbieter)
                     q_schein *= p['quote']
                     ticket_picks.append((m, p))
                     
@@ -640,7 +637,7 @@ else:
                 for m, p in ticket_picks:
                     st.markdown(f"""
                         <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #ffffff; font-size: 0.9rem;">⚽ {m['home']} vs {m['away']} (Tipp: <b>{p['tipp']}</b>) — <b style="color:#f59e0b;">{p['best_bookmaker']}</b></span>
+                            <span style="color: #ffffff; font-size: 0.9rem;">⚽ {m['home']} vs {m['away']} (Markt: <b>{p['markt']}</b> — Tipp: <b>{p['tipp']}</b>) — <b style="color:#f59e0b;">{p['best_bookmaker']}</b></span>
                             <span style="color: #00d47e; font-weight: 800;">{p['quote']}</span>
                         </div>
                     """, unsafe_allow_html=True)
@@ -650,4 +647,3 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 30px 0
 st.markdown("### 🗂️ Gespeicherte Wettscheine")
 if not st.session_state['saved_tickets']:
     st.info("Bisher keine Scheine hinterlegt.")
-
