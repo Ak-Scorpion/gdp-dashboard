@@ -60,7 +60,7 @@ def fetch_data_with_rotation(url_template):
         active_key = get_active_api_key()
         url = url_template.format(api_key=active_key)
         try:
-            res = requests.get(url, timeout=4)
+            res = requests.get(url, timeout=5)
             remaining = int(res.headers.get('x-requests-remaining', 1))
             if res.status_code == 401 or remaining <= 0:
                 st.session_state['current_key_index'] = (st.session_state['current_key_index'] + 1) % len(API_KEYS)
@@ -73,58 +73,6 @@ def fetch_data_with_rotation(url_template):
         st.session_state['current_key_index'] = (st.session_state['current_key_index'] + 1) % len(API_KEYS)
         attempts += 1
     return None
-
-# --- ECHTE TEAMS FÜR JEDE LIGA (FALLBACK-SYSTEM) ---
-FALLBACK_TEAMS = {
-    "🇩🇪 1. Bundesliga": [
-        ("FC Bayern München", "Borussia Dortmund"),
-        ("Bayer 04 Leverkusen", "RB Leipzig"),
-        ("Eintracht Frankfurt", "VfB Stuttgart"),
-        ("Mönchengladbach", "1. FC Union Berlin")
-    ],
-    "🇩🇪 2. Bundesliga": [
-        ("Hamburger SV", "Hertha BSC"),
-        ("FC Schalke 04", "1. FC Köln"),
-        ("Hannover 96", "Karlsruher SC"),
-        ("Fortuna Düsseldorf", "1. FC Kaiserslautern")
-    ],
-    "🇩🇪 3. Liga": [
-        ("Dynamo Dresden", "1860 München"),
-        ("Rot-Weiss Essen", "Alemannia Aachen"),
-        ("Hansa Rostock", "VfL Osnabrück")
-    ],
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": [
-        ("Arsenal FC", "Manchester City"),
-        ("Liverpool FC", "Chelsea FC"),
-        ("Manchester United", "Tottenham Hotspur")
-    ],
-    "🇪🇸 La Liga": [
-        ("Real Madrid", "FC Barcelona"),
-        ("Atlético Madrid", "Sevilla FC"),
-        ("Athletic Bilbao", "Real Sociedad")
-    ],
-    "🇮🇹 Serie A": [
-        ("Inter Mailand", "AC Mailand"),
-        ("Juventus Turin", "SSC Neapel"),
-        ("AS Rom", "Lazio Rom")
-    ],
-    "🇫🇷 Ligue 1": [
-        ("Paris Saint-Germain", "Olympique Marseille"),
-        ("AS Monaco", "Olympique Lyon")
-    ],
-    "🏆 Champions League": [
-        ("Real Madrid", "Manchester City"),
-        ("FC Bayern München", "Paris Saint-Germain")
-    ],
-    "🇪🇺 Europa League": [
-        ("AS Rom", "Tottenham Hotspur"),
-        ("Eintracht Frankfurt", "Athletic Bilbao")
-    ],
-    "🌍 Conference League": [
-        ("Chelsea FC", "Fiorentina"),
-        ("Betis Sevilla", "Kopenhagen")
-    ]
-}
 
 @st.cache_data(ttl=120)
 def load_league_odds(liga_code):
@@ -213,16 +161,7 @@ ANBIETER_URLS = {
 
 def extract_all_markets(match_bookmakers, selected_bm_name, home_team, away_team):
     if not match_bookmakers:
-        qh = round(random.uniform(1.60, 2.70), 2)
-        qa = round(random.uniform(2.10, 3.40), 2)
-        qx = round(random.uniform(3.10, 3.90), 2)
-        return [
-            {"tipp": f"Sieg {home_team} (1X2)", "quote": qh, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": f"Sieg {away_team} (1X2)", "quote": qa, "markt": "1X2 Siegwette 🎯"},
-            {"tipp": f"Doppelte Chance: 1X ({home_team} oder X)", "quote": round(qh * 0.72 + 1.10, 2), "markt": "Doppelte Chance 🛡️"},
-            {"tipp": "Über 2.5 Tore", "quote": round(random.uniform(1.65, 2.05), 2), "markt": "Tor-Markt ⚽"},
-            {"tipp": "Beide Teams treffen - Ja", "quote": round(random.uniform(1.60, 1.90), 2), "markt": "Beide Teams treffen 🔥"}
-        ], selected_bm_name
+        return [], selected_bm_name
 
     bm_map = {
         "Tipico": ["tipico", "bwin", "bet365"],
@@ -298,7 +237,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">100% Ausfallsicher • Garantiert Live-Spiele für alle Ligen</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Reine Live-Daten • Keine erfundenen Fakespiele</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -360,9 +299,9 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
     gen_zeit_modus = st.selectbox(
         "📅 Zeitraum-Modus wählen:", 
         [
-            f"⚡ HEUTE ({today_str} — Alle Partien von heute)",
-            f"📅 MORGEN ({tomorrow_str} — Alle Partien von morgen)",
-            "🟢 DIESE WOCHE (Nächste 7 Tage)",
+            f"⚡ HEUTE ({today_str} — Alle echten Partien)",
+            f"📅 MORGEN ({tomorrow_str} — Alle echten Partien)",
+            "🟢 DIESE WOCHE (Alle angesetzten Spiele)",
             "📅 Kalender-Bereich wählen"
         ], 
         index=0, 
@@ -407,7 +346,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Tagesauswa
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🔄 Spiele für gewählten Zeitraum laden", type="primary", use_container_width=True)
+    generate_click = st.button("🔄 Echte Live-Spiele laden", type="primary", use_container_width=True)
 
 if generate_click:
     if not aktive_generator_ligen: 
@@ -422,20 +361,19 @@ if generate_click:
         else:
             min_q, max_q = 2.20, 4.50
 
-        with st.spinner("Lade Wettmärkte & analysiere Begegnungen..."):
+        with st.spinner("Scanne Schnittstelle nach echten Ansetzungen..."):
             
             gefilterte_spiele = []
             
             for liga_label in aktive_generator_ligen:
                 code = LIGEN[liga_label]
                 data = load_league_odds(code)
-                league_matches = []
 
                 if isinstance(data, list) and len(data) > 0:
                     for match in data:
                         commence_str = match.get('commence_time', '')
-                        match_time_formatted = f"{today_str} - 18:30 Uhr"
-                        match_date_de = today_de
+                        match_time_formatted = "Live / Anstoß"
+                        match_date_de = None
                         
                         try:
                             if commence_str:
@@ -446,13 +384,27 @@ if generate_click:
                         except Exception:
                             pass
 
+                        # Strikte Kalender-Filterung nach gewähltem Modus
+                        is_valid_date = False
+                        if "HEUTE" in gen_zeit_modus and match_date_de == today_de:
+                            is_valid_date = True
+                        elif "MORGEN" in gen_zeit_modus and match_date_de == tomorrow_de:
+                            is_valid_date = True
+                        elif "DIESE WOCHE" in gen_zeit_modus and match_date_de and (today_de <= match_date_de <= (today_de + timedelta(days=7))):
+                            is_valid_date = True
+                        elif gen_zeit_modus == "📅 Kalender-Bereich wählen" and match_date_de and (kalender_auswahl[0] <= match_date_de <= kalender_auswahl[1]):
+                            is_valid_date = True
+
+                        if not is_valid_date:
+                            continue
+
                         home, away = match['home_team'], match['away_team']
                         all_markets, used_bm = extract_all_markets(match.get('bookmakers'), anbieter_wahl, home, away)
                         
                         for market_item in all_markets:
                             q = market_item['quote']
                             if q is not None and min_q <= q <= max_q:
-                                match_obj = {
+                                gefilterte_spiele.append({
                                     "Liga": liga_label, 
                                     "Datum": match_time_formatted, 
                                     "Begegnung": f"{home} vs {away}", 
@@ -461,29 +413,7 @@ if generate_click:
                                     "Markt": market_item['markt'], 
                                     "Risk": risiko_profil.split()[0], 
                                     "Anbieter": used_bm
-                                }
-                                league_matches.append(match_obj)
-
-                # AUTOGENERATOR-FALLBACK: Wenn API blockiert oder für die Liga am gewählten Tag leer ist
-                if not league_matches:
-                    teams_list = FALLBACK_TEAMS.get(liga_label, [("Heimteam", "Auswärtsteam")])
-                    for home_t, away_t in teams_list:
-                        all_markets, used_bm = extract_all_markets([], anbieter_wahl, home_t, away_t)
-                        for market_item in all_markets:
-                            q = market_item['quote']
-                            if min_q <= q <= max_q:
-                                league_matches.append({
-                                    "Liga": liga_label, 
-                                    "Datum": f"{today_str} - 18:30 Uhr", 
-                                    "Begegnung": f"{home_t} vs {away_t}", 
-                                    "Tipp": market_item['tipp'], 
-                                    "Quote": q, 
-                                    "Markt": market_item['markt'], 
-                                    "Risk": risiko_profil.split()[0], 
-                                    "Anbieter": anbieter_wahl
                                 })
-
-                gefilterte_spiele.extend(league_matches)
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -502,9 +432,11 @@ if 'gefilterte_spiele' in st.session_state:
     anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
-    if spiele:
+    if not spiele:
+        st.warning("⚠️ Keine echten Spiele für den gewählten Tag in der API gefunden. (Hinweis: Wenn im gewählten Zeitraum Länderspielpause ist oder keine Vereinsspiele stattfinden, bleibt das Feld sauber leer).")
+    else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Live-Wettmärkte ({len(spiele)} Tipps geladen)")
+            st.markdown(f"### 📊 Echte Live-Wettmärkte ({len(spiele)} Tipps geladen)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
@@ -572,6 +504,8 @@ if 'gefilterte_spiele' in st.session_state:
                         <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Zu {anbieter_label}</a>
                     </div>
                 """, unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Nicht genügend echte Spiele für diese Kombi-Größe im gewählten Zeitraum.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
@@ -589,7 +523,7 @@ if 'gefilterte_spiele' in st.session_state:
                             <span class="badge" style="background-color: #8b5cf6; color: #ffffff;">🎁 Gratiswette: {fb_w} €</span>
                             <span class="badge" style="background-color: #00d47e; color: #070a13;">💥 Gesamtquote: {round(q_ges, 2)}</span>
                         </div>
-                        <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 15px;">
+                        <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 14px; padding: 14px; text-align: center; margin-bottom: 15px;">
                             <span style="color: #94a3b8; font-size: 0.9rem;">Erwarteter Reingewinn (Netto):</span><br>
                             <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">{netto} €</span>
                         </div>
@@ -660,3 +594,4 @@ else:
         if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
             st.session_state['saved_tickets'].pop(idx)
             st.rerun()
+
