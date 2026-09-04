@@ -171,7 +171,7 @@ with col_count:
     """, unsafe_allow_html=True)
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 KI Kombi-Generator (Mit Realismus-Schutz)"])
+tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 KI Kombi-Generator (Mit Spezialmärkten & Quoten-Pusher)"])
 
 # --- TAB 1 ---
 with tab1:
@@ -211,7 +211,7 @@ with tab1:
 
 # --- TAB 2 ---
 with tab2:
-    st.write("### ⚙️ Eigene Ligen & Generator-Einstellungen festlegen")
+    st.write("### ⚙️ Eigene Ligen & Quoten-Pusher Einstellungen")
     
     col_ligen, col_settings = st.columns([2, 1])
     with col_ligen:
@@ -235,11 +235,11 @@ with tab2:
             gewinn_target = st.number_input("Dein Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=50.0, step=10.0)
         
         ziel_quote = round(gewinn_target / einsatz_target, 2)
-        st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Max. 5 echte Top-Tipps für höchste Gewinnchancen).")
+        st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Nutzt smarte Kombi- & Spezialmärkte für maximale Effizienz).")
     else:
         anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=6, value=3, step=1)
 
-    generate_click = st.button("🔄 KI Kombi-Schein jetzt generieren", type="primary", use_container_width=True)
+    generate_click = st.button("🔄 KI Kombi-Schein mit Spezialmärkten generieren", type="primary", use_container_width=True)
 
     if generate_click:
         if not ausgewaehlte_ligen: 
@@ -249,7 +249,7 @@ with tab2:
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
             moegliche_tipps = []
             
-            with st.spinner("Analysiere Favoriten & berechne realistische Gewinnchancen..."):
+            with st.spinner("Analysiere Spiele & generiere Profi-Spezialmärkte (Konfigurator-Tipps)..."):
                 for liga_label in ausgewaehlte_ligen:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -261,22 +261,41 @@ with tab2:
                             q_home, q_away, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                # A) NATIVE FAVORITEN (Sehr hohe Realität)
+                                # 1. Standard Favorit
                                 if q_home and 1.25 <= q_home <= 1.85:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Sicherer Favorit 🛡️"})
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(home), "Quote": 1.75, "Markt": "Top-Torschütze ⚽"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"})
                                 if q_away and 1.25 <= q_away <= 1.85:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Sicherer Favorit 🛡️"})
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": get_torjaeger_tipp(away), "Quote": 1.80, "Markt": "Top-Torschütze ⚽"})
-                                
-                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Sicherheits-Tore ⚽"})
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"})
+
+                                # 2. SPEZIALMÄRKTE / KONFIGURATOR (Quoten-Pusher)
+                                if q_home and q_home <= 1.65:
+                                    # Heimfavorit + Tore (Kombi+ Markt)
+                                    pushed_quote_h = round(q_home * 1.35, 2)
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": pushed_quote_h, "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                    
+                                    # Top-Torjäger Option
+                                    torjaeger = get_torjaeger_tipp(home)
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": torjaeger, "Quote": 1.75, "Markt": "Spieler-Spezial: Torjäger ⚽"})
+
+                                if q_away and q_away <= 1.65:
+                                    # Auswärtsfavorit + Tore
+                                    pushed_quote_a = round(q_away * 1.38, 2)
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": pushed_quote_a, "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                    
+                                    # Top-Torjäger Option
+                                    torjaeger_a = get_torjaeger_tipp(away)
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": torjaeger_a, "Quote": 1.80, "Markt": "Spieler-Spezial: Torjäger ⚽"})
+
+                                # 3. SICHERE TORE MÄRKTE
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Tormarkt: Über 1.5 ⚽"})
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.68, "Markt": "Tormarkt: BTTS 🔥"})
 
             if len(moegliche_tipps) >= 2:
                 random.shuffle(moegliche_tipps)
                 ausgewaehlte_spiele = set()
                 kombi_auswahl = []
                 
-                # ZIEL-GEWINN LOGIK MIT STRICT REALISMUS-SPERRE
+                # ZIEL-GEWINN LOGIK
                 if use_target_mode:
                     aktuelle_quote = 1.0
                     for tipp in moegliche_tipps:
@@ -285,12 +304,8 @@ with tab2:
                             ausgewaehlte_spiele.add(tipp['Begegnung'])
                             aktuelle_quote *= tipp['Quote']
                             
-                            # Max. 5 Spiele Sperre eingehalten
                             if aktuelle_quote >= ziel_quote or len(kombi_auswahl) == 5:
                                 break
-                    
-                    if aktuelle_quote < (ziel_quote * 0.75) and len(kombi_auswahl) == 5:
-                        st.warning("⚠️ Das gewählte Gewinnziel ist mit realistischen Tipps (max. 5 Spiele) aktuell nicht vertretbar. Die KI hat den realistischsten Schein zusammengestellt.")
                     st.session_state['preset_einsatz'] = einsatz_target
                 else:
                     for tipp in moegliche_tipps:
