@@ -132,13 +132,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     
-    .streamlit-expanderHeader {
-        background-color: #0f172a !important;
-        border-radius: 10px;
-        border: 1px solid #1e293b;
-        font-weight: 600;
-        color: #e2e8f0 !important;
-    }
     .stTabs [data-baseweb="tab-list"] {
         gap: 6px;
         background-color: #0f172a;
@@ -159,7 +152,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ERWEITERTE EUROPÄISCHE LIGEN & SPIELER ---
+# --- DATENBANKEN ---
 TOP_STUERMER = {
     "FC Bayern München": "Harry Kane", "Bayern Munich": "Harry Kane",
     "Eintracht Frankfurt": "Omar Marmoush", "Borussia Dortmund": "Serhou Guirassy",
@@ -174,7 +167,7 @@ TOP_STUERMER = {
 }
 
 LIGEN = {
-    "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)": "ALL",
+    "🌍 Alle europäischen Top-Ligen (Auto-Modus)": "ALL",
     "🇩🇪 Deutschland (Bundesliga)": "soccer_germany_bundesliga",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
     "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
@@ -188,9 +181,14 @@ LIGEN = {
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
 }
 
-DEUTSCHE_ANBIETER = {
-    "Tipico": "bwin", "Neo.bet": "bwin", "bwin (Deutschland)": "bwin",
-    "Bet-at-home": "betathome", "Bet365 (DE)": "bet365", "Betano": "bwin", "Oddset": "bwin"
+ANBIETER_URLS = {
+    "Tipico": "https://www.tipico.de",
+    "Neo.bet": "https://www.neo.bet/de",
+    "bwin (Deutschland)": "https://sports.bwin.de",
+    "Bet-at-home": "https://www.bet-at-home.com",
+    "Bet365 (DE)": "https://www.bet365.de",
+    "Betano": "https://www.betano.de",
+    "Oddset": "https://www.oddset.de"
 }
 
 WOCHEN_OPTIONS = {
@@ -233,13 +231,12 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
     return q_home, q_away, q_draw, is_value
 
 def get_risk_label(prob):
-    """Erzwingt ausschließlich Low & Medium Risk Einteilung."""
     if prob >= 40:
         return "🟢 Low Risk (Sehr sicher)"
     else:
         return "🟡 Medium Risk (Solide Chance)"
 
-# --- HEADER BEREICH ---
+# --- HAUPT-HEADER & COUNTER ---
 col_head, col_count = st.columns([3, 1])
 
 with col_head:
@@ -260,6 +257,41 @@ with col_count:
 
 st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
 
+# ==========================================
+# SEITENPANEL (SIDEBAR) FÜR ALLE EINSTELLUNGEN
+# ==========================================
+with st.sidebar:
+    st.markdown("### 🎛️ Steuerungs-Panel")
+    st.markdown("Hier steuerst du zentral alle Ligen, Spielwochen und Buchmacher.")
+    st.markdown("---")
+    
+    # 1. Buchmacher-Auswahl
+    anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
+    
+    # 2. Spielwoche-Auswahl
+    gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
+    
+    # 3. Ligen-Modus
+    modus_wahl = st.radio(
+        "Ligen-Modus:",
+        ["🌍 Alle europäischen Top-Ligen (Auto)", "📋 Manuelle Ligen-Auswahl"],
+        index=0,
+        key="sidebar_modus"
+    )
+    
+    if modus_wahl == "📋 Manuelle Ligen-Auswahl":
+        ausgewaehlte_ligen_keys = st.multiselect(
+            "Gewünschte Ligen:", 
+            options=[k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"],
+            default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"],
+            key="sidebar_multiselect"
+        )
+    else:
+        ausgewaehlte_ligen_keys = [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"]
+        
+    st.markdown("---")
+    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um blitzschnell Einstellungen zu ändern, ohne lange scrollen zu müssen.")
+
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
 
@@ -268,25 +300,16 @@ tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Ko
 # ==========================================
 with tab1:
     st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
+    st.markdown("Wähle links im Seitenpanel deine Wunsch-Liga aus und klicke auf den Button.")
     
-    with st.expander("⚙️ Klicke hier, um die Liga-Filter & Optionen zu öffnen", expanded=True):
-        col_sel, col_sp, col_bm = st.columns([2, 1.5, 1.5])
-        with col_sel:
-            ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"], key="l_tab1")
-        with col_sp:
-            gewaehlte_woche_label_tab1 = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="w_tab1")
-        with col_bm:
-            anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="b_tab1")
-            
-        st.markdown("<br>", unsafe_allow_html=True)
-        btn_liga = st.button("🔍 Spiele & Wahrscheinlichkeiten laden", use_container_width=True, type="primary")
+    Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"], key="l_tab1_single")
     
-    if btn_liga:
-        liga_code = LIGEN[ausgewaehlte_liga_label]
-        bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
-        offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_tab1]
+    if st.button("🔍 Spiele & Wahrscheinlichkeiten laden", use_container_width=True, type="primary"):
+        liga_code = LIGEN[Einzelne_Liga_Auswahl]
+        bm_code = "bwin" # Default mapping für Tab 1
+        offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
         
-        with st.spinner(f"Analysiere Quoten & berechne Wahrscheinlichkeiten..."):
+        with st.spinner(f"Analysiere Quoten für {Einzelne_Liga_Auswahl}..."):
             data = load_league_odds(liga_code)
             if isinstance(data, list) and len(data) > 0:
                 spiele_liste = []
@@ -310,56 +333,32 @@ with tab1:
             else: st.error("Keine Spiele gefunden oder alle API-Keys aufgebraucht.")
 
 # ==========================================
-# TAB 2: KI KOMBI-GENERATOR (STRIKT LOW/MEDIUM RISK)
+# TAB 2: KI KOMBI-GENERATOR
 # ==========================================
 with tab2:
-    st.markdown("### 🎯 Sicherer KI Kombi-Generator (Low & Medium Risk)")
+    st.markdown("### 🎯 Intelligenter KI Kombi-Generator (Low & Medium Risk)")
     
-    with st.expander("⚙️ Klicke hier, um Ligen & Ziel-Gewinn Einstellungen zu öffnen", expanded=True):
-        modus_wahl = st.radio(
-            "Wie möchtest du die Ligen durchsuchen lassen?",
-            ["🌍 Automatisch alle europäischen Top-Ligen durchsuchen (Empfohlen)", "📋 Manuell bestimmte Ligen auswählen"],
-            index=0
-        )
-        
-        if modus_wahl == "📋 Manuell bestimmte Ligen auswählen":
-            ausgewaehlte_ligen_keys = st.multiselect(
-                "Wähle deine gewünschten Ligen aus:", 
-                options=[k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"],
-                default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"]
-            )
-        else:
-            ausgewaehlte_ligen_keys = [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"]
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_w_gen, col_b_gen = st.columns(2)
-        with col_w_gen:
-            gewaehlte_woche_label_gen = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="w_gen")
-        with col_b_gen:
-            anbieter_wahl_gen = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="b_gen")
-        
-        st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
-        
+    with st.expander("⚙️ Ziel-Einstellungen für den Schein (Klicken zum Öffnen)", expanded=True):
         use_target_mode = st.checkbox("🎯 Ziel-Gewinn-Modus aktivieren (Einsatz ➔ Wunsch-Gewinn)", value=False)
         
         if use_target_mode:
             col_e1, col_g1 = st.columns(2)
             with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
-            with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=500.0, value=30.0, step=5.0) # Begrenzt auf realistische Gewinne für Low/Med Risk
+            with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=500.0, value=30.0, step=5.0)
             ziel_quote = round(gewinn_target / einsatz_target, 2)
-            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Streng auf stabile Low/Medium Risk Quoten optimiert).")
+            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Optimiert auf stabile Low/Medium Risk Quoten).")
         else:
-            anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3 für maximale Stabilität):", min_value=2, max_value=3, value=3, step=1)
+            anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3):", min_value=2, max_value=3, value=3, step=1)
 
         st.markdown("<br>", unsafe_allow_html=True)
         generate_click = st.button("🔄 Sicheren KI Kombi-Schein generieren", type="primary", use_container_width=True)
 
     if generate_click:
         if not ausgewaehlte_ligen_keys: 
-            st.error("Bitte wähle mindestens eine Liga aus!")
+            st.error("Bitte wähle mindestens eine Liga im Seitenpanel aus!")
         else:
-            bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
-            offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
+            bm_code = DEUTSCHE_ANBIETER[anbieter_wahl]
+            offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             moegliche_tipps = []
             
             with st.spinner("Durchsuche Europa nach stabilen Low & Medium Risk Quoten..."):
@@ -374,7 +373,6 @@ with tab2:
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                # Strikte Begrenzung auf solide Quoten (kein Harakiri, kein extremer High Risk)
                                 if q_home and 1.40 <= q_home <= 1.85:
                                     moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Solider Favorit 🛡️"})
                                 if q_away and 1.40 <= q_away <= 1.85:
@@ -416,14 +414,14 @@ with tab2:
                     st.session_state['preset_einsatz'] = 10.0
 
                 st.session_state['kombi_auswahl'] = kombi_auswahl
-                st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
-                st.session_state['gewaehlte_woche'] = gewaehlte_woche_label_gen
+                st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+                st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
             else: 
                 st.warning(f"Für die gewählten Ligen stehen derzeit nur {len(moegliche_tipps)} verwertbare Quoten zur Verfügung.")
 
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
-        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Anbieter')
+        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
         wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         preset_einsatz = st.session_state.get('preset_einsatz', 10.0)
         
@@ -432,6 +430,8 @@ with tab2:
             
         schein_wahrscheinlichkeit = max(28, min(85, round((1 / gesamtquote) * 100 * 1.15)))
         risk_text = get_risk_label(schein_wahrscheinlichkeit)
+        
+        bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
             
         st.markdown(f"### 📜 Dein sicherer KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
         
@@ -447,13 +447,22 @@ with tab2:
                     f'<p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>'
                     f'<hr style="border: 0; border-top: 1px solid #1e293b; margin: 12px 0;">'
                     f'<div style="display: flex; justify-content: space-between; align-items: center;">'
-                    f'<span style="color: #64748b; font-size: 0.8rem;">Quote ({anbieter_label}):</span>'
+                    f'<span style="color: #64748b; font-size: 0.8rem;">Quote:</span>'
                     f'<span class="odds-tag">{tipp["Quote"]}</span>'
                     f'</div></div>'
                 )
                 st.markdown(card_html, unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # --- DIREKT-LINK ZUM BUCHMACHER & EXPORT ---
+        st.markdown(f"""
+            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                <h3 style="color: #ffffff; margin-top: 0;">🚀 Direkt zu {anbieter_label}</h3>
+                <p style="color: #94a3b8; font-size: 0.9rem;">Klicke unten, um direkt zur Website von {anbieter_label} zu wechseln und den Schein zu platzieren:</p>
+                <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Jetzt {anbieter_label} öffnen & wetten</a>
+            </div>
+        """, unsafe_allow_html=True)
         
         col_action1, col_action2 = st.columns(2)
         
