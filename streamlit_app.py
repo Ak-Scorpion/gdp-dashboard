@@ -134,7 +134,6 @@ st.markdown("""
         display: inline-block; margin-bottom: 6px; text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
-    .badge-freebet { background-color: #8b5cf6; color: #ffffff; }
     .odds-tag { color: #00d47e; font-size: 1.15rem; font-weight: 800; }
     .counter-box {
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
@@ -185,7 +184,7 @@ def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         jetzt = datetime.now(timezone.utc)
         
-        if dt <= jetzt:
+        if dt < jetzt - timedelta(hours=2):
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
             
         if spieltag_filter > 0:
@@ -193,65 +192,50 @@ def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter
             if erwarteter_spieltag != spieltag_filter:
                 return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
 
-        heute_date = jetzt.date()
+        spiel_datum = dt.date()
+        heute_datum = jetzt.date()
 
         if zeit_modus == "📅 Kalender-Bereich wählen":
             if isinstance(datum_auswahl, tuple) and len(datum_auswahl) == 2:
                 start_date, end_date = datum_auswahl
                 if start_date and end_date:
-                    start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-                    end_dt = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-                    return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+                    return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (start_date <= spiel_datum <= end_date)
             elif isinstance(datum_auswahl, date):
-                start_dt = datetime.combine(datum_auswahl, datetime.min.time()).replace(tzinfo=timezone.utc)
-                end_dt = datetime.combine(datum_auswahl, datetime.max.time()).replace(tzinfo=timezone.utc)
-                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+                return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == datum_auswahl)
             return dt.strftime("%d.%m.%Y um %H:%M Uhr"), True
             
         elif zeit_modus == "📌 Heute":
-            start_dt = datetime.combine(heute_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(heute_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == heute_datum)
             
         elif zeit_modus == "📌 Morgen":
-            morgen_date = heute_date + timedelta(days=1)
-            start_dt = datetime.combine(morgen_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(morgen_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            morgen_datum = heute_datum + timedelta(days=1)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == morgen_datum)
             
         elif zeit_modus == "📌 Sonntag":
-            sonntag_date = heute_date + timedelta(days=(6 - heute_date.weekday()) % 7)
-            start_dt = datetime.combine(sonntag_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(sonntag_date, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            sonntag_datum = heute_datum + timedelta(days=(6 - heute_datum.weekday()) % 7)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == sonntag_datum)
             
         elif zeit_modus == "⚡ Wochenende (Freitag – Sonntag)":
-            tage_bis_freitag = (4 - heute_date.weekday()) % 7
-            freitag = heute_date + timedelta(days=tage_bis_freitag)
+            tage_bis_freitag = (4 - heute_datum.weekday()) % 7
+            freitag = heute_datum + timedelta(days=tage_bis_freitag if heute_datum.weekday() <= 4 else 0)
             sonntag = freitag + timedelta(days=2)
-            start_dt = datetime.combine(freitag, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (freitag <= spiel_datum <= sonntag)
             
         elif zeit_modus == "🟢 Ganze Woche (Montag – Sonntag)":
-            montag = heute_date - timedelta(days=heute_date.weekday())
+            montag = heute_datum - timedelta(days=heute_datum.weekday())
             sonntag = montag + timedelta(days=6)
-            start_dt = datetime.combine(montag, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (montag <= spiel_datum <= sonntag)
             
         else: 
-            aktueller_montag = heute_date - timedelta(days=heute_date.weekday())
+            aktueller_montag = heute_datum - timedelta(days=heute_datum.weekday())
             naechster_montag = aktueller_montag + timedelta(days=7)
             naechster_sonntag = naechster_montag + timedelta(days=6)
-            start_dt = datetime.combine(naechster_montag, datetime.min.time()).replace(tzinfo=timezone.utc)
-            end_dt = datetime.combine(naechster_sonntag, datetime.max.time()).replace(tzinfo=timezone.utc)
-            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (dt >= start_dt and dt <= end_dt)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (naechster_montag <= spiel_datum <= naechster_sonntag)
     except Exception: 
         return date_str, True
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
-    if not match_bookmakers: return None, None, None, None
+    if not match_bookmakers: return None, None, None
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
     if not target_bm: target_bm = match_bookmakers[0]
     odds = target_bm['markets'][0]['outcomes']
@@ -265,7 +249,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Reine Einzelwetten • Haken-System aktiv • Tastatur gesperrt</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Reine Einzelwetten-Karten • Haken-System • Tastatur gesperrt</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -390,7 +374,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & 
     gen_typ = st.selectbox(
         "Wett-Typ wählen:",
         [
-            "📊 Reine Einzelwetten (Tabelle)",
+            "📊 Reine Einzelwetten",
             "🛡️ Multi-Ticket System (3 separate Scheine)", 
             "🎁 Freebet-Modus (Gratiswette maximieren)", 
             "🎯 Standard Kombiwette (Freie Anzahl Spiele)"
@@ -416,8 +400,8 @@ if generate_click:
         
         with st.spinner(f"Lade Quoten bei {anbieter_wahl}..."):
             
-            if gen_typ == "📊 Reine Einzelwetten (Tabelle)":
-                spiele_liste = []
+            if gen_typ == "📊 Reine Einzelwetten":
+                einzel_tipps = []
                 for liga_label in aktive_generator_ligen:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -429,24 +413,23 @@ if generate_click:
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
-                            # Saubere Einzelwette ohne Quatsch (nur Begegnung, Anstoß, Tipp, Quote)
                             if q_home:
-                                spiele_liste.append({
-                                    "Liga": liga_label, "Anstoß": match_time, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {home}", "Quote": q_home
+                                einzel_tipps.append({
+                                    "Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Einzelwette 🎯"
                                 })
                             if q_draw:
-                                spiele_liste.append({
-                                    "Liga": liga_label, "Anstoß": match_time, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": "Unentschieden (X)", "Quote": q_draw
+                                einzel_tipps.append({
+                                    "Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": "Unentschieden (X)", "Quote": q_draw, "Markt": "Einzelwette 🎯"
                                 })
                             if q_away:
-                                spiele_liste.append({
-                                    "Liga": liga_label, "Anstoß": match_time, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {away}", "Quote": q_away
+                                einzel_tipps.append({
+                                    "Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Einzelwette 🎯"
                                 })
                 st.session_state['mode_type'] = 'einzel'
-                st.session_state['einzel_tabelle'] = spiele_liste
+                st.session_state['einzel_tipps'] = einzel_tipps
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl
 
             elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
@@ -571,12 +554,30 @@ mode = st.session_state.get('mode_type', None)
 anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
 bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
-if mode == 'einzel' and 'einzel_tabelle' in st.session_state:
-    st.markdown(f"### 📊 Einzelwetten bei {anbieter_label}")
-    if st.session_state['einzel_tabelle']:
-        st.dataframe(pd.DataFrame(st.session_state['einzel_tabelle']), use_container_width=True, hide_index=True)
+if mode == 'einzel' and 'einzel_tipps' in st.session_state:
+    st.markdown(f"### 📊 Reine Einzelwetten bei {anbieter_label}")
+    einzel_tipps = st.session_state['einzel_tipps']
+    if einzel_tipps:
+        for tipp in einzel_tipps:
+            st.markdown(f"""
+                <div class="bet-card">
+                    <span class="badge badge-market">{tipp["Markt"]}</span><br>
+                    <span class="badge" style="background-color: #1e293b; color: #94a3b8; margin-top:4px;">{tipp["Liga"]}</span>
+                    <h4 style="color: #ffffff; margin: 10px 0 4px 0; font-size: 1.05rem;">{tipp["Begegnung"]}</h4>
+                    <p style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {tipp["Datum"]}</p>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">Tipp: <b style="color: #ffffff;">{tipp["Tipp"]}</b></p>
+                    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 12px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #64748b; font-size: 0.8rem;">Quote:</span>
+                        <span class="odds-tag">{tipp["Quote"]}</span>
+                    </div>
+                    <div style="text-align: right; margin-top: 10px;">
+                        <a href="{bookmaker_url}" target="_blank" style="background-color: #00d47e; color: #070a13; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; text-decoration: none; display: inline-block;">🔗 Bei {anbieter_label} wetten</a>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
     else:
-        st.info("Keine Spiele für die gewählten Ligen und den Zeitraum gefunden.")
+        st.info("Keine Spiele für die gewählten Ligen und den Zeitraum gefunden. (Tipp: Falls heute keine Spiele anstehen, teste 'Ganze Woche' oder 'Wochenende').")
 
 elif mode == 'standard' and 'kombi_auswahl' in st.session_state:
     kombi_auswahl = st.session_state['kombi_auswahl']
@@ -685,3 +686,4 @@ else:
         if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
             st.session_state['saved_tickets'].pop(idx)
             st.rerun()
+
