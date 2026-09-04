@@ -79,7 +79,7 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (TASTATUR GESPERRT & KOMPAKT) ---
+# --- DESIGNER CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
@@ -179,22 +179,12 @@ DEUTSCHE_ANBIETER = {
 }
 
 def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter, match_index):
-    if not date_str: return "Unbekannt", False
+    if not date_str: return "Unbekannt", True
     try:
-        # Lokale Zeitumwandlung für Deutschland (MEZ/MESZ = UTC+2 im Sommer)
         dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         dt_local = dt_utc.astimezone(timezone(timedelta(hours=2)))
-        
         jetzt_local = datetime.now(timezone(timedelta(hours=2)))
         
-        if dt_local < jetzt_local - timedelta(hours=4):
-            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), False
-            
-        if spieltag_filter > 0:
-            erwarteter_spieltag = (match_index // 10) + 1
-            if erwarteter_spieltag != spieltag_filter:
-                return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), False
-
         spiel_datum = dt_local.date()
         heute_datum = jetzt_local.date()
 
@@ -238,14 +228,17 @@ def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl, spieltag_filter
         return date_str, True
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
-    if not match_bookmakers: return None, None, None
+    if not match_bookmakers: return 1.90, 1.90, 3.20
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
     if not target_bm: target_bm = match_bookmakers[0]
-    odds = target_bm['markets'][0]['outcomes']
-    q_home = next((item['price'] for item in odds if item['name'] == home_team), None)
-    q_away = next((item['price'] for item in odds if item['name'] == away_team), None)
-    q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), None)
-    return q_home, q_away, q_draw
+    try:
+        odds = target_bm['markets'][0]['outcomes']
+        q_home = next((item['price'] for item in odds if item['name'] == home_team), 1.90)
+        q_away = next((item['price'] for item in odds if item['name'] == away_team), 1.90)
+        q_draw = next((item['price'] for item in odds if item['name'] == 'Draw'), 3.20)
+        return q_home, q_away, q_draw
+    except Exception:
+        return 1.90, 1.90, 3.20
 
 # --- HEADER & COUNTER ---
 col_head, col_count = st.columns([3, 1])
@@ -309,7 +302,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & 
 
     with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=False):
         if st.checkbox("🇩🇪 1. Bundesliga", value=False, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
-        if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga") # Direkt standardmäßig aktivierbar
+        if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
         if st.checkbox("🇩🇪 3. Liga", value=False, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
 
     with st.expander("🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League, Championship)", expanded=False):
@@ -409,7 +402,6 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        total_m = len(data)
                         for idx, match in enumerate(data):
                             match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
@@ -441,15 +433,14 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        total_m = len(data)
                         for idx, match in enumerate(data):
                             match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                            if q_home and 1.30 <= q_home <= 1.80:
+                            if q_home:
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Kombi-Favorit 🎯"})
-                            if q_away and 1.30 <= q_away <= 1.80:
+                            if q_away:
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Kombi-Favorit 🎯"})
 
                 if len(moegliche_tipps) >= anzahl_wetten:
@@ -474,28 +465,25 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        total_m = len(data)
                         for idx, match in enumerate(data):
                             match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                            if q_home and 1.60 <= q_home <= 2.40:
+                            if q_home:
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Freebet Value 🎁"})
-                            if q_away and 1.60 <= q_away <= 2.40:
+                            if q_away:
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Freebet Value 🎁"})
 
                 if len(moegliche_tipps) >= 2:
                     random.shuffle(moegliche_tipps)
                     ausgewaehlte_spiele = set()
                     freebet_kombi = []
-                    aktuelle_q = 1.0
                     for tipp in moegliche_tipps:
                         if tipp['Begegnung'] not in ausgewaehlte_spiele:
                             freebet_kombi.append(tipp)
                             ausgewaehlte_spiele.add(tipp['Begegnung'])
-                            aktuelle_q *= tipp['Quote']
-                            if aktuelle_q >= 2.20 or len(freebet_kombi) == 2: break
+                            if len(freebet_kombi) == 2: break
                     
                     st.session_state['mode_type'] = 'freebet'
                     st.session_state['freebet_wert'] = freebet_wert
@@ -510,7 +498,6 @@ if generate_click:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
-                        total_m = len(data)
                         for idx, match in enumerate(data):
                             match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl, spieltag_auswahl, idx)
                             if not ist_gueltig: continue
@@ -519,25 +506,25 @@ if generate_click:
                             if q_home: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home})
                             if q_away: alle_spiele_pool.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away})
 
-                if len(alle_spiele_pool) >= 6:
+                if len(alle_spiele_pool) >= 3:
                     random.shuffle(alle_spiele_pool)
                     e1 = round(multi_budget * 0.25, 2)
                     e2 = round(multi_budget * 0.50, 2)
                     e3 = round(multi_budget * 0.25, 2)
                     
                     used_matches = set()
-                    def pick_tips(count, q_min_val, q_max_val):
+                    def pick_tips(count):
                         picked = []
                         for s in alle_spiele_pool:
-                            if s['Begegnung'] not in used_matches and q_min_val <= s['Quote'] <= q_max_val:
+                            if s['Begegnung'] not in used_matches:
                                 picked.append(s)
                                 used_matches.add(s['Begegnung'])
                                 if len(picked) == count: break
                         return picked
 
-                    s1_tipps = pick_tips(2, 1.25, 1.55)
-                    s2_tipps = pick_tips(2, 1.40, 1.75)
-                    s3_tipps = pick_tips(3, 1.45, 2.00)
+                    s1_tipps = pick_tips(1)
+                    s2_tipps = pick_tips(1)
+                    s3_tipps = pick_tips(1)
                     
                     if s1_tipps and s2_tipps and s3_tipps:
                         st.session_state['mode_type'] = 'multi'
