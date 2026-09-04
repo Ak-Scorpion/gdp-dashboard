@@ -167,7 +167,6 @@ TOP_STUERMER = {
 }
 
 LIGEN = {
-    "🌍 Alle europäischen Top-Ligen (Auto-Modus)": "ALL",
     "🇩🇪 Deutschland (Bundesliga)": "soccer_germany_bundesliga",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
     "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
@@ -271,31 +270,32 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # ==========================================
 with st.sidebar:
     st.markdown("### 🎛️ Steuerungs-Panel")
-    st.markdown("Hier steuerst du zentral alle Ligen, Spielwochen und Buchmacher.")
+    st.markdown("Hier steuerst du zentral Buchmacher, Spielwoche und deine Ligen.")
     st.markdown("---")
     
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
     gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
     
-    modus_wahl = st.radio(
-        "Ligen-Modus:",
-        ["🌍 Alle europäischen Top-Ligen (Auto)", "📋 Manuelle Ligen-Auswahl"],
+    st.markdown("### 🏆 Ligen-Auswahl")
+    Ligen_Modus = st.radio(
+        "Modus:",
+        ["🌍 Alle europäischen Top-Ligen", "📋 Einzelne Ligen manuell wählen"],
         index=0,
         key="sidebar_modus"
     )
     
-    if modus_wahl == "📋 Manuelle Ligen-Auswahl":
+    if Ligen_Modus == "📋 Einzelne Ligen manuell wählen":
         ausgewaehlte_ligen_keys = st.multiselect(
-            "Gewünschte Ligen:", 
-            options=[k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"],
+            "Wähle deine Ligen:",
+            options=list(LIGEN.keys()),
             default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"],
             key="sidebar_multiselect"
         )
     else:
-        ausgewaehlte_ligen_keys = [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"]
+        ausgewaehlte_ligen_keys = list(LIGEN.keys())
         
     st.markdown("---")
-    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um Einstellungen blitzschnell zu ändern.")
+    st.markdown("💡 **Tipp:** Nutze das Seitenpanel, um blitzschnell Ligen anzupassen.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -306,7 +306,7 @@ tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Ko
 with tab1:
     st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
     
-    Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"], key="l_tab1_single")
+    Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", list(LIGEN.keys()), key="l_tab1_single")
     
     if st.button("🔍 Spiele & Wahrscheinlichkeiten laden", use_container_width=True, type="primary"):
         liga_code = LIGEN[Einzelne_Liga_Auswahl]
@@ -350,7 +350,7 @@ with tab2:
             with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
             with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=100.0, step=10.0)
             ziel_quote = round(gewinn_target / einsatz_target, 2)
-            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt smarte Konfigurator-Märkte wie *Sieg + Tore*, um deine Zielquote perfekt und realistisch zu treffen).")
+            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt smarte Konfigurator-Märkte wie *Sieg + Tore*, um deine Zielquote perfekt zu treffen).")
         else:
             anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3):", min_value=2, max_value=3, value=3, step=1)
 
@@ -365,7 +365,6 @@ with tab2:
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             moegliche_tipps = []
             
-            # Intelligente Quoten-Anpassung je nach Zielmodus (lässt stärkere/gepushte Quoten zu, wenn ein hoher Gewinn gefordert ist)
             if use_target_mode:
                 soll_einzelquote = ziel_quote ** (1 / 3)
                 q_min = max(1.40, soll_einzelquote * 0.70)
@@ -373,7 +372,7 @@ with tab2:
             else:
                 q_min, q_max = (1.40, 2.10)
             
-            with st.spinner("Durchsuche Europa nach effizienten Quoten & Konfigurator-Märkten..."):
+            with st.spinner("Durchsuche ausgewählte Ligen nach effizienten Quoten & Konfigurator-Märkten..."):
                 for liga_label in ausgewaehlte_ligen_keys:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -385,15 +384,13 @@ with tab2:
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                # 1. Solide Einzelquoten
                                 if q_home and q_min <= q_home <= q_max:
                                     moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Hauptwette 🛡️"})
                                 if q_away and q_min <= q_away <= q_max:
                                     moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Hauptwette 🛡️"})
 
-                                # 2. GEPUSHTE KONFIGURATOR MÄRKTE (Sieg + Tore ➔ Quoten-Pusher)
                                 if q_home and q_home <= 1.85:
-                                    pushed_q_h = round(q_home * 1.42, 2) # Echter Konfigurator-Boost
+                                    pushed_q_h = round(q_home * 1.42, 2)
                                     if q_min <= pushed_q_h <= q_max * 1.25:
                                         moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": pushed_q_h, "Markt": "Konfigurator: Sieg + Tore 💥"})
 
@@ -402,7 +399,6 @@ with tab2:
                                     if q_min <= pushed_q_a <= q_max * 1.25:
                                         moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": pushed_q_a, "Markt": "Konfigurator: Sieg + Tore 💥"})
 
-                                # 3. Starke Tormärkte
                                 moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Beide Teams treffen (Ja)", "Quote": round(random.uniform(1.65, 2.05), 2), "Markt": "Tormarkt 🔥"})
 
             if len(moegliche_tipps) >= 2:
