@@ -325,7 +325,7 @@ def get_best_bookmaker_odds(base_quote, home_team, away_team, market_key, checke
     best_quote = bm_odds[best_bm]
     return best_bm, best_quote, bm_odds
 
-# --- ULTRA-MODERNES DESIGNER CSS (OPTIMIERTE UI) ---
+# --- DESIGNER CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0f19; font-family: 'Inter', sans-serif; color: #f1f5f9; }
@@ -343,13 +343,9 @@ st.markdown("""
         background: linear-gradient(135deg, #131c2e 0%, #0d1322 100%);
         border: 1px solid #1e293b;
         border-radius: 14px;
-        padding: 16px 18px;
-        margin-bottom: 14px;
+        padding: 18px;
+        margin-bottom: 16px;
         box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        transition: transform 0.2s ease;
-    }
-    .bet-card-pro:hover {
-        border-color: #00d47e;
     }
     .owner-tag {
         color: #00d47e; font-weight: 700; letter-spacing: 2px;
@@ -359,19 +355,18 @@ st.markdown("""
         padding: 3px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 800;
         display: inline-block; margin-right: 4px; margin-bottom: 4px; text-transform: uppercase;
     }
-    .badge-market { background-color: #1d4ed8; color: #ffffff; }
-    .badge-safe { background-color: #059669; color: #ffffff; }
-    .badge-bookie { background-color: #d97706; color: #ffffff; }
-    .badge-ev { background-color: #047857; color: #ffffff; font-weight: 800; }
+    .badge-market { background-color: #2563eb; color: #ffffff; }
+    .badge-safe { background-color: #00d47e; color: #070a13; }
+    .badge-bookie { background-color: #f59e0b; color: #070a13; }
+    .badge-ev { background-color: #10b981; color: #ffffff; font-weight: 800; }
     
     .odds-highlight {
-        color: #00d47e; font-size: 1.25rem; font-weight: 800; background: #064e3b44;
-        padding: 4px 10px; border-radius: 8px; border: 1px solid #00d47e55; display: inline-block;
+        color: #00d47e; font-size: 1.35rem; font-weight: 800;
     }
     .bookie-btn {
         background-color: #00d47e;
         color: #0b0f19 !important;
-        padding: 5px 12px;
+        padding: 6px 14px;
         border-radius: 6px;
         font-weight: 800;
         font-size: 0.75rem;
@@ -412,7 +407,7 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- EINSTELLUNGEN ALS SAUBERER EXPANDER ---
+# --- EINSTELLUNGEN EXPANDER ---
 with st.expander("⚙️ Einstellungen & Filter (Wettanbieter, Märkte, Bankroll)", expanded=False):
     col_bank1, col_bank2 = st.columns(2)
     with col_bank1:
@@ -735,32 +730,32 @@ else:
             
             st.markdown(f"""
                 <div class="bet-card-pro">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div>
                             <span class="badge badge-safe">DIXON-COLES</span>
                             <span class="badge badge-market">{pick['markt']}</span>
                             {ev_badge}
                         </div>
-                        <span style="color: #64748b; font-size: 0.75rem;">{match['liga']}</span>
+                        <span style="color: #94a3b8; font-size: 0.75rem;">{match['liga']}</span>
                     </div>
-                    <div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 2px;">
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #ffffff; margin-bottom: 2px;">
                         {match['home']} vs {match['away']}
                     </div>
-                    <div style="color: #00d47e; font-size: 0.72rem; margin-bottom: 10px;">📅 {match['time_str']}</div>
+                    <div style="color: #00d47e; font-size: 0.75rem; margin-bottom: 12px;">📅 {match['time_str']}</div>
                     
-                    <div style="background:#0b0f19; border:1px solid #1e293b; border-radius:10px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="background:#0b0f19; border:1px solid #1e293b; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                         <div>
-                            <span style="color:#94a3b8; font-size:0.75rem;">Empfehlung:</span><br>
+                            <span style="color:#94a3b8; font-size:0.75rem;">Empfehlung & Einsatz:</span><br>
                             <b style="color:#ffffff; font-size:0.95rem;">{pick['tipp']}</b><br>
-                            <span style="color:#00d47e; font-size:0.75rem; font-weight:700;">💡 Kelly-Einsatz: {pick['kelly_stake']} €</span>
+                            <span style="color:#00d47e; font-size:0.8rem; font-weight:700;">💡 Kelly: {pick['kelly_stake']} €</span>
                         </div>
                         <div style="text-align:right;">
                             <span class="odds-highlight">{pick['quote']}</span><br>
                             <span style="color:#94a3b8; font-size:0.7rem;">Prob: {pick['prob']}%</span>
                         </div>
                     </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                        <span style="color:#94a3b8; font-size:0.75rem;">Bester Anbieter: <b style="color:#f59e0b;">{pick['best_bookmaker']}</b></span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+                        <span style="color:#94a3b8; font-size:0.8rem;">Bester Anbieter: <b style="color:#f59e0b;">{pick['best_bookmaker']}</b></span>
                         <a href="{pick['bookmaker_url']}" target="_blank" class="bookie-btn">🔗 Zu {pick['best_bookmaker']}</a>
                     </div>
                 </div>
