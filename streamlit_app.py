@@ -84,7 +84,6 @@ st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
-    /* Entfernt die obere Streamlit-Toolbar komplett (Share, Settings, GitHub, Menü) */
     header[data-testid="stHeader"] {
         display: none !important;
     }
@@ -325,7 +324,7 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
             [
                 "🛡️ Multi-Ticket System (3 separate Scheine)", 
                 "🎁 Freebet-Modus (Gratiswette maximieren)", 
-                "🎯 Standard Kombiwette (2-3 Spiele)",
+                "🎯 Standard Kombiwette (Freie Anzahl Spiele)",
                 "📊 Einzelwetten & Value-Bets (Tabelle)"
             ],
             index=0
@@ -358,8 +357,8 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
         freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
     elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
         multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
-    elif gen_typ == "🎯 Standard Kombiwette (2-3 Spiele)":
-        anzahl_wetten = st.selectbox("Anzahl der Spiele im Kombischein:", [2, 3], index=0)
+    elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
+        anzahl_wetten = st.number_input("Anzahl der Spiele im Kombischein (Minimum 2):", min_value=2, max_value=10, value=2, step=1)
 
     generate_click = st.button("🔄 Wetten & Quoten jetzt laden / generieren", type="primary", use_container_width=True)
 
@@ -395,7 +394,7 @@ if generate_click:
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl
 
             # 2. STANDARD KOMBIWETTE
-            elif gen_typ == "🎯 Standard Kombiwette (2-3 Spiele)":
+            elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
                 moegliche_tipps = []
                 for liga_label in aktive_generator_ligen:
                     code = LIGEN[liga_label]
@@ -426,7 +425,7 @@ if generate_click:
                     st.session_state['kombi_auswahl'] = kombi_auswahl
                     st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 else:
-                    st.warning("Nicht genügend Spiele für eine Kombi im gewählten Spieltag/Zeitraum gefunden.")
+                    st.warning("Nicht genügend Spiele für eine Kombi in dieser Anzahl im gewählten Spieltag/Zeitraum gefunden.")
 
             # 3. FREEBET MODUS
             elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
