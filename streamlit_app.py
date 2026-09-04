@@ -5,7 +5,7 @@ import hashlib
 import random
 from datetime import datetime, timedelta, timezone
 
-# Deutsche Zeitzone (Europe/Berlin) für automatischen Datumswechsel um 00:00 Uhr
+# Deutsche Zeitzone (Europe/Berlin)
 try:
     from zoneinfo import ZoneInfo
     tz_de = ZoneInfo("Europe/Berlin")
@@ -108,7 +108,7 @@ ESPN_LEAGUE_CODES = {
     "🇪🇺 Europa League": "uefa.europa"
 }
 
-# --- KEYLESS FETCH ENGINES ---
+# --- FETCH ENGINES ---
 @st.cache_data(ttl=180)
 def fetch_openliga_matches(shortcut):
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
@@ -297,8 +297,8 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Gemischter Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Dynamische Elo-Power • Multi-Ticket Budget • Scheine auf Knopfdruck mischen</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen Generator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Multi-Markt KI • Scheine per Knopfdruck neu mischen • Echte Elo-Ratings</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
@@ -509,7 +509,6 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
-    # Reroll key fliesst in den Seed ein
     reroll = st.session_state.get('reroll_key', 0)
     match_seed = int(hashlib.md5(f"{home}_{away}_{profile}_{reroll}".encode()).hexdigest(), 16)
     
@@ -560,18 +559,17 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
 if not matches:
     st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.%Y')} - {dt_to.strftime('%d.%m.%Y')}) in den gewählten Ligen gefunden.")
 else:
-    # SHUFFLE BUTTON & HEADER ANZEIGE
-    col_t_title, col_t_btn = st.columns([3, 1.2])
+    # NEU MISCHEN / REROLL BUTTON
+    col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
-        st.markdown(f"### 🛡️ Aktuelle Prognosen & Wettscheine ({len(matches)} Spiele)")
+        st.markdown(f"### 🛡️ Aktuelle KI-Scheine ({len(matches)} Spiele geladen)")
     with col_t_btn:
-        if st.button("🎲 Neue Scheine generieren (Neu mischen)", type="primary", use_container_width=True):
+        if st.button("🎲 Neue Scheine generieren (Neu mischen)", type="primary", use_container_width=True, key="btn_shuffle"):
             st.session_state['reroll_key'] += 1
             st.rerun()
 
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
-    # Durchmischen der Matches je nach Reroll-Key für abwechslungsreiche Kombis
     current_reroll = st.session_state.get('reroll_key', 0)
     shuffled_matches = matches.copy()
     random.Random(current_reroll).shuffle(shuffled_matches)
