@@ -127,7 +127,6 @@ st.markdown("""
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
     .badge-risk-low { background-color: #00d47e; color: #070a13; }
-    .badge-risk-mid { background-color: #f59e0b; color: #070a13; }
     .odds-tag { color: #00d47e; font-size: 1.15rem; font-weight: 800; }
     .counter-box {
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
@@ -172,6 +171,45 @@ DEUTSCHE_ANBIETER = {
     "Bet365 (DE)": "bet365", "Oddset": "bwin", "Neo.bet": "bwin", "Bet-at-home": "betathome"
 }
 
+def check_spiel_im_zeitraum(date_str, zeit_modus, datum_auswahl):
+    if not date_str: return "Demnächst", True
+    try:
+        dt_utc = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        dt_local = dt_utc.astimezone(timezone(timedelta(hours=2)))
+        jetzt_local = datetime.now(timezone(timedelta(hours=2)))
+        
+        spiel_datum = dt_local.date()
+        heute_datum = jetzt_local.date()
+
+        if zeit_modus == "📅 Kalender-Bereich wählen":
+            if isinstance(datum_auswahl, tuple) and len(datum_auswahl) == 2:
+                start_date, end_date = datum_auswahl
+                if start_date and end_date:
+                    return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (start_date <= spiel_datum <= end_date)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), True
+            
+        elif zeit_modus == "📌 Heute":
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == heute_datum)
+        elif zeit_modus == "📌 Morgen":
+            morgen_datum = heute_datum + timedelta(days=1)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == morgen_datum)
+        elif zeit_modus == "📌 Sonntag":
+            sonntag_datum = heute_datum + timedelta(days=(6 - heute_datum.weekday()) % 7)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (spiel_datum == sonntag_datum)
+        elif zeit_modus == "⚡ Wochenende (Freitag – Sonntag)":
+            tage_bis_freitag = (4 - heute_datum.weekday()) % 7
+            freitag = heute_datum + timedelta(days=tage_bis_freitag if heute_datum.weekday() <= 4 else 0)
+            sonntag = freitag + timedelta(days=2)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (freitag <= spiel_datum <= sonntag)
+        elif zeit_modus == "🟢 Ganze Woche (Montag – Sonntag)":
+            montag = heute_datum - timedelta(days=heute_datum.weekday())
+            sonntag = montag + timedelta(days=6)
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), (montag <= spiel_datum <= sonntag)
+        else: 
+            return dt_local.strftime("%d.%m.%Y um %H:%M Uhr"), True
+    except Exception: 
+        return "Demnächst", True
+
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
     if not match_bookmakers: return 2.10, 3.10, 3.30
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
@@ -209,7 +247,7 @@ st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0
 # --- HAUPTSEITE ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Risikoprofil)", expanded=True):
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & Risikoprofil)", expanded=True):
     
     anbieter_wahl = st.radio(
         "Wähle deinen Wettanbieter:",
@@ -269,6 +307,26 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen & Risikoprof
 
     st.markdown("---")
     
+    gen_zeit_modus = st.selectbox(
+        "📅 Zeitraum-Modus wählen:", 
+        [
+            "📌 Heute",
+            "📌 Morgen",
+            "📌 Sonntag",
+            "⚡ Wochenende (Freitag – Sonntag)", 
+            "🟢 Ganze Woche (Montag – Sonntag)", 
+            "📅 Kalender-Bereich wählen"
+        ], 
+        index=0, 
+        key="gen_zeit_mode"
+    )
+
+    kalender_auswahl = None
+    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
+        kalender_auswahl = st.date_input("Zeitraum wählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
+
+    st.markdown("---")
+    
     risiko_profil = st.selectbox(
         "🧠 KI Risikoprofil (Filter für Quotenqualität):",
         [
@@ -308,7 +366,6 @@ if generate_click:
     else:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         
-        # Quoten-Grenzwerte je nach Risikoprofil definieren (keine Quoten unter 1.40 im Low Risk)
         if "Low Risk" in risiko_profil:
             min_q, max_q = 1.45, 2.10
         elif "Balanced" in risiko_profil:
@@ -325,11 +382,12 @@ if generate_click:
                 data = load_league_odds(code)
                 if isinstance(data, list):
                     for match in data:
+                        match_time, ist_gueltig = check_spiel_im_zeitraum(match.get('commence_time'), gen_zeit_modus, kalender_auswahl)
+                        if not ist_gueltig: continue
+                        
                         home, away = match['home_team'], match['away_team']
                         q_home, q_away, q_draw = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
-                        match_time = "Heute / Demnächst"
                         
-                        # Quoten nach Risikoprofil filtern (kein Schrott unter 1.40)
                         if min_q <= q_home <= max_q:
                             gefilterte_spiele.append({"Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}", "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0]})
                         if min_q <= q_draw <= max_q:
@@ -355,7 +413,7 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine Spiele im gewählten Quoten-Bereich gefunden. Versuche ein anderes Risikoprofil oder aktiviere weitere Ligen.")
+        st.warning("⚠️ Keine Spiele im gewählten Zeitraum und Quoten-Bereich gefunden. Versuche einen anderen Zeitraum oder ein anderes Risikoprofil.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
             st.markdown(f"### 📊 Optimierte Einzelwetten bei {anbieter_label}")
@@ -425,7 +483,7 @@ if 'gefilterte_spiele' in st.session_state:
                     </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Größe im gewählten Quotenbereich.")
+                st.warning("⚠️ Nicht genügend Spiele für diese Kombi-Größe im gewählten Zeitraum.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
@@ -514,4 +572,3 @@ else:
         if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
             st.session_state['saved_tickets'].pop(idx)
             st.rerun()
-
