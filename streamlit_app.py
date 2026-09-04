@@ -79,14 +79,19 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (TASTATURSPERRE & TIPICO-STYLE KOMPAKT-LAYOUT) ---
+# --- DESIGNER CSS (STRENGES BLOCKIEREN DER TASTATUR BEI ALLEN AUSWÄHLEN) ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
     header[data-testid="stHeader"] { display: none !important; }
     
-    input, textarea, [data-baseweb="input"] input, [data-baseweb="base-input"] input {
+    /* VOM-HAND-SCHREIBEN / TASTATUR AUF MOBILGERÄTEN VOLLSTÄNDIG SPERREN */
+    input, textarea, select, 
+    [data-baseweb="input"] input, 
+    [data-baseweb="base-input"] input, 
+    [data-baseweb="select"] input, 
+    div[role="combobox"] input {
         caret-color: transparent !important;
         pointer-events: auto !important;
     }
@@ -262,7 +267,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Tipico-Style • Kompakt • DAZN Bet • Tastatursperre</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Tipico-Style • Kompakt • Tastatur gesperrt • DAZN Bet</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -344,12 +349,10 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=2, step=1)
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Tipico-Kompaktansicht)")
+    st.markdown("#### 🏆 Ligen-Auswahl (Tipico-Kompaktansicht & Tastatursperre)")
     
-    # TIPICO-STYLE: Top-Ligen als direkter Schnellstart-Schalter
     schnellwahl_top5 = st.checkbox("🔥 Top-5 Ligen Schnellstart (Bundesliga, PL, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top5")
 
-    # Alle verfügbaren Ligen kompakt in einem einzigen Multi-Select (Multiselect-Dropdown wie ein Buchmacher-Filter)
     alle_ligen_Namen = list(LIGEN.keys())
     standard_auswahl = [
         "🇩🇪 1. Bundesliga",
@@ -359,8 +362,9 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         "🇫🇷 Ligue 1"
     ] if schnellwahl_top5 else ["🇩🇪 1. Bundesliga"]
 
+    # Kompakter Multiselect, bei dem durch das CSS jegliches Aufpoppen der Handytastatur unterdrückt wird
     aktive_generator_ligen = st.multiselect(
-        "Wähle Ligen aus oder füge Unterligen (2./3. Liga etc.) hinzu:",
+        "Wähle Ligen aus oder füge Unterligen hinzu:",
         options=alle_ligen_Namen,
         default=standard_auswahl,
         key="multiselect_ligen"
@@ -635,4 +639,3 @@ else:
         if st.button(f"Löschen #{idx+1}", key=f"del_{idx}"):
             st.session_state['saved_tickets'].pop(idx)
             st.rerun()
-
