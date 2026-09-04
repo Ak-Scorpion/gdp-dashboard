@@ -76,29 +76,51 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- DATENBANKEN ---
-TOP_STUERGME = {
-    "FC Bayern München": "Harry Kane",
-    "Bayern Munich": "Harry Kane",
+# --- ERWEITERTE TORJÄGER-DATENBANK ---
+TOP_STUERMER = {
+    # Deutschland
+    "FC Bayern München": "Harry Kane", "Bayern Munich": "Harry Kane",
     "Eintracht Frankfurt": "Omar Marmoush",
     "Borussia Dortmund": "Serhou Guirassy",
     "Bayer Leverkusen": "Victor Boniface",
     "RB Leipzig": "Loïs Openda",
+    "VfB Stuttgart": "Deniz Undav",
+    "Borussia Mönchengladbach": "Tim Kleindienst",
+    
+    # England
     "Manchester City": "Erling Haaland",
     "Liverpool": "Mohamed Salah",
     "Arsenal": "Bukayo Saka",
     "Chelsea": "Cole Palmer",
     "Tottenham Hotspur": "Son Heung-min",
+    "Manchester United": "Rasmus Højlund",
+    "Aston Villa": "Ollie Watkins",
+    "Newcastle United": "Alexander Isak",
+    
+    # Spanien
     "Real Madrid": "Kylian Mbappé",
-    "FC Barcelona": "Robert Lewandowski",
-    "Barcelona": "Robert Lewandowski",
-    "Atletico Madrid": "Antoine Griezmann",
-    "Inter Milan": "Lautaro Martínez",
-    "Inter": "Lautaro Martínez",
+    "FC Barcelona": "Robert Lewandowski", "Barcelona": "Robert Lewandowski",
+    "Atletico Madrid": "Antoine Griezmann", "Atlético Madrid": "Antoine Griezmann",
+    "Athletic Bilbao": "Iñaki Williams",
+    "Villarreal": "Ayoze Pérez",
+    
+    # Italien
+    "Inter Milan": "Lautaro Martínez", "Inter": "Lautaro Martínez",
     "Juventus": "Dušan Vlahović",
-    "Paris Saint-Germain": "Ousmane Dembélé",
-    "PSG": "Ousmane Dembélé",
-    "Sporting CP": "Viktor Gyökeres"
+    "AC Milan": "Alvaro Morata",
+    "Napoli": "Romelu Lukaku",
+    "Atalanta": "Ademola Lookman",
+    "Lazio": "Taty Castellanos",
+    
+    # Frankreich & International
+    "Paris Saint-Germain": "Ousmane Dembélé", "PSG": "Ousmane Dembélé",
+    "Marseille": "Mason Greenwood",
+    "Lille": "Jonathan David",
+    "Sporting CP": "Viktor Gyökeres",
+    "Benfica": "Vangelis Pavlidis",
+    "FC Porto": "Samu Omorodion",
+    "Galatasaray": "Victor Osimhen",
+    "Feyenoord": "Santiago Giménez"
 }
 
 ligen = {
@@ -124,6 +146,12 @@ def format_datum_and_check_aktuell(date_str):
         return formatted_str, ist_aktuell
     except Exception:
         return date_str, True
+
+def get_torjaeger_tipp(team_name):
+    """Gibt den konkreten Namen des Stürmers zurück oder wählt eine torgefährliche Alternative."""
+    if team_name in TOP_STUERMER:
+        return f"Tor durch {TOP_STUERMER[team_name]}"
+    return f"{team_name} erzielt mind. 2 Tore"
 
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
@@ -227,7 +255,7 @@ with tab2:
 
         moegliche_tipps = []
         
-        with st.spinner("Analysiere Favoriten & erstelle ausgewogene Quoten-Kombination..."):
+        with st.spinner("Analysiere Favoriten & konkrete Torschützen..."):
             for liga_label, code in fokus_ligen.items():
                 url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
                 try:
@@ -247,36 +275,35 @@ with tab2:
                                 q_home = next((item['price'] for item in odds if item['name'] == home), None)
                                 q_away = next((item['price'] for item in odds if item['name'] == away), None)
                                 
-                                # LOGIK: Immer das favorisierte Team unterstützen (Siegchance > Außenseiter)
-                                
-                                # A) Klare Favoriten (Quote 1.25 bis 1.65) -> Hohe Gewinnchance
+                                # A) KLARER FAVORIT HEIM
                                 if q_home and 1.25 <= q_home <= 1.65:
-                                    stuermer = TOP_STUERGME.get(home, f"Top-Torjäger ({home})")
+                                    tor_tipp = get_torjaeger_tipp(home)
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
                                         "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
                                     })
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.75, "Markt": "Torschütze ⚽"
+                                        "Tipp": tor_tipp, "Quote": 1.75, "Markt": "Torschütze / Tore ⚽"
                                     })
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
                                         "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": round(q_home * 1.30, 2), "Markt": "Sieg + Tore 💥"
                                     })
 
+                                # B) KLARER FAVORIT AUSWÄRTS
                                 if q_away and 1.25 <= q_away <= 1.65:
-                                    stuermer = TOP_STUERGME.get(away, f"Top-Torjäger ({away})")
+                                    tor_tipp = get_torjaeger_tipp(away)
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
                                         "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"
                                     })
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
-                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.80, "Markt": "Torschütze ⚽"
+                                        "Tipp": tor_tipp, "Quote": 1.80, "Markt": "Torschütze / Tore ⚽"
                                     })
 
-                                # B) Moderate Favoriten / Ausgeglichene Top-Spiele (Quote 1.66 bis 2.30)
+                                # C) LEICHTER FAVORIT / VALUE WETTE
                                 if q_home and 1.66 <= q_home <= 2.30 and (not q_away or q_home < q_away):
                                     moegliche_tipps.append({
                                         "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
@@ -297,7 +324,7 @@ with tab2:
                                         "Tipp": f"Doppelte Chance (X2 {away})", "Quote": round(q_away * 0.70, 2) if q_away * 0.70 >= 1.25 else 1.28, "Markt": "Doppelte Chance 🔒"
                                     })
 
-                                # C) Allgemeine Tore-Märkte für Torgefährliche Spiele
+                                # D) TORMARKT
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time,
                                     "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.32, "Markt": "Über 1.5 Tore ⚽"
