@@ -79,7 +79,7 @@ def load_league_odds(liga_code):
     url_template = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={{api_key}}&regions=eu,uk&markets=h2h'
     return fetch_data_with_rotation(url_template)
 
-# --- DESIGNER CSS (VOLLSTÄNDIGE AUSBLENDUNG DER OBEREN LEISTE & TASTATUR-SPERRE) ---
+# --- DESIGNER CSS ---
 st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
@@ -145,18 +145,22 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Alle Ligen inklusive deutscher Unterligen
+# Vollständige Ligen-Zuordnung (inkl. Unterligen für Top-Ligen)
 LIGEN = {
-    "🇩🇪 Deutschland (1. Bundesliga)": "soccer_germany_bundesliga",
-    "🇩🇪 Deutschland (2. Bundesliga)": "soccer_germany_liga2",
-    "🇩🇪 Deutschland (3. Liga)": "soccer_germany_liga3",
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
-    "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
-    "🇮🇹 Italien (Serie A)": "soccer_italy_serie_a",
-    "🇫🇷 Frankreich (Ligue 1)": "soccer_france_ligue_one",
-    "🇹🇷 Türkei (Süper Lig)": "soccer_turkey_super_lig",
-    "🇳🇱 Niederlande (Eredivisie)": "soccer_netherlands_eredivisie",
-    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_primeira_liga",
+    "🇩🇪 1. Bundesliga": "soccer_germany_bundesliga",
+    "🇩🇪 2. Bundesliga": "soccer_germany_liga2",
+    "🇩🇪 3. Liga": "soccer_germany_liga3",
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "soccer_epl",
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship": "soccer_efl_champ",
+    "🇪🇸 La Liga": "soccer_spain_la_liga",
+    "🇪🇸 La Liga 2": "soccer_spain_segunda_division",
+    "🇮🇹 Serie A": "soccer_italy_serie_a",
+    "🇮🇹 Serie B": "soccer_italy_serie_b",
+    "🇫🇷 Ligue 1": "soccer_france_ligue_one",
+    "🇫🇷 Ligue 2": "soccer_france_ligue_two",
+    "🇹🇷 Süper Lig": "soccer_turkey_super_lig",
+    "🇳🇱 Eredivisie": "soccer_netherlands_eredivisie",
+    "🇵🇹 Primeira Liga": "soccer_portugal_primeira_liga",
     "🏆 Champions League": "soccer_uefa_champs_league",
     "🇪🇺 Europa League": "soccer_uefa_europa_league",
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
@@ -264,7 +268,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Inkl. DAZN Bet, 1./2./3. Liga, Spieltag-Filter & Kalender</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Inkl. DAZN Bet, Top-Ligen im Aufklapp-System, Spieltag & Kalender</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -339,40 +343,39 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
         kalender_auswahl = st.date_input("Zeitraum für Wetten auswählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl per Häkchen & Aufklapp-System")
+    st.markdown("#### 🏆 Ligen nach Ländern aufklappen & auswählen")
     
-    # AUFKLAPP-SYSTEM FÜR DEUTSCHLAND (1., 2., 3. Bundesliga) & RESTLICHE LIGEN
     aktive_generator_ligen = []
     
+    # SAUBERE AUFKLAPP-MENÜS FÜR JEDES LAND / WETTBEWERB
     with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=True):
-        chk_bundesliga = st.checkbox("🇩🇪 Deutschland (1. Bundesliga)", value=True, key="chk_BL1")
-        chk_liga2 = st.checkbox("🇩🇪 Deutschland (2. Bundesliga)", value=False, key="chk_BL2")
-        chk_liga3 = st.checkbox("🇩🇪 Deutschland (3. Liga)", value=False, key="chk_BL3")
-        
-        if chk_bundesliga: aktive_generator_ligen.append("🇩🇪 Deutschland (1. Bundesliga)")
-        if chk_liga2: aktive_generator_ligen.append("🇩🇪 Deutschland (2. Bundesliga)")
-        if chk_liga3: aktive_generator_ligen.append("🇩🇪 Deutschland (3. Liga)")
+        if st.checkbox("🇩🇪 1. Bundesliga", value=True, key="chk_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+        if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="chk_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
+        if st.checkbox("🇩🇪 3. Liga", value=False, key="chk_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
 
-    with st.expander("🌍 Internationale Top-Ligen & Europa", expanded=False):
-        inter_ligen = [
-            "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)",
-            "🇪🇸 Spanien (La Liga)",
-            "🇮🇹 Italien (Serie A)",
-            "🇫🇷 Frankreich (Ligue 1)",
-            "🇹🇷 Türkei (Süper Lig)",
-            "🇳🇱 Niederlande (Eredivisie)",
-            "🇵🇹 Portugal (Primeira Liga)",
-            "🏆 Champions League",
-            "🇪🇺 Europa League",
-            "🌍 Conference League"
-        ]
-        
-        col_il1, col_il2 = st.columns(2)
-        for idx, l_name in enumerate(inter_ligen):
-            target_col = col_il1 if idx % 2 == 0 else col_il2
-            with target_col:
-                is_chk = st.checkbox(l_name, value=False, key=f"chk_inter_{idx}")
-                if is_chk: aktive_generator_ligen.append(l_name)
+    with st.expander("🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League, Championship)", expanded=False):
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=False, key="chk_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship", value=False, key="chk_en2"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship")
+
+    with st.expander("🇪🇸 Spanien (La Liga, La Liga 2)", expanded=False):
+        if st.checkbox("🇪🇸 La Liga", value=False, key="chk_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
+        if st.checkbox("🇪🇸 La Liga 2", value=False, key="chk_es2"): aktive_generator_ligen.append("🇪🇸 La Liga 2")
+
+    with st.expander("🇮🇹 Italien (Serie A, Serie B)", expanded=False):
+        if st.checkbox("🇮🇹 Serie A", value=False, key="chk_it1"): aktive_generator_ligen.append("🇮🇹 Serie A")
+        if st.checkbox("🇮🇹 Serie B", value=False, key="chk_it2"): aktive_generator_ligen.append("🇮🇹 Serie B")
+
+    with st.expander("🇫🇷 Frankreich (Ligue 1, Ligue 2)", expanded=False):
+        if st.checkbox("🇫🇷 Ligue 1", value=False, key="chk_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
+        if st.checkbox("🇫🇷 Ligue 2", value=False, key="chk_fr2"): aktive_generator_ligen.append("🇫🇷 Ligue 2")
+
+    with st.expander("🌍 Weitere Top-Ligen & Europa", expanded=False):
+        if st.checkbox("🇹🇷 Süper Lig", value=False, key="chk_tr"): aktive_generator_ligen.append("🇹🇷 Süper Lig")
+        if st.checkbox("🇳🇱 Eredivisie", value=False, key="chk_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
+        if st.checkbox("🇵🇹 Primeira Liga", value=False, key="chk_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
+        if st.checkbox("🏆 Champions League", value=False, key="chk_cl"): aktive_generator_ligen.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=False, key="chk_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+        if st.checkbox("🌍 Conference League", value=False, key="chk_co"): aktive_generator_ligen.append("🌍 Conference League")
 
     st.markdown("---")
     if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
@@ -386,7 +389,7 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
 
 if generate_click:
     if not aktive_generator_ligen: 
-        st.error("Bitte wähle mindestens eine Liga per Häkchen aus den Aufklapp-Menüs aus!")
+        st.error("Bitte wähle mindestens eine Liga per Häkchen in den Aufklapp-Menüs aus!")
     else:
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
         
