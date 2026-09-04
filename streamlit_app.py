@@ -1,4 +1,4 @@
-import import streamlit as st
+import streamlit as st
 import requests
 import pandas as pd
 import random
@@ -96,7 +96,6 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
                             q_home = next((item['price'] for item in odds if item['name'] == home), None)
                             q_away = next((item['price'] for item in odds if item['name'] == away), None)
                             
-                            # 1. Klarer Favorit -> Sieg oder Torschütze/Sieg+Tore
                             if q_home and 1.20 <= q_home <= 1.65:
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
@@ -121,7 +120,6 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
                                     "Tipp": f"Hauptstürmer ({away}) trifft im Spiel", "Quote": 1.80, "Markt": "Torschütze ⚽"
                                 })
 
-                            # 2. Ausgeglichene Partien -> Doppelte Chance oder Beide treffen
                             if (q_home and 1.70 <= q_home <= 2.60) or (q_away and 1.70 <= q_away <= 2.60):
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
@@ -158,9 +156,3 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
         st.info("💡 Drücke erneut auf den Button, um andere Tipico-Kombinationen zu testen!")
     else:
         st.warning("Keine passenden Spiele gefunden. Versuche es vor dem Spieltag erneut.")
-
-
-
-
-
-
