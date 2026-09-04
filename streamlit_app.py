@@ -99,6 +99,14 @@ st.markdown("""
         margin-bottom: 24px;
         box-shadow: 0 10px 35px rgba(0,212,126,0.15);
     }
+    .freebet-box {
+        background: linear-gradient(135deg, #1e1b4b 100%, #0f172a 0%);
+        border: 2px solid #8b5cf6;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 35px rgba(139,92,246,0.2);
+    }
     .owner-tag {
         color: #00d47e;
         font-weight: 700;
@@ -115,6 +123,7 @@ st.markdown("""
         display: inline-block; margin-bottom: 6px; text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
+    .badge-freebet { background-color: #8b5cf6; color: #ffffff; }
     .odds-tag { color: #00d47e; font-size: 1.15rem; font-weight: 800; }
     .counter-box {
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
@@ -136,7 +145,7 @@ LIGEN = {
     "🇫🇷 Frankreich (Ligue 1)": "soccer_france_ligue_one",
     "🇹🇷 Türkei (Süper Lig)": "soccer_turkey_super_lig",
     "🇳🇱 Niederlande (Eredivisie)": "soccer_netherlands_eredivisie",
-    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_portugal_liga" if False else "soccer_portugal_primeira_liga",
+    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_primeira_liga",
     "🏆 Champions League": "soccer_uefa_champs_league",
     "🇪🇺 Europa League": "soccer_uefa_europa_league",
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
@@ -202,7 +211,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Stylisches Multi-Ticket System & Bankroll-Allocation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Multi-Ticket System & Freebet-Maximierer</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -224,7 +233,7 @@ with st.sidebar:
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
     gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
     st.markdown("---")
-    st.markdown("💡 Stilvolles Staffel-System aktiv.")
+    st.markdown("💡 Freebet-Optimierer aktiv.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -257,9 +266,9 @@ with tab1:
             else: st.error("Keine Spiele gefunden oder API-Limit erreicht.")
 
 with tab2:
-    st.markdown("### 🎯 Intelligenter KI Kombi-Generator & Multi-Ticket System")
+    st.markdown("### 🎯 Intelligenter KI Kombi-Generator & Freebet-Optimierer")
     
-    with st.expander("⚙️ Ligen- & Budget-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
+    with st.expander("⚙️ Ligen- & Modus-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
         generator_ligen_modus = st.radio(
             "Ligen-Auswahl für diesen Schein:",
             ["🌍 Alle europäischen Top-Ligen nutzen", "☑️ Ligen per Häkchen einzeln wählen"],
@@ -285,7 +294,7 @@ with tab2:
         
         gen_typ = st.radio(
             "Generator-Modus wählen:",
-            ["🛡️ Multi-Ticket System (3 separate Scheine aus deinem Budget)", "Standard (Einzelner Schein nach Wunsch)"],
+            ["🛡️ Multi-Ticket System (3 separate Scheine)", "🎁 Freebet-Modus (Gratiswette maximieren)", "Standard (Einzelner Schein nach Wunsch)"],
             index=0
         )
         
@@ -298,12 +307,15 @@ with tab2:
                 ziel_quote = round(gewinn_target / einsatz_target, 2)
             else:
                 anzahl_wetten = st.selectbox("Anzahl der Wetten auf dem Schein:", [2, 3], index=0)
+        elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
+            freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
+            st.info(f"💡 **Freebet-Tipp ({freebet_wert} €):** Da dir bei einer Gratiswette nur der Reingewinn ausgezahlt wird, sucht die KI nach einer starken Quote (ca. 2.20 – 3.50), um den maximalen Profit herauszuholen!")
         else:
             multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
-            st.info("💡 **Staffel-Logik bei 100 €:** Schein 1 (25 € Anker) ➔ Schein 2 (50 € Solide Kombi) ➔ Schein 3 (25 € High-Reward). Perfekt minimiertes Risiko!")
+            st.info("💡 **Staffel-Logik bei 100 €:** Schein 1 (25 € Anker) ➔ Schein 2 (50 € Solide Kombi) ➔ Schein 3 (25 € High-Reward).")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        generate_click = st.button("🔄 KI Kombi-Schein(e) generieren", type="primary", use_container_width=True)
+        generate_click = st.button("🔄 KI Wettschein(e) generieren", type="primary", use_container_width=True)
 
     if generate_click:
         if not aktive_generator_ligen: 
@@ -312,7 +324,7 @@ with tab2:
             bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             
-            with st.spinner("Durchsuche die gewählten Ligen und optimiere Risiko-Verteilung..."):
+            with st.spinner("Durchsuche die gewählten Ligen..."):
                 if gen_typ == "Standard (Einzelner Schein nach Wunsch)":
                     moegliche_tipps = []
                     if use_target_mode:
@@ -360,14 +372,53 @@ with tab2:
                                 if len(kombi_auswahl) == anz_spiele: break
                             st.session_state['preset_einsatz'] = 20.0
 
-                        st.session_state['multi_mode'] = False
+                        st.session_state['mode_type'] = 'standard'
                         st.session_state['kombi_auswahl'] = kombi_auswahl
                         st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                         st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                     else:
                         st.warning("Nicht genügend Spiele im Zielbereich gefunden.")
+                
+                elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
+                    # Freebet: Suche nach 2er-Kombi oder starken Einzelmärkten mit Zielquote 2.20 bis 3.50
+                    moegliche_tipps = []
+                    for liga_label in aktive_generator_ligen:
+                        code = LIGEN[liga_label]
+                        data = load_league_odds(code)
+                        if isinstance(data, list):
+                            for match in data:
+                                match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                                if not ist_gueltig: continue
+                                home, away = match['home_team'], match['away_team']
+                                q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
+                                if q_home and 1.60 <= q_home <= 2.40:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Freebet Value 🎁"})
+                                if q_away and 1.60 <= q_away <= 2.40:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Freebet Value 🎁"})
+
+                    if len(moegliche_tipps) >= 2:
+                        random.shuffle(moegliche_tipps)
+                        ausgewaehlte_spiele = set()
+                        freebet_kombi = []
+                        aktuelle_q = 1.0
+                        for tipp in moegliche_tipps:
+                            if tipp['Begegnung'] not in ausgewaehlte_spiele:
+                                freebet_kombi.append(tipp)
+                                ausgewaehlte_spiele.add(tipp['Begegnung'])
+                                aktuelle_q *= tipp['Quote']
+                                if aktuelle_q >= 2.20 or len(freebet_kombi) == 2:
+                                    break
+                        
+                        st.session_state['mode_type'] = 'freebet'
+                        st.session_state['freebet_wert'] = freebet_wert
+                        st.session_state['freebet_kombi'] = freebet_kombi
+                        st.session_state['gewaehlter_anbieter'] = anbieter_wahl
+                        st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
+                    else:
+                        st.warning("Nicht genügend passende Freebet-Spiele gefunden. Aktiviere mehr Ligen!")
+                
                 else:
-                    # MULTI-TICKET MODUS (EXAKTE 25 / 50 / 25 STAFFELUNG)
+                    # MULTI-TICKET MODUS
                     alle_spiele_pool = []
                     for liga_label in aktive_generator_ligen:
                         code = LIGEN[liga_label]
@@ -383,8 +434,6 @@ with tab2:
 
                     if len(alle_spiele_pool) >= 6:
                         random.shuffle(alle_spiele_pool)
-                        
-                        # Exakte Budget-Staffelung proportional zum Multi-Budget (Standard 25% / 50% / 25%)
                         e1 = round(multi_budget * 0.25, 2)
                         e2 = round(multi_budget * 0.50, 2)
                         e3 = round(multi_budget * 0.25, 2)
@@ -399,15 +448,12 @@ with tab2:
                                     if len(picked) == count: break
                             return picked
 
-                        # Schein 1: 25% Einsatz (Sicherer Anker, 2er Kombi)
                         s1_tipps = pick_tips(2, 1.25, 1.55)
-                        # Schein 2: 50% Einsatz (Der Hauptgewinn-Schein, 2er oder 3er Kombi)
                         s2_tipps = pick_tips(2, 1.40, 1.75)
-                        # Schein 3: 25% Einsatz (High-Reward / System-Tipp)
                         s3_tipps = pick_tips(3, 1.45, 2.00)
                         
                         if s1_tipps and s2_tipps and s3_tipps:
-                            st.session_state['multi_mode'] = True
+                            st.session_state['mode_type'] = 'multi'
                             st.session_state['multi_tickets'] = [
                                 {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "tipps": s1_tipps},
                                 {"name": "⭐ Schein 2: Hauptgewinn-Kombi", "einsatz": e2, "tipps": s2_tipps},
@@ -416,18 +462,70 @@ with tab2:
                             st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                             st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                         else:
-                            st.warning("Nicht genügend passende Spiele für die Multi-Ticket-Staffelung gefunden. Versuche mehr Ligen zu aktivieren!")
+                            st.warning("Nicht genügend passende Spiele für das Multi-Ticket-System gefunden.")
                     else:
                         st.warning("Zu wenige anstehende Spiele für 3 separate Scheine verfügbar.")
 
-    # STYLISHE MULTI-TICKET ANZEIGE
-    if st.session_state.get('multi_mode', False) and 'multi_tickets' in st.session_state:
+    # ANZEIGE: FREEBET MODUS
+    if st.session_state.get('mode_type') == 'freebet' and 'freebet_kombi' in st.session_state:
+        fb_wert = st.session_state.get('freebet_wert', 20)
+        fb_kombi = st.session_state['freebet_kombi']
+        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
+        wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
+        bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
+        
+        q_gesamt = 1.0
+        for t in fb_kombi: q_gesamt *= t['Quote']
+        
+        # Bei Freebets wird nur der Reingewinn ausgezahlt: (Einsatz * Quote) - Einsatz
+        reingewinn = round((fb_wert * q_gesamt) - fb_wert, 2)
+        brutto_gewinn = round(fb_wert * q_gesamt, 2)
+        
+        st.markdown(f"### 🎁 Deine optimierte Freebet-Empfehlung ({wochen_label})")
+        st.markdown(f"""
+            <div class="freebet-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span class="badge badge-freebet" style="font-size: 0.9rem; padding: 6px 14px;">🎁 Gratiswette: {fb_wert} € Einsatz</span>
+                    <span class="badge" style="background-color: #00d47e; color: #070a13; font-size: 0.9rem; padding: 6px 14px;">💥 Gesamtquote: {round(q_gesamt, 2)}</span>
+                </div>
+                <div style="background-color: #070a13; border: 1px solid #8b5cf6; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 15px;">
+                    <span style="color: #94a3b8; font-size: 0.9rem;">Erwarteter Reingewinn (Freebet-Ertrag netto):</span><br>
+                    <span style="color: #00d47e; font-size: 1.6rem; font-weight: 800;">{reingewinn} €</span>
+                    <span style="color: #64748b; font-size: 0.8rem;"><br>(Brutto-Auszahlung abzüglich {fb_wert} € Freebet = {brutto_gewinn} € Total)</span>
+                </div>
+        """, unsafe_allow_html=True)
+        
+        for t in fb_kombi:
+            st.markdown(f"""
+                <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="color: #ffffff; font-weight: 600; font-size: 0.95rem;">⚽ {t['Begegnung']}</span><br>
+                        <span style="color: #94a3b8; font-size: 0.8rem;">📅 {t['Datum']} &nbsp;|&nbsp; Tipp: <b style="color: #00d47e;">{t['Tipp']}</b></span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="color: #64748b; font-size: 0.75rem;">Quote</span><br>
+                        <span style="color: #00d47e; font-weight: 800; font-size: 1.05rem;">{t['Quote']}</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(f"""
+            <div style="background-color: #0f172a; border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                <h3 style="color: #ffffff; margin-top: 0;">🚀 Jetzt Freebet bei {anbieter_label} einlösen</h3>
+                <a href="{bookmaker_url}" target="_blank" style="background-color: #8b5cf6; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; margin-top: 10px;">🔗 Zu {anbieter_label} wechseln</a>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # ANZEIGE: MULTI-TICKET MODUS
+    elif st.session_state.get('mode_type') == 'multi' and 'multi_tickets' in st.session_state:
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
         wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
         
         st.markdown(f"### 🛡️ Dein Multi-Ticket System ({wochen_label}) — 3 separate Scheine")
-        st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;'>Dein Budget wurde intelligent aufgeteilt, damit du maximales Risiko vermeidest und breit gestreut gewinnst:</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;'>Dein Budget wurde intelligent aufgeteilt (Staffelung 25% / 50% / 25%):</p>", unsafe_allow_html=True)
         
         gesamt_moeglicher_gewinn = 0
         gesamt_einsatz = 0
@@ -439,7 +537,6 @@ with tab2:
             gesamt_moeglicher_gewinn += gewinn_schein
             gesamt_einsatz += ticket['einsatz']
             
-            # Stylische HTML-Card für jeden einzelnen Schein
             st.markdown(f"""
                 <div class="multi-ticket-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -482,8 +579,8 @@ with tab2:
             </div>
         """, unsafe_allow_html=True)
 
-    # STANDARD ANZEIGE
-    elif not st.session_state.get('multi_mode', False) and 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
+    # ANZEIGE: STANDARD MODUS
+    elif st.session_state.get('mode_type') == 'standard' and 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
         wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
