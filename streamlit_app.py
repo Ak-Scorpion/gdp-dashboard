@@ -166,24 +166,28 @@ DEUTSCHE_ANBIETER = {
     "Bet-at-home": "betathome", "Bet365 (DE)": "bet365", "Betano": "bwin", "Oddset": "bwin"
 }
 
-WOCHEN_OPTIONS = {
-    "🟢 Dieses Wochenende (Aktuelle Woche)": 0,
-    "⏩ Nächste Woche (+1 Woche)": 1,
-    "⏩ Übernächste Woche (+2 Wochen)": 2,
-    "⏩ In 3 Wochen (+3 Wochen)": 3,
-    "⏩ In 4 Wochen (+4 Wochen)": 4
-}
-
-def check_und_format_woche_und_zukunft(date_str, offset_wochen):
+def check_spiel_im_zeitfenster(date_str, zeit_modus, tage_offset):
     if not date_str: return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         jetzt = datetime.now(timezone.utc)
-        ist_in_zukunft = dt > jetzt
-        start_zielwoche = jetzt + timedelta(weeks=offset_wochen)
-        end_zielwoche = start_zielwoche + timedelta(days=7)
-        ist_in_zielwoche = (dt >= start_zielwoche) and (dt < end_zielwoche)
-        return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (ist_in_zielwoche and ist_in_zukunft)
+        
+        # Grundvoraussetzung: Spiel muss in der Zukunft liegen (nicht vorbei / nicht live)
+        if dt <= jetzt:
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), False
+            
+        if zeit_modus == "📅 Exakten Tag wählen":
+            # Exakter Tag (heute = 0 Tage, morgen = 1 Tag, in 3 Tagen = 3 Tage etc.)
+            start_tag = jetzt.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=tage_offset)
+            end_tag = start_tag + timedelta(days=1)
+            ist_passend = (dt >= start_tag) and (dt < end_tag)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
+        else:
+            # Klassischer Wochen-Modus
+            start_woche = jetzt + timedelta(weeks=tage_offset)
+            end_woche = start_woche + timedelta(days=7)
+            ist_passend = (dt >= start_woche) and (dt < end_woche)
+            return dt.strftime("%d.%m.%Y um %H:%M Uhr"), ist_passend
     except Exception: 
         return date_str, True
 
@@ -211,7 +215,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Multi-Ticket System & Freebet-Maximierer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Tagesgenauer Filter & Multi-Ticket System</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -227,30 +231,68 @@ with col_count:
 
 st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- SIDEBAR (NEU MIT TAGES-AUSWAHL) ---
 with st.sidebar:
     st.markdown("### 🎛️ Steuerungs-Panel")
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
-    gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
+    
     st.markdown("---")
-    st.markdown("💡 Freebet-Optimierer aktiv.")
+    zeit_filter_modus = st.radio(
+        "Zeitraum-Modus:",
+        ["📅 Exakten Tag wählen", "🟢 Ganze Woche wählen"],
+        index=0
+    )
+    
+    if zeit_filter_modus == "📅 Exakten Tag wählen":
+        tag_auswahl = st.selectbox(
+            "Wähle den Tag:",
+            [
+                "Heute (0 Tage)", 
+                "Morgen (+1 Tag)", 
+                "In 2 Tagen (+2 Tage)", 
+                "In 3 Tagen (+3 Tage)", 
+                "In 4 Tagen (+4 Tage)", 
+                "In 5 Tagen (+5 Tage)", 
+                "In 6 Tagen (+6 Tage)", 
+                "In 7 Tagen (+7 Tage)"
+            ],
+            index=0
+        )
+        # Extrahiere den Offset in Tagen aus dem String
+        offset_tage = int(tag_auswahl.split("(")[1].split(" ")[0])
+    else:
+        wochen_auswahl = st.selectbox(
+            "Spielwoche wählen:",
+            [
+                "🟢 Diese Woche (Aktuell)", 
+                "⏩ Nächste Woche (+1 Woche)", 
+                "⏩ In 2 Wochen (+2 Wochen)", 
+                "⏩ In 3 Wochen (+3 Wochen)", 
+                "⏩ In 4 Wochen (+4 Wochen)"
+            ],
+            index=0
+        )
+        wochen_mapping = {"🟢 Diese Woche (Aktuell)": 0, "⏩ Nächste Woche (+1 Woche)": 1, "⏩ In 2 Wochen (+2 Wochen)": 2, "⏩ In 3 Wochen (+3 Wochen)": 3, "⏩ In 4 Wochen (+4 Wochen)": 4}
+        offset_tage = wochen_mapping[wochen_auswahl]
+
+    st.markdown("---")
+    st.markdown("💡 Tagesgenauer Filter aktiv.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
 
 with tab1:
-    st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
+    st.markdown("### 📊 Einzelne Liga & tagesgenaue Analyse")
     Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", list(LIGEN.keys()), key="l_tab1_single")
     if st.button("🔍 Spiele & Wahrscheinlichkeiten laden", use_container_width=True, type="primary"):
         liga_code = LIGEN[Einzelne_Liga_Auswahl]
         bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
-        offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
         with st.spinner(f"Analysiere Quoten für {Einzelne_Liga_Auswahl}..."):
             data = load_league_odds(liga_code)
             if isinstance(data, list) and len(data) > 0:
                 spiele_liste = []
                 for match in data:
-                    match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                    match_time, ist_gueltig = check_spiel_im_zeitfenster(match.get('commence_time'), zeit_filter_modus, offset_tage)
                     if not ist_gueltig: continue
                     home, away = match['home_team'], match['away_team']
                     q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -262,11 +304,11 @@ with tab1:
                     })
                 if spiele_liste:
                     st.dataframe(pd.DataFrame(spiele_liste), use_container_width=True, hide_index=True)
-                else: st.info("Keine anstehenden Begegnungen gefunden.")
+                else: st.info("Keine Spiele für diesen exakten Zeitraum gefunden.")
             else: st.error("Keine Spiele gefunden oder API-Limit erreicht.")
 
 with tab2:
-    st.markdown("### 🎯 Intelligenter KI Kombi-Generator & Freebet-Optimierer")
+    st.markdown("### 🎯 Intelligenter KI Kombi-Generator & tagesgenauer Filter")
     
     with st.expander("⚙️ Ligen- & Modus-Einstellungen (Hier klicken zum Öffnen)", expanded=True):
         generator_ligen_modus = st.radio(
@@ -309,7 +351,7 @@ with tab2:
                 anzahl_wetten = st.selectbox("Anzahl der Wetten auf dem Schein:", [2, 3], index=0)
         elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
-            st.info(f"💡 **Freebet-Tipp ({freebet_wert} €):** Da dir bei einer Gratiswette nur der Reingewinn ausgezahlt wird, sucht die KI nach einer starken Quote (ca. 2.20 – 3.50), um den maximalen Profit herauszuholen!")
+            st.info(f"💡 **Freebet-Tipp ({freebet_wert} €):** Die KI sucht nach starken Quoten (ca. 2.20 – 3.50) für den maximalen Netto-Reingewinn.")
         else:
             multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
             st.info("💡 **Staffel-Logik bei 100 €:** Schein 1 (25 € Anker) ➔ Schein 2 (50 € Solide Kombi) ➔ Schein 3 (25 € High-Reward).")
@@ -322,9 +364,8 @@ with tab2:
             st.error("Bitte wähle mindestens eine Liga per Häkchen aus!")
         else:
             bm_code = DEUTSCHE_ANBIETER.get(anbieter_wahl, "bwin")
-            offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             
-            with st.spinner("Durchsuche die gewählten Ligen..."):
+            with st.spinner("Durchsuche den gewählten Zeitraum..."):
                 if gen_typ == "Standard (Einzelner Schein nach Wunsch)":
                     moegliche_tipps = []
                     if use_target_mode:
@@ -341,7 +382,7 @@ with tab2:
                         data = load_league_odds(code)
                         if isinstance(data, list):
                             for match in data:
-                                match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                                match_time, ist_gueltig = check_spiel_im_zeitfenster(match.get('commence_time'), zeit_filter_modus, offset_tage)
                                 if not ist_gueltig: continue
                                 home, away = match['home_team'], match['away_team']
                                 q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -375,19 +416,17 @@ with tab2:
                         st.session_state['mode_type'] = 'standard'
                         st.session_state['kombi_auswahl'] = kombi_auswahl
                         st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                        st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                     else:
-                        st.warning("Nicht genügend Spiele im Zielbereich gefunden.")
+                        st.warning("Nicht genügend Spiele für den gewählten Tag/Zeitraum im Zielbereich gefunden.")
                 
                 elif gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-                    # Freebet: Suche nach 2er-Kombi oder starken Einzelmärkten mit Zielquote 2.20 bis 3.50
                     moegliche_tipps = []
                     for liga_label in aktive_generator_ligen:
                         code = LIGEN[liga_label]
                         data = load_league_odds(code)
                         if isinstance(data, list):
                             for match in data:
-                                match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                                match_time, ist_gueltig = check_spiel_im_zeitfenster(match.get('commence_time'), zeit_filter_modus, offset_tage)
                                 if not ist_gueltig: continue
                                 home, away = match['home_team'], match['away_team']
                                 q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -413,19 +452,17 @@ with tab2:
                         st.session_state['freebet_wert'] = freebet_wert
                         st.session_state['freebet_kombi'] = freebet_kombi
                         st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                        st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                     else:
-                        st.warning("Nicht genügend passende Freebet-Spiele gefunden. Aktiviere mehr Ligen!")
+                        st.warning("Nicht genügend Freebet-Spiele für diesen Zeitraum gefunden.")
                 
                 else:
-                    # MULTI-TICKET MODUS
                     alle_spiele_pool = []
                     for liga_label in aktive_generator_ligen:
                         code = LIGEN[liga_label]
                         data = load_league_odds(code)
                         if isinstance(data, list):
                             for match in data:
-                                match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
+                                match_time, ist_gueltig = check_spiel_im_zeitfenster(match.get('commence_time'), zeit_filter_modus, offset_tage)
                                 if not ist_gueltig: continue
                                 home, away = match['home_team'], match['away_team']
                                 q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -460,28 +497,24 @@ with tab2:
                                 {"name": "🚀 Schein 3: High-Reward Tipp", "einsatz": e3, "tipps": s3_tipps}
                             ]
                             st.session_state['gewaehlter_anbieter'] = anbieter_wahl
-                            st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                         else:
-                            st.warning("Nicht genügend passende Spiele für das Multi-Ticket-System gefunden.")
+                            st.warning("Nicht genügend Spiele für das Multi-Ticket-System im gewählten Zeitraum verfügbar.")
                     else:
-                        st.warning("Zu wenige anstehende Spiele für 3 separate Scheine verfügbar.")
+                        st.warning("Zu wenige anstehende Spiele für 3 separate Scheine an diesem Tag/Zeitraum.")
 
     # ANZEIGE: FREEBET MODUS
     if st.session_state.get('mode_type') == 'freebet' and 'freebet_kombi' in st.session_state:
         fb_wert = st.session_state.get('freebet_wert', 20)
         fb_kombi = st.session_state['freebet_kombi']
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
         
         q_gesamt = 1.0
         for t in fb_kombi: q_gesamt *= t['Quote']
-        
-        # Bei Freebets wird nur der Reingewinn ausgezahlt: (Einsatz * Quote) - Einsatz
         reingewinn = round((fb_wert * q_gesamt) - fb_wert, 2)
         brutto_gewinn = round(fb_wert * q_gesamt, 2)
         
-        st.markdown(f"### 🎁 Deine optimierte Freebet-Empfehlung ({wochen_label})")
+        st.markdown(f"### 🎁 Deine optimierte Freebet-Empfehlung")
         st.markdown(f"""
             <div class="freebet-box">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -510,7 +543,6 @@ with tab2:
             """, unsafe_allow_html=True)
             
         st.markdown("</div>", unsafe_allow_html=True)
-
         st.markdown(f"""
             <div style="background-color: #0f172a; border: 1px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
                 <h3 style="color: #ffffff; margin-top: 0;">🚀 Jetzt Freebet bei {anbieter_label} einlösen</h3>
@@ -521,10 +553,9 @@ with tab2:
     # ANZEIGE: MULTI-TICKET MODUS
     elif st.session_state.get('mode_type') == 'multi' and 'multi_tickets' in st.session_state:
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
         
-        st.markdown(f"### 🛡️ Dein Multi-Ticket System ({wochen_label}) — 3 separate Scheine")
+        st.markdown(f"### 🛡️ Dein Multi-Ticket System — 3 separate Scheine")
         st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;'>Dein Budget wurde intelligent aufgeteilt (Staffelung 25% / 50% / 25%):</p>", unsafe_allow_html=True)
         
         gesamt_moeglicher_gewinn = 0
@@ -571,7 +602,6 @@ with tab2:
                 <span style="color: #94a3b8;">Maximaler Gesamtertrag:</span> <b style="color: #00d47e;">{round(gesamt_moeglicher_gewinn, 2)} €</b>
             </div>
         """, unsafe_allow_html=True)
-
         st.markdown(f"""
             <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
                 <h3 style="color: #ffffff; margin-top: 0;">🚀 Direkt zu {anbieter_label}</h3>
@@ -583,7 +613,6 @@ with tab2:
     elif st.session_state.get('mode_type') == 'standard' and 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
-        wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         preset_einsatz = st.session_state.get('preset_einsatz', 20.0)
         
         gesamtquote = 1.0
@@ -592,7 +621,7 @@ with tab2:
         risk_text = get_risk_label(schein_wahrscheinlichkeit)
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
             
-        st.markdown(f"### 📜 Dein optimierter KI-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
+        st.markdown(f"### 📜 Dein optimierter KI-Schein ({len(kombi_auswahl)}er Kombi)")
         cols = st.columns(len(kombi_auswahl))
         for idx, tipp in enumerate(kombi_auswahl):
             with cols[idx]:
