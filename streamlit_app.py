@@ -22,16 +22,36 @@ API_KEYS = [
 
 if 'current_key_index' not in st.session_state:
     st.session_state['current_key_index'] = 0
-if 'api_remaining' not in st.session_state:
-    st.session_state['api_remaining'] = "500"
-if 'api_used' not in st.session_state:
-    st.session_state['api_used'] = "0"
 if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
 
 def get_active_api_key():
     idx = st.session_state['current_key_index']
     return API_KEYS[idx]
+
+def get_total_api_stats():
+    """Fragt die Rest-Kontingente aller 4 API-Keys ab und summiert sie auf."""
+    total_remaining = 0
+    total_used = 0
+    success_count = 0
+    
+    for key in API_KEYS:
+        try:
+            # Test-Request an eine kleine Sportart, um die Header auszulesen
+            res = requests.get(f"https://api.the-odds-api.com/v4/sports/?apiKey={key}")
+            if res.status_code == 200:
+                headers = res.headers
+                rem = int(headers.get('x-requests-remaining', 500))
+                used = int(headers.get('x-requests-used', 0))
+                total_remaining += rem
+                total_used += used
+                success_count += 1
+            else:
+                total_remaining += 500 # Fallback
+        except Exception:
+            total_remaining += 500
+            
+    return total_remaining, total_used
 
 def fetch_data_with_rotation(url_template):
     attempts = 0
@@ -43,14 +63,8 @@ def fetch_data_with_rotation(url_template):
         
         try:
             res = requests.get(url)
-            headers = res.headers
+            remaining = int(res.headers.get('x-requests-remaining', 1))
             
-            if 'x-requests-remaining' in headers:
-                st.session_state['api_remaining'] = headers['x-requests-remaining']
-            if 'x-requests-used' in headers:
-                st.session_state['api_used'] = headers['x-requests-used']
-                
-            remaining = int(headers.get('x-requests-remaining', 1))
             if res.status_code == 401 or remaining <= 0:
                 st.session_state['current_key_index'] = (st.session_state['current_key_index'] + 1) % len(API_KEYS)
                 attempts += 1
@@ -204,16 +218,12 @@ WOCHEN_OPTIONS = {
 }
 
 def check_und_format_woche_und_zukunft(date_str, offset_wochen):
-    if not date_str: return "Unbekannt", False, False
+    if not date_str: return "Unbekannt", False
     try:
-        # Konvertiere API-Zeitstring in ein datetime-Objekt (UTC)
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         jetzt = datetime.now(timezone.utc)
-        
-        # 1. Check: Ist das Spiel JETZT SCHON VORBEI ODER LÄUFT BEREITS? (Vergangenheit ausschließen)
         ist_in_zukunft = dt > jetzt
         
-        # 2. Check: Gehört es in die ausgewählte Ziel-Spielwoche?
         start_zielwoche = jetzt + timedelta(weeks=offset_wochen)
         end_zielwoche = start_zielwoche + timedelta(days=7)
         ist_in_zielwoche = (dt >= start_zielwoche) and (dt < end_zielwoche)
@@ -221,10 +231,6 @@ def check_und_format_woche_und_zukunft(date_str, offset_wochen):
         return dt.strftime("%d.%m.%Y um %H:%M Uhr"), (ist_in_zielwoche and ist_in_zukunft)
     except Exception: 
         return date_str, True
-
-def get_torjaeger_tipp(team_name):
-    if team_name in TOP_STUERMER: return f"Tor durch {TOP_STUERMER[team_name]}"
-    return f"{team_name} erzielt mind. 2 Tore"
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
     if not match_bookmakers: return None, None, None, None
@@ -252,22 +258,25 @@ def get_risk_label(prob):
     else:
         return "🔴 Harakiri / Verrückt"
 
-# --- HAUPT-HEADER & COUNTER ---
+# --- HAUPT-HEADER & GESAMT-API-COUNTER ---
 col_head, col_count = st.columns([3, 1])
 
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Europäische Top-Ligen, Echtzeit-Live-Filter & smarte Scheine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen, Gesamt-API-Tracking & Live-Filter</div>', unsafe_allow_html=True)
 
 with col_count:
-    active_key_num = st.session_state['current_key_index'] + 1
+    # Berechne die Summe aller 4 API-Keys live
+    total_rem, total_used = get_total_api_stats()
+    max_gesamt_klicks = len(API_KEYS) * 500
+    
     st.markdown(f"""
         <div class="counter-box">
-            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;">📊 API KEY #{active_key_num} / {len(API_KEYS)}</span><br>
-            <span style="color: #00d47e; font-size: 1.3rem; font-weight: 800;">{st.session_state.get('api_remaining', '500')}</span>
-            <span style="color: #ffffff; font-size: 0.8rem;">/ 500 übrig</span><br>
-            <span style="color: #475569; font-size: 0.65rem;">Verbraucht: {st.session_state.get('api_used', '0')} Klicks</span>
+            <span style="color: #64748b; font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;">📊 ALLE 4 API-KEYS GESAMT</span><br>
+            <span style="color: #00d47e; font-size: 1.3rem; font-weight: 800;">{total_rem}</span>
+            <span style="color: #ffffff; font-size: 0.8rem;">/ {max_gesamt_klicks} übrig</span><br>
+            <span style="color: #475569; font-size: 0.65rem;">Gesamt verbraucht: {total_used} Klicks</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -327,7 +336,7 @@ with tab1:
                 spiele_liste = []
                 for match in data:
                     match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
-                    if not ist_gueltig: continue # Bereits gespielte Partien ignorieren
+                    if not ist_gueltig: continue
                     
                     home, away = match['home_team'], match['away_team']
                     q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -342,7 +351,7 @@ with tab1:
                     })
                 if spiele_liste:
                     st.dataframe(pd.DataFrame(spiele_liste), use_container_width=True, hide_index=True)
-                else: st.info("Keine anstehenden Begegnungen für die gewählte Spielwoche gefunden (abgelaufene Spiele wurden ausgeblendet).")
+                else: st.info("Keine anstehenden Begegnungen für die gewählte Spielwoche gefunden.")
             else: st.error("Keine Spiele gefunden oder alle API-Keys aufgebraucht.")
 
 # ==========================================
@@ -359,7 +368,7 @@ with tab2:
             with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
             with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=2000.0, value=100.0, step=10.0)
             ziel_quote = round(gewinn_target / einsatz_target, 2)
-            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt ausschließlich Spiele, die noch vor uns liegen).")
+            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI nutzt ausschließlich zukünftige Spiele).")
         else:
             anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3):", min_value=2, max_value=3, value=3, step=1)
 
@@ -388,7 +397,7 @@ with tab2:
                     if isinstance(data, list):
                         for match in data:
                             match_time, ist_gueltig = check_und_format_woche_und_zukunft(match.get('commence_time'), offset_w)
-                            if not ist_gueltig: continue # WICHTIG: Vergangene / laufende Spiele ignorieren!
+                            if not ist_gueltig: continue
                             
                             home, away = match['home_team'], match['away_team']
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
@@ -438,7 +447,7 @@ with tab2:
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                 st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
             else: 
-                st.warning(f"Für die gewählten Ligen stehen derzeit keine weiteren anstehenden Spiele zur Verfügung (bereits gestartete Spiele wurden automatisch ausgeschlossen).")
+                st.warning("Für die gewählten Ligen stehen derzeit keine weiteren anstehenden Spiele zur Verfügung.")
 
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
