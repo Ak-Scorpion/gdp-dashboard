@@ -76,7 +76,6 @@ st.markdown("""
     <style>
     .stApp { background-color: #070a13; font-family: 'Inter', sans-serif; color: #f1f5f9; }
     
-    /* Moderne Cards */
     .bet-card {
         background: linear-gradient(135deg, #111827 0%, #0d1320 100%);
         border: 1px solid #1e293b;
@@ -91,7 +90,6 @@ st.markdown("""
         transform: translateY(-2px);
     }
     
-    /* Typografie */
     .owner-tag {
         color: #00d47e;
         font-weight: 700;
@@ -123,10 +121,8 @@ st.markdown("""
         text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
-    .badge-prob { background-color: #7c3aed; color: #ffffff; }
     .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
     
-    /* Counter Box */
     .counter-box {
         background-color: #0f172a;
         border: 1px solid #1e293b;
@@ -136,7 +132,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     
-    /* Clean Expanders & Tabs */
     .streamlit-expanderHeader {
         background-color: #0f172a !important;
         border-radius: 10px;
@@ -164,7 +159,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- DATENBANKEN ---
+# --- ERWEITERTE EUROPÄISCHE LIGEN DATENBANK ---
 TOP_STUERMER = {
     "FC Bayern München": "Harry Kane", "Bayern Munich": "Harry Kane",
     "Eintracht Frankfurt": "Omar Marmoush", "Borussia Dortmund": "Serhou Guirassy",
@@ -174,15 +169,20 @@ TOP_STUERMER = {
     "Chelsea": "Cole Palmer", "Tottenham Hotspur": "Son Heung-min",
     "Real Madrid": "Kylian Mbappé", "FC Barcelona": "Robert Lewandowski", "Barcelona": "Robert Lewandowski",
     "Atletico Madrid": "Antoine Griezmann", "Inter Milan": "Lautaro Martínez", "Inter": "Lautaro Martínez",
-    "Juventus": "Dušan Vlahović", "Paris Saint-Germain": "Ousmane Dembélé", "PSG": "Ousmane Dembélé"
+    "Juventus": "Dušan Vlahović", "Paris Saint-Germain": "Ousmane Dembélé", "PSG": "Ousmane Dembélé",
+    "Galatasaray": "Victor Osimhen", "Fenerbahce": "Edin Džeko", "Besiktas": "Ciro Immobile"
 }
 
 LIGEN = {
+    "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)": "ALL",
     "🇩🇪 Deutschland (Bundesliga)": "soccer_germany_bundesliga",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England (Premier League)": "soccer_epl",
     "🇪🇸 Spanien (La Liga)": "soccer_spain_la_liga",
     "🇮🇹 Italien (Serie A)": "soccer_italy_serie_a",
     "🇫🇷 Frankreich (Ligue 1)": "soccer_france_ligue_one",
+    "🇹🇷 Türkei (Süper Lig)": "soccer_turkey_super_lig",
+    "🇳🇱 Niederlande (Eredivisie)": "soccer_netherlands_eredivisie",
+    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_primeira_liga",
     "🏆 Champions League": "soccer_uefa_champs_league",
     "🇪🇺 Europa League": "soccer_uefa_europa_league",
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
@@ -238,7 +238,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Hochpräzise Quoten-Analyse, Treffer-Wahrscheinlichkeiten & intelligente Kombis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen, Quoten-Analyse & smarte Ziel-Scheine</div>', unsafe_allow_html=True)
 
 with col_count:
     active_key_num = st.session_state['current_key_index'] + 1
@@ -262,11 +262,10 @@ tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Ko
 with tab1:
     st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
     
-    # Ausklappbare Box für die Einstellungen (kein langes Scrollen)
     with st.expander("⚙️ Klicke hier, um die Liga-Filter & Optionen zu öffnen", expanded=True):
         col_sel, col_sp, col_bm = st.columns([2, 1.5, 1.5])
         with col_sel:
-            ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(LIGEN.keys()), key="l_tab1")
+            ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"], key="l_tab1")
         with col_sp:
             gewaehlte_woche_label_tab1 = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="w_tab1")
         with col_bm:
@@ -290,9 +289,7 @@ with tab1:
                     home, away = match['home_team'], match['away_team']
                     q_home, q_away, q_draw, is_value = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                     
-                    # Mathematische Prozent-Wahrscheinlichkeit aus Quoten berechnen
                     prob_h = round((1 / q_home) * 100) if q_home else 0
-                    prob_a = round((1 / q_away) * 100) if q_away else 0
                     value_anzeige = "🔥 VALUE-BET" if is_value else "Standard"
 
                     spiele_liste.append({
@@ -311,16 +308,28 @@ with tab1:
 with tab2:
     st.markdown("### 🎯 Intelligenter KI Kombi-Generator")
     
-    # Ausklappbare Box für den Generator
     with st.expander("⚙️ Klicke hier, um Ligen & Ziel-Gewinn Einstellungen zu öffnen", expanded=True):
-        col_ligen, col_settings = st.columns([2, 1])
-        with col_ligen:
-            ausgewaehlte_ligen = st.multiselect(
-                "Wähle deine gewünschten Ligen aus:", options=list(LIGEN.keys()),
+        # Automatischer Modus oder manuelle Auswahl via Radio-Button gelöst
+        modus_wahl = st.radio(
+            "Wie möchtest du die Ligen durchsuchen lassen?",
+            ["🌍 Automatisch alle europäischen Top-Ligen durchsuchen (Empfohlen)", "📋 Manuell bestimmte Ligen auswählen"],
+            index=0
+        )
+        
+        if modus_wahl == "📋 Manuell bestimmte Ligen auswählen":
+            ausgewaehlte_ligen_keys = st.multiselect(
+                "Wähle deine gewünschten Ligen aus:", 
+                options=[k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"],
                 default=["🇩🇪 Deutschland (Bundesliga)", "🇪🇸 Spanien (La Liga)"]
             )
-        with col_settings:
+        else:
+            ausgewaehlte_ligen_keys = [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen durchsuchen (Auto-Modus)"]
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_w_gen, col_b_gen = st.columns(2)
+        with col_w_gen:
             gewaehlte_woche_label_gen = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="w_gen")
+        with col_b_gen:
             anbieter_wahl_gen = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="b_gen")
         
         st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 15px 0;'>", unsafe_allow_html=True)
@@ -340,15 +349,16 @@ with tab2:
         generate_click = st.button("🔄 Realistischen KI Kombi-Schein generieren", type="primary", use_container_width=True)
 
     if generate_click:
-        if not ausgewaehlte_ligen: 
+        if not ausgewaehlte_ligen_keys: 
             st.error("Bitte wähle mindestens eine Liga aus!")
         else:
             bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
             moegliche_tipps = []
             
-            with st.spinner("Analysiere Spiele & berechne realistische Erfolgswahrscheinlichkeiten..."):
-                for liga_label in ausgewaehlte_ligen:
+            with st.spinner("Durchsuche Europa & berechne realistische Erfolgswahrscheinlichkeiten..."):
+                # Bei Auto-Modus scannen wir direkt alle relevanten Top-Ligen durch
+                for liga_label in ausgewaehlte_ligen_keys:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
                     if isinstance(data, list):
@@ -412,7 +422,6 @@ with tab2:
         gesamtquote = 1.0
         for item in kombi_auswahl: gesamtquote *= item['Quote']
             
-        # Mathematische Gesamt-Wahrscheinlichkeit des Scheins (aus Gesamtquote abgeleitet)
         schein_wahrscheinlichkeit = max(5, min(92, round((1 / gesamtquote) * 100 * 1.15)))
             
         st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
@@ -437,7 +446,6 @@ with tab2:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # --- EXPORT & HISTORIE ---
         col_action1, col_action2 = st.columns(2)
         
         with col_action1:
@@ -460,13 +468,12 @@ with tab2:
             with st.expander("📋 WhatsApp / Telegram Export (Klicken zum Öffnen)"):
                 share_text = f"🔥 *KI-Kombi-Schein ({anbieter_label})* 🔥\n"
                 for t in kombi_auswahl:
-                    share_text += f"• {t['Begegnung']} ➔ *{t['Tipp']}* (Q: {t['Quote']})\n"
+                    share_text += f"• {t['Begegnung']} ➔ *{t['Tipp']}* (Q: {t['Quote']}\n"
                 share_text += f"💥 *Gesamtquote:* {round(gesamtquote, 2)} (Chance: ~{schein_wahrscheinlichkeit}%)\n📱 *Erstellt mit Pascal Gellers KI-App*"
                 st.code(share_text, language="markdown")
 
         st.markdown("<hr style='border: 0; border-top: 1px solid #1e293b; margin: 25px 0;'>", unsafe_allow_html=True)
         
-        # --- BANKROLL & TREFFER-WAHRSCHEINLICHKEIT ---
         st.markdown(f"### 💰 Bankroll-Management & Treffer-Prognose ({anbieter_label})")
         
         col_q, col_prob, col_bank, col_einsatz, col_gewinn = st.columns([1, 1, 1, 1, 1.2])
