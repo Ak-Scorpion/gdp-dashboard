@@ -238,8 +238,12 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
 def get_risk_label(prob):
     if prob >= 40:
         return "🟢 Low Risk (Sehr sicher)"
-    else:
+    elif prob >= 25:
         return "🟡 Medium Risk (Solide Chance)"
+    elif prob >= 12:
+        return "🟠 High Risk (Risikoreich)"
+    else:
+        return "🔴 Harakiri / Verrückt"
 
 # --- HAUPT-HEADER & COUNTER ---
 col_head, col_count = st.columns([3, 1])
@@ -247,7 +251,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Europäische Top-Ligen, Quoten-Analyse & sichere Low/Medium Risk Scheine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Europäische Top-Ligen, Quoten-Analyse & smarte Ziel-Scheine</div>', unsafe_allow_html=True)
 
 with col_count:
     active_key_num = st.session_state['current_key_index'] + 1
@@ -301,7 +305,6 @@ tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Ko
 # ==========================================
 with tab1:
     st.markdown("### 📊 Einzelne Liga & Spielwoche analysieren")
-    st.markdown("Wähle unten deine Liga aus und lade die Live-Quoten.")
     
     Einzelne_Liga_Auswahl = st.selectbox("Einzelne Liga für Ansicht wählen:", [k for k in LIGEN.keys() if k != "🌍 Alle europäischen Top-Ligen (Auto-Modus)"], key="l_tab1_single")
     
@@ -337,7 +340,7 @@ with tab1:
 # TAB 2: KI KOMBI-GENERATOR
 # ==========================================
 with tab2:
-    st.markdown("### 🎯 Intelligenter KI Kombi-Generator (Low & Medium Risk)")
+    st.markdown("### 🎯 Intelligenter KI Kombi-Generator")
     
     with st.expander("⚙️ Ziel-Einstellungen für den Schein (Klicken zum Öffnen)", expanded=True):
         use_target_mode = st.checkbox("🎯 Ziel-Gewinn-Modus aktivieren (Einsatz ➔ Wunsch-Gewinn)", value=False)
@@ -345,14 +348,14 @@ with tab2:
         if use_target_mode:
             col_e1, col_g1 = st.columns(2)
             with col_e1: einsatz_target = st.number_input("Einsatz (€):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
-            with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=500.0, value=30.0, step=5.0)
+            with col_g1: gewinn_target = st.number_input("Wunsch-Gewinn (€):", min_value=2.0, max_value=1000.0, value=50.0, step=10.0)
             ziel_quote = round(gewinn_target / einsatz_target, 2)
-            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Optimiert auf stabile Low/Medium Risk Quoten).")
+            st.info(f"💡 Benötigte Gesamtquote: **{ziel_quote}** (Die KI passt das Risiko automatisch an, um dein Ziel effizient zu erreichen).")
         else:
             anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein (Max. 3):", min_value=2, max_value=3, value=3, step=1)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        generate_click = st.button("🔄 Sicheren KI Kombi-Schein generieren", type="primary", use_container_width=True)
+        generate_click = st.button("🔄 KI Kombi-Schein generieren", type="primary", use_container_width=True)
 
     if generate_click:
         if not ausgewaehlte_ligen_keys: 
@@ -362,7 +365,10 @@ with tab2:
             offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label]
             moegliche_tipps = []
             
-            with st.spinner("Durchsuche Europa nach stabilen Low & Medium Risk Quoten..."):
+            # Dynamische Quoten-Spanne: Wenn Ziel-Modus aktiv & hohe Quote gefordert, auch stärkere/höhere Quoten erlauben
+            q_min, q_max = (1.35, 2.60) if use_target_mode else (1.40, 1.85)
+            
+            with st.spinner("Durchsuche Europa nach den effizientesten Quoten..."):
                 for liga_label in ausgewaehlte_ligen_keys:
                     code = LIGEN[liga_label]
                     data = load_league_odds(code)
@@ -374,22 +380,22 @@ with tab2:
                             q_home, q_away, q_draw, _ = get_best_bookmaker_odds(match.get('bookmakers'), bm_code, home, away)
                             
                             if q_home or q_away:
-                                if q_home and 1.40 <= q_home <= 1.85:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Solider Favorit 🛡️"})
-                                if q_away and 1.40 <= q_away <= 1.85:
-                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Solider Favorit 🛡️"})
+                                if q_home and q_min <= q_home <= q_max:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Hauptwette 🛡️"})
+                                if q_away and q_min <= q_away <= q_max:
+                                    moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Hauptwette 🛡️"})
 
-                                if q_home and q_home <= 1.70:
-                                    pushed_q_h = round(q_home * 1.25, 2)
-                                    if 1.50 <= pushed_q_h <= 1.95:
-                                        moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": pushed_q_h, "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                if q_home and q_home <= 1.80:
+                                    pushed_q_h = round(q_home * 1.35, 2)
+                                    if 1.50 <= pushed_q_h <= 2.80:
+                                        moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": pushed_q_h, "Markt": "Konfigurator 💥"})
 
-                                if q_away and q_away <= 1.70:
-                                    pushed_q_a = round(q_away * 1.28, 2)
-                                    if 1.50 <= pushed_q_a <= 1.95:
-                                        moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": pushed_q_a, "Markt": "Konfigurator: Sieg + Tore 💥"})
+                                if q_away and q_away <= 1.80:
+                                    pushed_q_a = round(q_away * 1.38, 2)
+                                    if 1.50 <= pushed_q_a <= 2.80:
+                                        moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": pushed_q_a, "Markt": "Konfigurator 💥"})
 
-                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.35, "Markt": "Sicherheits-Tore ⚽"})
+                                moegliche_tipps.append({"Liga": liga_label, "Begegnung": f"{home} vs {away}", "Datum": match_time, "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.35, "Markt": "Tore ⚽"})
 
             if len(moegliche_tipps) >= 2:
                 random.shuffle(moegliche_tipps)
@@ -429,12 +435,12 @@ with tab2:
         gesamtquote = 1.0
         for item in kombi_auswahl: gesamtquote *= item['Quote']
             
-        schein_wahrscheinlichkeit = max(28, min(85, round((1 / gesamtquote) * 100 * 1.15)))
+        schein_wahrscheinlichkeit = max(10, min(85, round((1 / gesamtquote) * 100 * 1.15)))
         risk_text = get_risk_label(schein_wahrscheinlichkeit)
         
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
             
-        st.markdown(f"### 📜 Dein sicherer KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
+        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
         
         cols = st.columns(len(kombi_auswahl))
         for idx, tipp in enumerate(kombi_auswahl):
@@ -484,7 +490,7 @@ with tab2:
                 
         with col_action2:
             with st.expander("📋 WhatsApp / Telegram Export (Klicken zum Öffnen)"):
-                share_text = f"🔥 *Sicherer KI-Kombi-Schein ({anbieter_label})* 🔥\n"
+                share_text = f"🔥 *KI-Kombi-Schein ({anbieter_label})* 🔥\n"
                 for t in kombi_auswahl:
                     share_text += f"• {t['Begegnung']} ➔ *{t['Tipp']}* (Q: {t['Quote']})\n"
                 share_text += f"💥 *Gesamtquote:* {round(gesamtquote, 2)} (Chance: ~{schein_wahrscheinlichkeit}% | {risk_text})\n📱 *Erstellt mit Pascal Gellers KI-App*"
