@@ -91,6 +91,14 @@ st.markdown("""
         margin-bottom: 16px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
+    .multi-ticket-box {
+        background: linear-gradient(135deg, #0f172a 100%, #111827 0%);
+        border: 2px solid #00d47e;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 35px rgba(0,212,126,0.15);
+    }
     .owner-tag {
         color: #00d47e;
         font-weight: 700;
@@ -107,7 +115,7 @@ st.markdown("""
         display: inline-block; margin-bottom: 6px; text-transform: uppercase;
     }
     .badge-market { background-color: #2563eb; color: #ffffff; }
-    .odds-tag { color: #00d47e; font-size: 1.25rem; font-weight: 800; }
+    .odds-tag { color: #00d47e; font-size: 1.15rem; font-weight: 800; }
     .counter-box {
         background-color: #0f172a; border: 1px solid #1e293b; border-radius: 12px;
         padding: 10px 14px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -128,7 +136,7 @@ LIGEN = {
     "🇫🇷 Frankreich (Ligue 1)": "soccer_france_ligue_one",
     "🇹🇷 Türkei (Süper Lig)": "soccer_turkey_super_lig",
     "🇳🇱 Niederlande (Eredivisie)": "soccer_netherlands_eredivisie",
-    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_primeira_liga",
+    "🇵🇹 Portugal (Primeira Liga)": "soccer_portugal_portugal_liga" if False else "soccer_portugal_primeira_liga",
     "🏆 Champions League": "soccer_uefa_champs_league",
     "🇪🇺 Europa League": "soccer_uefa_europa_league",
     "🌍 Conference League": "soccer_uefa_europa_conference_league"
@@ -194,7 +202,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Multi-Ticket Bankroll-Allocation & Low-Risk System</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Stylisches Multi-Ticket System & Bankroll-Allocation</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -216,7 +224,7 @@ with st.sidebar:
     anbieter_wahl = st.selectbox("Wettanbieter wählen:", list(ANBIETER_URLS.keys()), key="sidebar_bm")
     gewaehlte_woche_label = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sidebar_woche")
     st.markdown("---")
-    st.markdown("💡 Multi-Schein System aktiv.")
+    st.markdown("💡 Stilvolles Staffel-System aktiv.")
 
 # --- TABS ---
 tab1, tab2, tab3 = st.tabs(["📊 1. Einzelne Liga & Value-Bets", "🎯 2. KI Kombi-Generator", "🗂️ 3. Gespeicherte Wettscheine"])
@@ -275,10 +283,9 @@ with tab2:
             
         st.markdown("---")
         
-        # Generator-Modus Wahl
         gen_typ = st.radio(
             "Generator-Modus wählen:",
-            ["Standard (Einzelner Schein nach Wunsch)", "🛡️ Multi-Ticket System (3 separate Scheine aus deinem Budget)"],
+            ["🛡️ Multi-Ticket System (3 separate Scheine aus deinem Budget)", "Standard (Einzelner Schein nach Wunsch)"],
             index=0
         )
         
@@ -293,6 +300,7 @@ with tab2:
                 anzahl_wetten = st.selectbox("Anzahl der Wetten auf dem Schein:", [2, 3], index=0)
         else:
             multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
+            st.info("💡 **Staffel-Logik bei 100 €:** Schein 1 (25 € Anker) ➔ Schein 2 (50 € Solide Kombi) ➔ Schein 3 (25 € High-Reward). Perfekt minimiertes Risiko!")
 
         st.markdown("<br>", unsafe_allow_html=True)
         generate_click = st.button("🔄 KI Kombi-Schein(e) generieren", type="primary", use_container_width=True)
@@ -359,8 +367,7 @@ with tab2:
                     else:
                         st.warning("Nicht genügend Spiele im Zielbereich gefunden.")
                 else:
-                    # MULTI-TICKET MODUS (3 Scheine)
-                    # Wir sammeln alle verfügbaren Spiele
+                    # MULTI-TICKET MODUS (EXAKTE 25 / 50 / 25 STAFFELUNG)
                     alle_spiele_pool = []
                     for liga_label in aktive_generator_ligen:
                         code = LIGEN[liga_label]
@@ -377,13 +384,12 @@ with tab2:
                     if len(alle_spiele_pool) >= 6:
                         random.shuffle(alle_spiele_pool)
                         
-                        # Budget-Aufteilung (z.B. bei 100€: Schein 1 = 50€, Schein 2 = 30€, Schein 3 = 20€)
-                        e1 = round(multi_budget * 0.50, 2)
-                        e2 = round(multi_budget * 0.30, 2)
-                        e3 = round(multi_budget * 0.20, 2)
+                        # Exakte Budget-Staffelung proportional zum Multi-Budget (Standard 25% / 50% / 25%)
+                        e1 = round(multi_budget * 0.25, 2)
+                        e2 = round(multi_budget * 0.50, 2)
+                        e3 = round(multi_budget * 0.25, 2)
                         
                         used_matches = set()
-                        
                         def pick_tips(count, q_min_val, q_max_val):
                             picked = []
                             for s in alle_spiele_pool:
@@ -393,35 +399,35 @@ with tab2:
                                     if len(picked) == count: break
                             return picked
 
-                        # Schein 1: Low-Risk Anker (2er Kombi, niedrige Quoten 1.25 - 1.55)
-                        schein_1_tipps = pick_tips(2, 1.25, 1.55)
-                        # Schein 2: Solide Value-Kombi (2er oder 3er, Quoten 1.45 - 1.85)
-                        schein_2_tipps = pick_tips(2, 1.45, 1.85)
-                        # Schein 3: High-Reward / System-Tipp (3er Kombi, etwas breiter gestreut)
-                        schein_3_tipps = pick_tips(3, 1.40, 2.05)
+                        # Schein 1: 25% Einsatz (Sicherer Anker, 2er Kombi)
+                        s1_tipps = pick_tips(2, 1.25, 1.55)
+                        # Schein 2: 50% Einsatz (Der Hauptgewinn-Schein, 2er oder 3er Kombi)
+                        s2_tipps = pick_tips(2, 1.40, 1.75)
+                        # Schein 3: 25% Einsatz (High-Reward / System-Tipp)
+                        s3_tipps = pick_tips(3, 1.45, 2.00)
                         
-                        if schein_1_tipps and schein_2_tipps and schein_3_tipps:
+                        if s1_tipps and s2_tipps and s3_tipps:
                             st.session_state['multi_mode'] = True
                             st.session_state['multi_tickets'] = [
-                                {"name": "🛡️ Schein 1: Low-Risk Anker", "einsatz": e1, "tipps": schein_1_tipps},
-                                {"name": "⚖️ Schein 2: Solide Value-Kombi", "einsatz": e2, "tipps": schein_2_tipps},
-                                {"name": "🚀 Schein 3: High-Reward System-Tipp", "einsatz": e3, "tipps": schein_3_tipps}
+                                {"name": "🛡️ Schein 1: Solider Anker", "einsatz": e1, "tipps": s1_tipps},
+                                {"name": "⭐ Schein 2: Hauptgewinn-Kombi", "einsatz": e2, "tipps": s2_tipps},
+                                {"name": "🚀 Schein 3: High-Reward Tipp", "einsatz": e3, "tipps": s3_tipps}
                             ]
                             st.session_state['gewaehlter_anbieter'] = anbieter_wahl
                             st.session_state['gewaehlte_woche'] = gewaehlte_woche_label
                         else:
-                            st.warning("Nicht genügend passende Spiele für die Multi-Ticket-Staffelung gefunden. Versuche mehr Ligen auszuwählen!")
+                            st.warning("Nicht genügend passende Spiele für die Multi-Ticket-Staffelung gefunden. Versuche mehr Ligen zu aktivieren!")
                     else:
                         st.warning("Zu wenige anstehende Spiele für 3 separate Scheine verfügbar.")
 
-    # ANZEIGE BEI MULTI-TICKET MODUS
+    # STYLISHE MULTI-TICKET ANZEIGE
     if st.session_state.get('multi_mode', False) and 'multi_tickets' in st.session_state:
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
         wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
         
-        st.markdown(f"### 🛡️ Dein Multi-Ticket System ({wochen_label}) — Aufgeteilt auf 3 separate Scheine")
-        st.info("💡 **Profi-Tipp:** Dein Budget wurde intelligent gestaffelt. Sollte ein Schein unglücklich verloren gehen, fangen die anderen beiden Scheine das Risiko ab oder erzielen Gewinn!")
+        st.markdown(f"### 🛡️ Dein Multi-Ticket System ({wochen_label}) — 3 separate Scheine")
+        st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px;'>Dein Budget wurde intelligent aufgeteilt, damit du maximales Risiko vermeidest und breit gestreut gewinnst:</p>", unsafe_allow_html=True)
         
         gesamt_moeglicher_gewinn = 0
         gesamt_einsatz = 0
@@ -433,21 +439,38 @@ with tab2:
             gesamt_moeglicher_gewinn += gewinn_schein
             gesamt_einsatz += ticket['einsatz']
             
+            # Stylische HTML-Card für jeden einzelnen Schein
             st.markdown(f"""
-                <div class="bet-card">
-                    <span class="badge" style="background-color: #00d47e; color: #070a13;">{ticket['name']}</span>
-                    <span class="badge badge-market">Empfohlener Einsatz: {ticket['einsatz']} €</span>
-                    <h4 style="color: #ffffff; margin: 10px 0 5px 0;">Gesamtquote: <span style="color: #00d47e;">{round(q_schein, 2)}</span> | Möglicher Gewinn: <span style="color: #00d47e;">{round(gewinn_schein, 2)} €</span></h4>
+                <div class="multi-ticket-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span class="badge" style="background-color: #00d47e; color: #070a13; font-size: 0.85rem; padding: 6px 12px;">{ticket['name']}</span>
+                        <span class="badge badge-market" style="font-size: 0.85rem; padding: 6px 12px;">💰 Empfohlener Einsatz: {ticket['einsatz']} €</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px; border-bottom: 1px solid #1e293b; padding-bottom: 10px;">
+                        <span>Gesamtquote: <b style="color: #00d47e; font-size: 1.1rem;">{round(q_schein, 2)}</b></span>
+                        <span>Möglicher Gewinn: <b style="color: #00d47e; font-size: 1.1rem;">{round(gewinn_schein, 2)} €</b></span>
+                    </div>
             """, unsafe_allow_html=True)
             
             for t in ticket['tipps']:
-                st.write(f"• **{t['Begegnung']}** (📅 {t['Datum']}) ➔ Tipp: `{t['Tipp']}` (Quote: *{t['Quote']}*)")
-            
+                st.markdown(f"""
+                    <div style="background-color: #070a13; border: 1px solid #1e293b; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="color: #ffffff; font-weight: 600; font-size: 0.95rem;">⚽ {t['Begegnung']}</span><br>
+                            <span style="color: #94a3b8; font-size: 0.8rem;">📅 {t['Datum']} &nbsp;|&nbsp; Tipp: <b style="color: #00d47e;">{t['Tipp']}</b></span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: #64748b; font-size: 0.75rem;">Quote</span><br>
+                            <span style="color: #00d47e; font-weight: 800; font-size: 1.05rem;">{t['Quote']}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
             st.markdown("</div>", unsafe_allow_html=True)
             
         st.markdown(f"""
-            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 20px;">
-                <span style="color: #94a3b8;">Gesamteinsatz:</span> <b>{round(gesamt_einsatz, 2)} €</b> | 
+            <div style="background-color: #0f172a; border: 1px solid #00d47e; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 20px;">
+                <span style="color: #94a3b8;">Gesamteinsatz aller 3 Scheine:</span> <b style="color: #ffffff;">{round(gesamt_einsatz, 2)} €</b> &nbsp;|&nbsp; 
                 <span style="color: #94a3b8;">Maximaler Gesamtertrag:</span> <b style="color: #00d47e;">{round(gesamt_moeglicher_gewinn, 2)} €</b>
             </div>
         """, unsafe_allow_html=True)
@@ -459,7 +482,7 @@ with tab2:
             </div>
         """, unsafe_allow_html=True)
 
-    # ANZEIGE BEI STANDARD MODUS
+    # STANDARD ANZEIGE
     elif not st.session_state.get('multi_mode', False) and 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Tipico')
