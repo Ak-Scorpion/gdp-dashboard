@@ -15,7 +15,6 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    path="KI Wettprognosen — Professional Pro Engine",
     page_title="KI Wettprognosen — Professional Pro Engine",
     page_icon="⚽",
     layout="wide",
