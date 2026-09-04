@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -118,17 +118,32 @@ DEUTSCHE_ANBIETER = {
     "Oddset": "bwin"
 }
 
-# Generiere Liste von Spieltag 1 bis 34
-SPIELTAGE = [f"{i}. Spieltag" for i in range(1, 35)] + ["Aktuelle Woche (Standard)"]
+WOCHEN_OPTIONS = {
+    "🟢 Dieses Wochenende (Aktuelle Woche)": 0,
+    "⏩ Nächste Woche (+1 Woche)": 1,
+    "⏩ Übernächste Woche (+2 Wochen)": 2,
+    "⏩ In 3 Wochen (+3 Wochen)": 3,
+    "⏩ In 4 Wochen (+4 Wochen)": 4
+}
 
-def format_datum(date_str):
+def check_und_format_woche(date_str, offset_wochen):
+    """Prüft, ob das Spiel exakt in die gewählte Woche fällt."""
     if not date_str:
-        return "Unbekannt"
+        return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
-        return dt.strftime("%d.%m.%Y um %H:%M Uhr")
+        jetzt = datetime.utcnow()
+        
+        # Start und Ende der Zielwoche berechnen
+        start_zielwoche = jetzt + timedelta(weeks=offset_wochen)
+        # Woche ab Montag/heute bis 7 Tage später
+        end_zielwoche = start_zielwoche + timedelta(days=7)
+        
+        ist_in_zielwoche = (dt >= start_zielwoche) and (dt < end_zielwoche)
+        formatted_str = dt.strftime("%d.%m.%Y um %H:%M Uhr")
+        return formatted_str, ist_in_zielwoche
     except Exception:
-        return date_str
+        return date_str, True
 
 def get_torjaeger_tipp(team_name):
     if team_name in TOP_STUERMER:
@@ -153,10 +168,10 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Präzise Spieltag-Analyse, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Präzise Wochenauswahl, freie Ligenauswahl und KI-generierte Wett-Kombinationen</div>', unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
-tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spieltag", "🎯 Individueller Kombi-Generator"])
+tab1, tab2 = st.tabs(["📊 Einzelne Liga & Spielwoche", "🎯 Individueller Kombi-Generator"])
 
 # --- TAB 1: EINZELNE LIGA ANALYSE ---
 with tab1:
@@ -164,7 +179,7 @@ with tab1:
     with col_sel:
         ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(LIGEN.keys()))
     with col_sp:
-        gewaehlter_spieltag_tab1 = st.selectbox("Spieltag wählen:", SPIELTAGE, index=len(SPIELTAGE)-1, key="sp_tab1")
+        gewaehlte_woche_label_tab1 = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sp_tab1")
     with col_bm:
         anbieter_wahl_tab1 = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
         
@@ -173,10 +188,11 @@ with tab1:
     if btn_liga:
         liga_code = LIGEN[ausgewaehlte_liga_label]
         bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
+        offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_tab1]
         
         url = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
         
-        with st.spinner(f"Lade Quoten für {ausgewaehlte_liga_label} ({gewaehlter_spieltag_tab1})..."):
+        with st.spinner(f"Lade Quoten für {ausgewaehlte_liga_label} ({gewaehlte_woche_label_tab1})..."):
             try:
                 res = requests.get(url)
                 data = res.json()
@@ -184,7 +200,10 @@ with tab1:
                 if isinstance(data, list) and len(data) > 0:
                     spiele_liste = []
                     for match in data:
-                        match_time = format_datum(match.get('commence_time'))
+                        match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
+                        if not ist_in_zielwoche:
+                            continue
+                            
                         home = match['home_team']
                         away = match['away_team']
                         
@@ -208,7 +227,7 @@ with tab1:
                         df_display = pd.DataFrame(spiele_liste)
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
                     else:
-                        st.info("Keine Begegnungen für den gewählten Filter gefunden.")
+                        st.info("Keine Begegnungen für die gewählte Spielwoche gefunden.")
                 else:
                     st.error("Keine Spiele gefunden oder API-Limit erreicht.")
             except Exception as e:
@@ -216,7 +235,7 @@ with tab1:
 
 # --- TAB 2: INDIVIDUELLER KOMBI GENERATOR ---
 with tab2:
-    st.write("### ⚙️ Eigene Ligen & Einstellungen festlegen")
+    st.write("### ⚙️ Eigene Ligen & Wochen-Einstellungen festlegen")
     
     col_ligen, col_settings = st.columns([2, 1])
     
@@ -228,7 +247,7 @@ with tab2:
         )
         
     with col_settings:
-        gewaehlter_spieltag_gen = st.selectbox("Spieltag / Zeitraum:", SPIELTAGE, index=len(SPIELTAGE)-1, key="sp_gen")
+        gewaehlte_woche_label_gen = st.selectbox("Spielwoche wählen:", list(WOCHEN_OPTIONS.keys()), key="sp_gen")
         anbieter_wahl_gen = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_gen")
         anzahl_wetten = st.number_input("Anzahl der Wetten auf dem Schein:", min_value=2, max_value=10, value=3, step=1)
         
@@ -239,9 +258,10 @@ with tab2:
             st.error("Bitte wähle mindestens eine Liga aus!")
         else:
             bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
+            offset_w = WOCHEN_OPTIONS[gewaehlte_woche_label_gen]
             moegliche_tipps = []
             
-            with st.spinner("Analysiere gewählte Ligen & Spieltage..."):
+            with st.spinner("Analysiere gewählte Ligen & Spielwoche..."):
                 for liga_label in ausgewaehlte_ligen:
                     code = LIGEN[liga_label]
                     url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
@@ -250,7 +270,10 @@ with tab2:
                         data = res.json()
                         if isinstance(data, list):
                             for match in data:
-                                match_time = format_datum(match.get('commence_time'))
+                                match_time, ist_in_zielwoche = check_und_format_woche(match.get('commence_time'), offset_w)
+                                if not ist_in_zielwoche:
+                                    continue
+                                    
                                 home = match['home_team']
                                 away = match['away_team']
                                 
@@ -315,21 +338,21 @@ with tab2:
                 
                 st.session_state['kombi_auswahl'] = kombi_auswahl
                 st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
-                st.session_state['gewaehlter_spieltag'] = gewaehlter_spieltag_gen
+                st.session_state['gewaehlte_woche'] = gewaehlte_woche_label_gen
             else:
-                st.warning(f"Für die gewählten Ligen stehen derzeit nur {len(moegliche_tipps)} verwertbare Quoten zur Verfügung.")
+                st.warning(f"Für die gewählten Ligen und diese Spielwoche stehen derzeit nur {len(moegliche_tipps)} verwertbare Quoten zur Verfügung.")
 
     # --- SCHEIN ANZEIGEN UND RECHNER BEREITSTELLEN ---
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
         anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Anbieter')
-        spieltag_label = st.session_state.get('gewaehlter_spieltag', 'Spieltag')
+        wochen_label = st.session_state.get('gewaehlte_woche', 'Spielwoche')
         
         gesamtquote = 1.0
         for item in kombi_auswahl:
             gesamtquote *= item['Quote']
             
-        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {spieltag_label})")
+        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {wochen_label})")
         
         cols = st.columns(len(kombi_auswahl))
         for idx, tipp in enumerate(kombi_auswahl):
