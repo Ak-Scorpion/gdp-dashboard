@@ -167,14 +167,9 @@ ANBIETER_URLS = {
 }
 
 def get_strict_preferred_odds(match_bookmakers, selected_bm_name, home_team, away_team):
-    """
-    Prüft ZUERST exakt den ausgewählten Anbieter. 
-    Wenn dort keine Quoten vorliegen, wird der nächste Buchmacher in der Kette gefragt.
-    """
     if not match_bookmakers:
         return 1.85, 3.20, 3.40, selected_bm_name
 
-    # API-Schlüssel-Fragmente für die Buchmacher
     bm_map = {
         "Tipico": ["tipico", "bwin", "bet365", "unibet"],
         "DAZN Bet": ["daznbet", "bwin", "bet365", "unibet"],
@@ -186,27 +181,20 @@ def get_strict_preferred_odds(match_bookmakers, selected_bm_name, home_team, awa
         "Bet-at-home": ["betathome", "bwin", "bet365"]
     }
 
-    # Erstelle eine Prioritätsliste, die den Wunsch-Anbieter an erste Stelle setzt
-    api_keys_to_check = []
-    preferred_keys = bm_map.get(selected_bm_name, ["bwin", "bet365"])
-    
-    # Füge den präferierten Namen/Schlüssel als Erstes hinzu
-    api_keys_to_check.append(selected_bm_name.lower().replace(" ", "").replace("(", "").replace(")", ""))
-    for pk in preferred_keys:
+    api_keys_to_check = [selected_bm_name.lower().replace(" ", "").replace("(", "").replace(")", "")]
+    for pk in bm_map.get(selected_bm_name, ["bwin", "bet365"]):
         if pk not in api_keys_to_check:
             api_keys_to_check.append(pk)
 
     target_bm = None
     used_name = selected_bm_name
 
-    # 1. Strenger Test auf den Wunsch-Anbieter
     for key_part in api_keys_to_check:
         target_bm = next((bm for bm in match_bookmakers if key_part in bm['key'].lower() or key_part in bm['title'].lower()), None)
         if target_bm:
             used_name = target_bm.get('title', selected_bm_name)
             break
 
-    # 2. Fallback auf den ersten verfügbaren Buchmacher, falls der Wunsch-Anbieter komplett leer ist
     if not target_bm and match_bookmakers:
         target_bm = match_bookmakers[0]
         used_name = target_bm.get('title', "Alternativ-Anbieter")
@@ -225,7 +213,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Priorisierter Buchmacher-Check • Wunsch-Anbieter zuerst</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Reine Echt-Team Analyse • Kein Platzhalter-Quatsch</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -247,7 +235,7 @@ st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & Risikoprofil)", expanded=True):
     
     anbieter_wahl = st.radio(
-        "Wähle deinen bevorzugten Wettanbieter (Wird zuerst geprüft):",
+        "Wähle deinen bevorzugten Wettanbieter:",
         list(ANBIETER_URLS.keys()),
         horizontal=True,
         key="main_bm_select"
@@ -355,7 +343,7 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Zeitraum & 
         anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=3, step=1)
 
     st.markdown("---")
-    generate_click = st.button("🔄 Prüfe Wunsch-Anbieter & lade Live-Spiele", type="primary", use_container_width=True)
+    generate_click = st.button("🔄 Echte Spiele & Quoten laden", type="primary", use_container_width=True)
 
 if generate_click:
     if not aktive_generator_ligen: 
@@ -368,36 +356,26 @@ if generate_click:
         else:
             min_q, max_q = 2.20, 4.50
 
-        with st.spinner(f"Prüfe {anbieter_wahl} und alternative Buchmacher..."):
+        with st.spinner("Lade ausschließlich echte Begegnungen von der API..."):
             
             gefilterte_spiele = []
             
             for liga_label in aktive_generator_ligen:
                 code = LIGEN[liga_label]
                 data = load_league_odds(code)
-                liga_hat_spiele = False
                 
                 if isinstance(data, list):
                     for match in data:
                         home, away = match['home_team'], match['away_team']
                         q_home, q_away, q_draw, used_bm = get_strict_preferred_odds(match.get('bookmakers'), anbieter_wahl, home, away)
-                        match_time = "Live / Demnächst"
+                        match_time = "Live / Anstoß demnächst"
                         
                         if min_q <= q_home <= max_q:
                             gefilterte_spiele.append({"Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}", "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0], "Anbieter": used_bm})
-                            liga_hat_spiele = True
                         if min_q <= q_draw <= max_q:
                             gefilterte_spiele.append({"Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}", "Tipp": "Unentschieden (X)", "Quote": q_draw, "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0], "Anbieter": used_bm})
-                            liga_hat_spiele = True
                         if min_q <= q_away <= max_q:
                             gefilterte_spiele.append({"Liga": liga_label, "Datum": match_time, "Begegnung": f"{home} vs {away}", "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0], "Anbieter": used_bm})
-                            liga_hat_spiele = True
-
-                if not liga_hat_spiele:
-                    gefilterte_spiele.extend([
-                        {"Liga": liga_label, "Datum": "Heute um 18:30 Uhr", "Begegnung": f"{liga_label.split()[-1]} Top-Team A vs Top-Team B", "Tipp": f"Sieg Team A", "Quote": round(random.uniform(min_q, max_q), 2), "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0], "Anbieter": anbieter_wahl},
-                        {"Liga": liga_label, "Datum": "Heute um 20:30 Uhr", "Begegnung": f"{liga_label.split()[-1]} Team X vs Team Y", "Tipp": f"Sieg Team X", "Quote": round(random.uniform(min_q, max_q), 2), "Markt": "Einzelwette 🎯", "Risk": risiko_profil.split()[0], "Anbieter": anbieter_wahl}
-                    ])
 
             st.session_state['gefilterte_spiele'] = gefilterte_spiele
             st.session_state['gen_typ'] = gen_typ
@@ -417,10 +395,10 @@ if 'gefilterte_spiele' in st.session_state:
     bookmaker_url = ANBIETER_URLS.get(anbieter_label, "https://www.tipico.de")
 
     if not spiele:
-        st.warning("⚠️ Keine Spiele im gewählten Quoten-Bereich gefunden.")
+        st.warning("⚠️ Keine echten Spiele im gewählten Quoten-Bereich gefunden. Versuche ein anderes Risikoprofil oder aktiviere weitere Ligen.")
     else:
         if g_typ == "📊 Reine Einzelwetten":
-            st.markdown(f"### 📊 Optimierte Einzelwetten")
+            st.markdown(f"### 📊 Optimierte Einzelwetten (Echte Begegnungen)")
             for tipp in spiele:
                 st.markdown(f"""
                     <div class="bet-card">
@@ -489,7 +467,7 @@ if 'gefilterte_spiele' in st.session_state:
                     </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Nicht genügend Spiele für diese Kombi verfügbar.")
+                st.warning("⚠️ Nicht genügend echte Spiele für diese Kombi-Größe verfügbar.")
 
         elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
             fb_w = st.session_state.get('freebet_wert', 20)
