@@ -267,7 +267,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Tipico-Style • Haken-System mit Aufklapp-Ligen • Tastatur gesperrt</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Tipico-Style • Ligen direkt unter Wettanbieter • Tastatur gesperrt</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -291,8 +291,9 @@ with st.sidebar:
 # --- HAUPTSEITE ---
 st.markdown("### 🎯 Kombi-, System- & Einzelwetten Generator")
 
-with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum & Ligen)", expanded=True):
+with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Ligen, Spieltag & Zeitraum)", expanded=True):
     
+    # 1. WETTANBIETER
     st.markdown("#### 🏢 1. Wettanbieter wählen")
     anbieter_wahl = st.radio(
         "Wähle deinen Wettanbieter:",
@@ -302,56 +303,10 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
     )
     
     st.markdown("---")
-    st.markdown("#### 🔢 2. Spieltag & Zeitraum")
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        spieltag_auswahl = st.selectbox(
-            "Spieltag wählen (0 = Ignorieren):",
-            [0] + list(range(1, 39)),
-            format_func=lambda x: "Alle Spieltage (Standard)" if x == 0 else f"Spieltag {x}",
-            key="spieltag_select"
-        )
-    with col_s2:
-        gen_zeit_modus = st.selectbox(
-            "Zeitraum-Modus:", 
-            [
-                "⚡ Wochenende (Freitag – Sonntag)", 
-                "🟢 Ganze Woche (Montag – Sonntag)", 
-                "⏭️ Nächste Woche (Montag – Sonntag)", 
-                "📅 Kalender-Bereich wählen"
-            ], 
-            index=0, 
-            key="gen_zeit_mode"
-        )
-
-    kalender_auswahl = None
-    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-        kalender_auswahl = st.date_input("Zeitraum wählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
-
-    st.markdown("---")
-    st.markdown("#### 📊 Wett-Typ & Strategie")
-    gen_typ = st.selectbox(
-        "Wett-Typ wählen:",
-        [
-            "🛡️ Multi-Ticket System (3 separate Scheine)", 
-            "🎁 Freebet-Modus (Gratiswette maximieren)", 
-            "🎯 Standard Kombiwette (Freie Anzahl Spiele)",
-            "📊 Einzelwetten & Value-Bets (Tabelle)"
-        ],
-        index=0
-    )
-
-    if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
-        freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
-    elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
-        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
-    elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
-        anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=2, step=1)
-
-    st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Haken-System mit Aufklapp-Menüs)")
     
-    # Schnellstart-Schalter für Top-Ligen
+    # 2. LIGEN (JETZT DIREKT UNTER DEM WETTANBIETER IM HAKEN-SYSTEM)
+    st.markdown("#### 🏆 2. Ligen-Auswahl (Haken-System mit Aufklapp-Menüs)")
+    
     schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen (Bundesliga, Premier League, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top1")
 
     aktive_generator_ligen = []
@@ -365,7 +320,6 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
             "🇫🇷 Ligue 1"
         ])
 
-    # Saubere Haken-Auswahl mit Aufklappern für Unterligen (Tipico-Stil)
     st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Klicke auf die Länder, um Unterligen (2. & 3. Ligen) per Haken hinzuzufügen:</p>", unsafe_allow_html=True)
 
     with st.expander("🇩🇪 Deutschland (1. Bundesliga, 2. Bundesliga, 3. Liga)", expanded=False):
@@ -397,8 +351,58 @@ with st.expander("⚙️ Einstellungen öffnen (Wettanbieter, Spieltag, Zeitraum
         if st.checkbox("🇳🇱 Eredivisie", value=False, key="h_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
         if st.checkbox("🇵🇹 Primeira Liga", value=False, key="h_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
 
-    # Doppelte Einträge sauber filtern
     aktive_generator_ligen = list(dict.fromkeys(aktive_generator_ligen))
+
+    st.markdown("---")
+    
+    # 3. SPIELTAG & ZEITRAUM
+    st.markdown("#### 🔢 3. Spieltag & Zeitraum")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        spieltag_auswahl = st.selectbox(
+            "Spieltag wählen (0 = Ignorieren):",
+            [0] + list(range(1, 39)),
+            format_func=lambda x: "Alle Spieltage (Standard)" if x == 0 else f"Spieltag {x}",
+            key="spieltag_select"
+        )
+    with col_s2:
+        gen_zeit_modus = st.selectbox(
+            "Zeitraum-Modus:", 
+            [
+                "⚡ Wochenende (Freitag – Sonntag)", 
+                "🟢 Ganze Woche (Montag – Sonntag)", 
+                "⏭️ Nächste Woche (Montag – Sonntag)", 
+                "📅 Kalender-Bereich wählen"
+            ], 
+            index=0, 
+            key="gen_zeit_mode"
+        )
+
+    kalender_auswahl = None
+    if gen_zeit_modus == "📅 Kalender-Bereich wählen":
+        kalender_auswahl = st.date_input("Zeitraum wählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
+
+    st.markdown("---")
+    
+    # 4. WETT-TYP & STRATEGIE
+    st.markdown("#### 📊 4. Wett-Typ & Strategie")
+    gen_typ = st.selectbox(
+        "Wett-Typ wählen:",
+        [
+            "🛡️ Multi-Ticket System (3 separate Scheine)", 
+            "🎁 Freebet-Modus (Gratiswette maximieren)", 
+            "🎯 Standard Kombiwette (Freie Anzahl Spiele)",
+            "📊 Einzelwetten & Value-Bets (Tabelle)"
+        ],
+        index=0
+    )
+
+    if gen_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
+        freebet_wert = st.slider("Wert deiner Freebet (€):", min_value=1, max_value=50, value=20, step=1)
+    elif gen_typ == "🛡️ Multi-Ticket System (3 separate Scheine)":
+        multi_budget = st.number_input("Gesamtbudget für alle 3 Scheine (€):", min_value=10.0, max_value=1000.0, value=100.0, step=10.0)
+    elif gen_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
+        anzahl_wetten = st.number_input("Anzahl Spiele im Kombischein (Min. 2):", min_value=2, max_value=10, value=2, step=1)
 
     st.markdown("---")
     generate_click = st.button("🔄 Wetten & Quoten jetzt laden / generieren", type="primary", use_container_width=True)
