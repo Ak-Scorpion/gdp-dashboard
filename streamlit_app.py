@@ -136,8 +136,8 @@ ligen = {
 
 # MAPPING DEUTSCHER WETTANBIETER
 DEUTSCHE_ANBIETER = {
-    "Tipico": "bwin",          # Deutscher Quoten-Referenzabgleich
-    "Neo.bet": "bwin",          # Deutscher Quoten-Referenzabgleich
+    "Tipico": "bwin",
+    "Neo.bet": "bwin",
     "bwin (Deutschland)": "bwin",
     "Bet-at-home": "betathome",
     "Winamax": "bwin",
@@ -146,16 +146,26 @@ DEUTSCHE_ANBIETER = {
     "Oddset": "bwin"
 }
 
-def format_datum_and_check_aktuell(date_str):
+SPIELTAG_FILTER = {
+    "📅 Aktueller Spieltag (Nächste 7 Tage)": (0, 7),
+    "⏩ Nächster Spieltag (Tag 8 - 14)": (8, 14),
+    "🔮 Übernächster Spieltag (Tag 15 - 21)": (15, 21),
+    "📆 Alle kommenden Spieltage (Nächste 30 Tage)": (0, 30)
+}
+
+def format_datum_and_check_zeitfenster(date_str, min_tage, max_tage):
+    """Prüft, ob das Spiel im gewählten Spieltags-Zeitfenster liegt."""
     if not date_str:
         return "Unbekannt", False
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
         jetzt = datetime.utcnow()
-        in_einer_woche = jetzt + timedelta(days=7)
-        ist_aktuell = jetzt <= dt <= in_einer_woche
+        start_fenster = jetzt + timedelta(days=min_tage)
+        end_fenster = jetzt + timedelta(days=max_tage)
+        
+        ist_im_fenster = start_fenster <= dt <= end_fenster
         formatted_str = dt.strftime("%d.%m.%Y um %H:%M Uhr")
-        return formatted_str, ist_aktuell
+        return formatted_str, ist_im_fenster
     except Exception:
         return date_str, True
 
@@ -165,12 +175,10 @@ def get_torjaeger_tipp(team_name):
     return f"{team_name} erzielt mind. 2 Tore"
 
 def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_team):
-    """Findet die Quoten des gewählten deutschen Wettanbieters."""
     if not match_bookmakers:
         return None, None, None
     
     target_bm = next((bm for bm in match_bookmakers if bm['key'] == selected_bm_key), None)
-    
     if not target_bm:
         target_bm = match_bookmakers[0]
         
@@ -184,16 +192,18 @@ def get_best_bookmaker_odds(match_bookmakers, selected_bm_key, home_team, away_t
 # --- HEADER ---
 st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyse von Live-Quoten deutscher Wettanbieter (Tipico, Neo.bet, bwin etc.) & KI Kombi-Scheinen</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Analyse von Live-Quoten deutscher Wettanbieter nach Spieltagen & KI Kombi-Scheinen</div>', unsafe_allow_html=True)
 
 # --- NAVIGATION TABS ---
 tab1, tab2 = st.tabs(["📊 Liga Analyse & Quoten", "🎯 Kombi-Generator"])
 
 # --- TAB 1: LIGA ANALYSE ---
 with tab1:
-    col_sel, col_bm = st.columns([2, 1])
+    col_sel, col_sp, col_bm = st.columns([2, 2, 1.5])
     with col_sel:
         ausgewaehlte_liga_label = st.selectbox("Wähle Wettbewerb/Liga:", list(ligen.keys()))
+    with col_sp:
+        spieltag_wahl_tab1 = st.selectbox("Spieltag / Zeitraum:", list(SPIELTAG_FILTER.keys()), key="sp_tab1")
     with col_bm:
         anbieter_wahl_tab1 = st.selectbox("Deutscher Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_tab1")
         
@@ -202,9 +212,11 @@ with tab1:
     if btn_liga:
         liga_code = ligen[ausgewaehlte_liga_label]
         bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_tab1]
+        min_d, max_d = SPIELTAG_FILTER[spieltag_wahl_tab1]
+        
         url = f'https://api.the-odds-api.com/v4/sports/{liga_code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
         
-        with st.spinner(f"Lade Live-Quoten von {anbieter_wahl_tab1}..."):
+        with st.spinner(f"Lade Quoten für {spieltag_wahl_tab1}..."):
             try:
                 res = requests.get(url)
                 data = res.json()
@@ -212,8 +224,8 @@ with tab1:
                 if isinstance(data, list) and len(data) > 0:
                     spiele_liste = []
                     for match in data:
-                        match_time, ist_aktuell = format_datum_and_check_aktuell(match.get('commence_time'))
-                        if not ist_aktuell:
+                        match_time, ist_passend = format_datum_and_check_zeitfenster(match.get('commence_time'), min_d, max_d)
+                        if not ist_passend:
                             continue
                             
                         home = match['home_team']
@@ -239,7 +251,7 @@ with tab1:
                         df_display = pd.DataFrame(spiele_liste)
                         st.dataframe(df_display, use_container_width=True, hide_index=True)
                     else:
-                        st.info("Keine anstehenden Spiele für die nächsten 7 Tage in dieser Liga gefunden.")
+                        st.info("Keine anstehenden Spiele für das gewählte Spieltags-Fenster gefunden.")
                 else:
                     st.error("Keine Spiele gefunden oder API-Limit erreicht.")
             except Exception as e:
@@ -249,14 +261,16 @@ with tab1:
 with tab2:
     st.write("### Einstellungen für deinen KI-Kombi-Schein")
     
-    col_fokus, col_bm_gen, col_anzahl = st.columns([2, 1.5, 1])
+    col_fokus, col_sp_gen, col_bm_gen, col_anzahl = st.columns([2, 2, 1.5, 1])
     with col_fokus:
         fokus_wahl = st.selectbox(
             "Wähle den Fokus der Spiele:",
-            ["🌍 Alle Ligen & Europapokale (Gemischt)", "🏆 Nur Europapokal (Champions League, Europa League, ECL)", "🏟️ Nur Top 5 Ligen (Wochenende)"]
+            ["🌍 Alle Ligen & Europapokale (Gemischt)", "🏆 Nur Europapokal (Champions League, Europa League, ECL)", "🏟️ Nur Top 5 Ligen"]
         )
+    with col_sp_gen:
+        spieltag_wahl_gen = st.selectbox("Spieltag / Zeitraum:", list(SPIELTAG_FILTER.keys()), key="sp_gen")
     with col_bm_gen:
-        anbieter_wahl_gen = st.selectbox("Wettanbieter für Quoten:", list(DEUTSCHE_ANBIETER.keys()), key="bm_gen")
+        anbieter_wahl_gen = st.selectbox("Wettanbieter:", list(DEUTSCHE_ANBIETER.keys()), key="bm_gen")
     with col_anzahl:
         anzahl_wetten = st.slider("Anzahl Wetten:", min_value=2, max_value=5, value=3)
         
@@ -264,6 +278,8 @@ with tab2:
 
     if generate_click:
         bm_code = DEUTSCHE_ANBIETER[anbieter_wahl_gen]
+        min_d, max_d = SPIELTAG_FILTER[spieltag_wahl_gen]
+        
         if "Europapokal" in fokus_wahl:
             fokus_ligen = {
                 "Champions League": "soccer_uefa_champs_league",
@@ -286,7 +302,7 @@ with tab2:
 
         moegliche_tipps = []
         
-        with st.spinner(f"Analysiere Live-Quoten von {anbieter_wahl_gen}..."):
+        with st.spinner(f"Analysiere Spiele für {spieltag_wahl_gen} ({anbieter_wahl_gen})..."):
             for liga_label, code in fokus_ligen.items():
                 url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
                 try:
@@ -294,8 +310,8 @@ with tab2:
                     data = res.json()
                     if isinstance(data, list):
                         for match in data:
-                            match_time, ist_aktuell = format_datum_and_check_aktuell(match.get('commence_time'))
-                            if not ist_aktuell:
+                            match_time, ist_passend = format_datum_and_check_zeitfenster(match.get('commence_time'), min_d, max_d)
+                            if not ist_passend:
                                 continue
                                 
                             home = match['home_team']
@@ -380,18 +396,21 @@ with tab2:
             
             st.session_state['kombi_auswahl'] = kombi_auswahl
             st.session_state['gewaehlter_anbieter'] = anbieter_wahl_gen
+            st.session_state['gewaehlter_spieltag'] = spieltag_wahl_gen
         else:
-            st.warning("Für die ausgewählten Filter stehen derzeit nicht genügend Spiele in den nächsten 7 Tagen zur Verfügung.")
+            st.warning("Für das ausgewählte Spieltags-Fenster stehen derzeit nicht genügend Quoten zur Verfügung.")
 
     # --- SCHEIN ANZEIGEN UND RECHNER BEREITSTELLEN ---
     if 'kombi_auswahl' in st.session_state and st.session_state['kombi_auswahl']:
         kombi_auswahl = st.session_state['kombi_auswahl']
-        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Ausgewählter Anbieter')
+        anbieter_label = st.session_state.get('gewaehlter_anbieter', 'Anbieter')
+        spieltag_label = st.session_state.get('gewaehlter_spieltag', 'Spieltag')
+        
         gesamtquote = 1.0
         for item in kombi_auswahl:
             gesamtquote *= item['Quote']
             
-        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — Quoten von {anbieter_label})")
+        st.markdown(f"### 📜 Dein KI Kombi-Schein ({len(kombi_auswahl)}er Kombi — {spieltag_label})")
         
         cols = st.columns(len(kombi_auswahl))
         for idx, tipp in enumerate(kombi_auswahl):
