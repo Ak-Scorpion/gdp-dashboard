@@ -1,12 +1,12 @@
-import streamlit as st
+import import streamlit as st
 import requests
 import pandas as pd
 import random
 
-st.set_page_config(page_title="KI Wettprognosen & Multi-Kombi", layout="wide")
+st.set_page_config(page_title="KI Wettprognosen — Tipico Style", layout="wide")
 
-st.title("⚽ KI Wettprognosen — Variabler Kombi-Generator")
-st.write("Generiert vielseitige Scheine mit Siegwetten, Über-1.5-Tore-Tipps und Match-Kombis.")
+st.title("⚽ KI Wettprognosen — Tipico-Style Kombi Generator")
+st.write("Generiert vielseitige Scheine mit Siegwetten, Torschützen-Tipps, 'Beide treffen' & Doppelter Chance.")
 
 # DEIN FEST EINGEBAUTER API-KEY:
 API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
@@ -20,7 +20,7 @@ ligen = {
     "Champions League": "soccer_uefa_champs_league"
 }
 
-# --- BEREICH 1: EINZELNE LIGA ANALYSIEREN ---
+# --- BEREICH 1: LIGA ANALYSE ---
 st.subheader("1. Einzelne Liga analysieren")
 ausgewaehlte_liga_name = st.selectbox("Wähle eine Liga aus:", list(ligen.keys()))
 
@@ -66,11 +66,11 @@ if st.button("Spiele dieser Liga anzeigen"):
 
 st.divider()
 
-# --- BEREICH 2: VIELSEITIGER KOMBI-GENERATOR ---
-st.subheader("2. 🎲 Abwechslungsreichen Kombi-Schein erstellen")
-st.write("Generiert Scheine mit einem Mix aus Siegwetten, Über 1.5 Tore & Kombi-Tipps.")
+# --- BEREICH 2: TIPICO-STYLE KOMBI GENERATOR ---
+st.subheader("2. 🎯 Tipico-Style Kombi-Schein erstellen")
+st.write("Erstellt Kombinationen aus Siegen, Torschützen, 'Beide treffen' & Doppelter Chance.")
 
-if st.button("🔄 Neuen Multi-Wett-Schein generieren"):
+if st.button("🔄 Tipico-Mix Schein generieren"):
     fokus_ligen = {
         "Bundesliga": "soccer_germany_bundesliga",
         "Premier League": "soccer_epl",
@@ -81,7 +81,7 @@ if st.button("🔄 Neuen Multi-Wett-Schein generieren"):
     
     moegliche_tipps = []
     
-    with st.spinner("Analysiere Spiele & erstelle abwechslungsreiche Wett-Varianten..."):
+    with st.spinner("Durchsuche Märkte nach Tipico-Wettoptionen..."):
         for liga_label, code in fokus_ligen.items():
             url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
             try:
@@ -96,44 +96,47 @@ if st.button("🔄 Neuen Multi-Wett-Schein generieren"):
                             q_home = next((item['price'] for item in odds if item['name'] == home), None)
                             q_away = next((item['price'] for item in odds if item['name'] == away), None)
                             
-                            # Option A: Klarer Favoritensieg (1.20 bis 1.70)
-                            if q_home and 1.20 <= q_home <= 1.70:
+                            # 1. Klarer Favorit -> Sieg oder Torschütze/Sieg+Tore
+                            if q_home and 1.20 <= q_home <= 1.65:
                                 moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
-                                    "Tipp": f"Sieg {home}", "Quote": q_home, "Art": "Einfacher Sieg 🛡️"
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
                                 })
-                                # Zusätzliche Variante: Sieg + Über 1.5 Tore (Quote leicht erhöht)
-                                combi_q = round(q_home * 1.25, 2)
                                 moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
-                                    "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": combi_q, "Art": "Sieg + Tore ⚽"
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Hauptstürmer ({home}) trifft im Spiel", "Quote": 1.75, "Markt": "Torschütze ⚽"
                                 })
-
-                            if q_away and 1.20 <= q_away <= 1.70:
                                 moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
-                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Art": "Einfacher Sieg 🛡️"
-                                })
-                                combi_q = round(q_away * 1.25, 2)
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
-                                    "Tipp": f"Sieg {away} & Über 1.5 Tore", "Quote": combi_q, "Art": "Sieg + Tore ⚽"
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": round(q_home * 1.3, 2), "Markt": "Sieg + Tore 💥"
                                 })
 
-                            # Option B: Reines "Über 1.5 Tore" für ausgeglichene/torreiche Partien (1.71 bis 2.50)
-                            if (q_home and 1.71 <= q_home <= 2.50) or (q_away and 1.71 <= q_away <= 2.50):
+                            if q_away and 1.20 <= q_away <= 1.65:
                                 moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}", 
-                                    "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.30, "Art": "Tore-Wette 🔥"
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Hauptstürmer ({away}) trifft im Spiel", "Quote": 1.80, "Markt": "Torschütze ⚽"
+                                })
+
+                            # 2. Ausgeglichene Partien -> Doppelte Chance oder Beide treffen
+                            if (q_home and 1.70 <= q_home <= 2.60) or (q_away and 1.70 <= q_away <= 2.60):
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.65, "Markt": "BTTS 🔥"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Doppelte Chance (1X {home})", "Quote": 1.35, "Markt": "Doppelte Chance 🔒"
                                 })
             except Exception:
                 pass
 
     if len(moegliche_tipps) >= 3:
-        # Zufällige Auswahl aus verschiedenen Kategorien für maximale Abwechslung
         random.shuffle(moegliche_tipps)
         
-        # Stelle sicher, dass nicht 2 verschiedene Tipps für exakt dasselbe Spiel ausgewählt werden
         ausgewaehlte_spiele = set()
         kombi_auswahl = []
         
@@ -145,16 +148,17 @@ if st.button("🔄 Neuen Multi-Wett-Schein generieren"):
                 break
         
         gesamtquote = 1.0
-        st.success("### 📜 Dein vielseitiger KI-Mix-Schein:")
+        st.success("### 📜 Dein Tipico-Style Kombi-Schein:")
         
         for idx, tipp in enumerate(kombi_auswahl, 1):
-            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Typ:** `{tipp['Art']}`")
+            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Wettart:** `{tipp['Markt']}`")
             gesamtquote *= tipp['Quote']
         
-        st.metric(label="💥 Gesamtquote des Kombi-Scheins", value=f"{round(gesamtquote, 2)}")
-        st.info("💡 Drücke einfach erneut auf den Button, um weitere Variationen (Tore, Siege, Kombis) auszuprobieren!")
+        st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
+        st.info("💡 Drücke erneut auf den Button, um andere Tipico-Kombinationen zu testen!")
     else:
-        st.warning("Aktuell stehen nicht genügend Spiele zur Verfügung. Versuche es kurz vor dem nächsten Spieltag erneut.")
+        st.warning("Keine passenden Spiele gefunden. Versuche es vor dem Spieltag erneut.")
+
 
 
 
