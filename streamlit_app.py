@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import random
+from datetime import datetime
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
@@ -118,8 +119,18 @@ ligen = {
     "🏆 Champions League": "soccer_uefa_champs_league"
 }
 
+def format_datum(date_str):
+    """Konvertiert UTC Datums-String in lesbares deutsches Format."""
+    if not date_str:
+        return "Unbekannt"
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+        return dt.strftime("%d.%m.%Y um %H:%M Uhr")
+    except Exception:
+        return date_str
+
 # --- HEADER MIT DEINEM NAMEN ---
-st.markdown('<div class="owner-tag">👤 Dashboard von Pascal Gellers</div>', unsafe_allow_html=True)
+st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">⚽ KI Wettprognosen & Tipico Generator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Analyse von Live-Quoten, Match-Wahrscheinlichkeiten und KI-generierten Kombi-Scheinen</div>', unsafe_allow_html=True)
 
@@ -147,6 +158,8 @@ with tab1:
                     for match in data:
                         home = match['home_team']
                         away = match['away_team']
+                        match_time = format_datum(match.get('commence_time'))
+                        
                         if match.get('bookmakers'):
                             odds = match['bookmakers'][0]['markets'][0]['outcomes']
                             q_home = next((item['price'] for item in odds if item['name'] == home), None)
@@ -158,6 +171,7 @@ with tab1:
                             prob_a = round((1 / q_away) * 100) if q_away else 0
 
                             spiele_liste.append({
+                                "Anstoßzeit": match_time,
                                 "Heim": home,
                                 "Auswärts": away,
                                 "Quote 1": q_home,
@@ -202,98 +216,6 @@ with tab2:
                         for match in data:
                             home = match['home_team']
                             away = match['away_team']
-                            if match.get('bookmakers'):
-                                odds = match['bookmakers'][0]['markets'][0]['outcomes']
-                                q_home = next((item['price'] for item in odds if item['name'] == home), None)
-                                q_away = next((item['price'] for item in odds if item['name'] == away), None)
-                                
-                                # 1. Favorit Heim
-                                if q_home and 1.20 <= q_home <= 1.45:
-                                    stuermer = TOP_STUERGME.get(home, f"Top-Torjäger ({home})")
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.70, "Markt": "Torschütze ⚽"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": "Über 2.5 Tore im Spiel", "Quote": 1.55, "Markt": "Über 2.5 Tore 🔥"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Sieg {home} & Über 2.5 Tore", "Quote": round(q_home * 1.45, 2), "Markt": "Sieg + Tore 💥"
-                                    })
-
-                                if q_away and 1.20 <= q_away <= 1.45:
-                                    stuermer = TOP_STUERGME.get(away, f"Top-Torjäger ({away})")
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Tor durch {stuermer}", "Quote": 1.75, "Markt": "Torschütze ⚽"
-                                    })
-
-                                # 2. Moderate Matches
-                                if q_home and 1.46 <= q_home <= 1.85:
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.30, "Markt": "Über 1.5 Tore ⚽"
-                                    })
-
-                                # 3. Ausgeglichene Matches
-                                if (q_home and q_home > 1.85) or (q_away and q_away > 1.85):
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.65, "Markt": "BTTS 🔥"
-                                    })
-                                    moegliche_tipps.append({
-                                        "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                        "Tipp": f"Doppelte Chance (1X {home})", "Quote": 1.38, "Markt": "Doppelte Chance 🔒"
-                                    })
-                except Exception:
-                    pass
-
-        if len(moegliche_tipps) >= 3:
-            random.shuffle(moegliche_tipps)
-            
-            ausgewaehlte_spiele = set()
-            kombi_auswahl = []
-            
-            for tipp in moegliche_tipps:
-                if tipp['Begegnung'] not in ausgewaehlte_spiele:
-                    kombi_auswahl.append(tipp)
-                    ausgewaehlte_spiele.add(tipp['Begegnung'])
-                if len(kombi_auswahl) == 3:
-                    break
-            
-            gesamtquote = 1.0
-            st.markdown("### 📜 Dein KI Tipico-Kombi-Schein")
-            
-            cols = st.columns(3)
-            for idx, tipp in enumerate(kombi_auswahl):
-                gesamtquote *= tipp['Quote']
-                with cols[idx]:
-                    st.markdown(f"""
-                        <div class="bet-card">
-                            <span class="badge badge-market">{tipp['Markt']}</span>
-                            <span class="badge" style="background-color: #334155; color: #fff;">{tipp['Liga']}</span>
-                            <h4 style="color: #ffffff; margin: 8px 0;">{tipp['Begegnung']}</h4>
-                            <p style="color: #94a3b8; margin-bottom: 8px;">Tipp: <b style="color: #ffffff;">{tipp['Tipp']}</b></p>
-                            <hr style="border: 0; border-top: 1px solid #2e3a52; margin: 10px 0;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: #64748b; font-size: 0.85rem;">Quote:</span>
-                                <span class="odds-tag">{tipp['Quote']}</span>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-            
-            st.divider()
-            
-            col_m1, col_m2 = st.columns([1, 2])
-            with col_m1:
-                st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
-            with col_m2:
-                st.success("✅ Schein erfolgreich generiert! Klicke erneut auf den Button oben, um neue Variationen zu sehen.")
-        else:
-            st.warning("Momentan stehen nicht genügend Spiele zur Verfügung. Versuche es vor dem Spieltag erneut.")
+                            match_time = format_datum(match.get('commence_time'))
+                            
+                            if match.get('bookmakers
