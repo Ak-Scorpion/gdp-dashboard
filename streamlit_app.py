@@ -1,7 +1,8 @@
-import streamlit as st
+äimport streamlit as st
 import requests
 import math
 import hashlib
+import random
 from datetime import datetime, timedelta, timezone
 
 # Deutsche Zeitzone (Europe/Berlin) für automatischen Datumswechsel um 00:00 Uhr
@@ -13,7 +14,7 @@ except ImportError:
 
 # --- SEITEN-KONFIGURATION ---
 st.set_page_config(
-    page_title="KI Wettprognosen — Realistische Elo & Live Engine",
+    page_title="KI Wettprognosen — Dynamische Live Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -24,6 +25,8 @@ if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
 if 'matches_cache' not in st.session_state:
     st.session_state['matches_cache'] = []
+if 'reroll_key' not in st.session_state:
+    st.session_state['reroll_key'] = 0
 
 # --- TEAM STÄRKE-DATENBANK (ELO / POWER RATINGS) ---
 TEAM_RATINGS = {
@@ -59,16 +62,14 @@ TEAM_RATINGS = {
 }
 
 def get_team_rating(team_name):
-    """Ermittelt das Team-Rating anhand von Keyword-Matching."""
     name_clean = team_name.lower().strip()
     for key, rating in TEAM_RATINGS.items():
         if key in name_clean:
             return rating
-    return 73 # Standard-Durchschnittsrating für unbekannte Teams
+    return 73
 
 def calculate_dynamic_xg(home_team, away_team):
-    """Berechnet realistische Tore-Erwartungswerte (xG) basierend auf Teamstärken."""
-    r_home = get_team_rating(home_team) + 4 # +4 Punkte Heimvorteil
+    r_home = get_team_rating(home_team) + 4
     r_away = get_team_rating(away_team)
     
     ratio_home = r_home / float(r_away)
@@ -296,15 +297,15 @@ sun_str = sun_de.strftime("%d.%m.")
 col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Realismus Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Dynamisches Elo-Modell • Beseitigt unfaire Favoriten-Tipps • Realistischer Quotenvergleich</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">⚽ KI Wettprognosen & Gemischter Generator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Dynamische Elo-Power • Multi-Ticket Budget • Scheine auf Knopfdruck mischen</div>', unsafe_allow_html=True)
 
 with col_count:
     st.markdown(f"""
         <div class="counter-box">
             <span style="color: #64748b; font-size: 0.7rem; font-weight: 700;">📅 HEUTIGER TAG</span><br>
             <span style="color: #00d47e; font-size: 1.1rem; font-weight: 800;">{today_str}</span><br>
-            <span style="color: #94a3b8; font-size: 0.65rem;">Elo-Power-Rating Aktiv</span>
+            <span style="color: #94a3b8; font-size: 0.65rem;">Zeitzone Berlin</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -421,10 +422,10 @@ start_str_espn = dt_from.strftime("%Y%m%d")
 end_str_espn = dt_to.strftime("%Y%m%d")
 
 # --- GENERATOR ENGINE ---
-if generate_click or 'matches_cache' not in st.session_state:
-    if not aktive_generator_ligen: 
+if generate_click or 'matches_cache' not in st.session_state or not st.session_state['matches_cache']:
+    if generate_click and not aktive_generator_ligen: 
         st.error("Bitte wähle mindestens eine Liga per Haken aus!")
-    elif not aktive_anbieter:
+    elif generate_click and not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
         with st.spinner("Berechne Elo-Ratings & reale Tor-Wahrscheinlichkeiten..."):
@@ -450,7 +451,6 @@ if generate_click or 'matches_cache' not in st.session_state:
                                     home = m['team1']['teamName']
                                     away = m['team2']['teamName']
                                     
-                                    # Dynamische Tore-Erwartung anhand echter Elo-Rating Stärke
                                     home_xg, away_xg = calculate_dynamic_xg(home, away)
                                     p_markets = calculate_poisson_markets(home_xg, away_xg)
                                     
@@ -509,7 +509,9 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
     mkts = match['markets']
     home, away = match['home'], match['away']
     
-    match_seed = int(hashlib.md5(f"{home}_{away}_{profile}".encode()).hexdigest(), 16)
+    # Reroll key fliesst in den Seed ein
+    reroll = st.session_state.get('reroll_key', 0)
+    match_seed = int(hashlib.md5(f"{home}_{away}_{profile}_{reroll}".encode()).hexdigest(), 16)
     
     candidates = [
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette 🎯", "key": "1x2_1"},
@@ -522,7 +524,6 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
     ]
     
     if "Safe Mode" in profile:
-        # Im Safe Mode nur echte Hohe Wahrscheinlichkeiten (>= 60.0%)
         valid = [c for c in candidates if c['prob'] >= 60.0]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['prob'], reverse=True)[:2]
@@ -530,7 +531,7 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
         valid = [c for c in candidates if c['base_q'] >= 2.00]
         if not valid:
             valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:2]
-    else: # Balanced
+    else:
         valid = [c for c in candidates if 1.40 <= c['base_q'] <= 2.20]
         if not valid:
             valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.75))[:3]
@@ -559,11 +560,24 @@ def get_profile_pick_mixed(match, profile, checked_bookmakers):
 if not matches:
     st.info(f"ℹ️ Keine Ansetzungen für den ausgewählten Zeitraum ({dt_from.strftime('%d.%m.%Y')} - {dt_to.strftime('%d.%m.%Y')}) in den gewählten Ligen gefunden.")
 else:
+    # SHUFFLE BUTTON & HEADER ANZEIGE
+    col_t_title, col_t_btn = st.columns([3, 1.2])
+    with col_t_title:
+        st.markdown(f"### 🛡️ Aktuelle Prognosen & Wettscheine ({len(matches)} Spiele)")
+    with col_t_btn:
+        if st.button("🎲 Neue Scheine generieren (Neu mischen)", type="primary", use_container_width=True):
+            st.session_state['reroll_key'] += 1
+            st.rerun()
+
     g_typ = st.session_state.get('gen_typ', '📊 Reine Einzelwetten')
     
+    # Durchmischen der Matches je nach Reroll-Key für abwechslungsreiche Kombis
+    current_reroll = st.session_state.get('reroll_key', 0)
+    shuffled_matches = matches.copy()
+    random.Random(current_reroll).shuffle(shuffled_matches)
+    
     if g_typ == "📊 Reine Einzelwetten":
-        st.markdown(f"### 🛡️ Realistische KI-Einzelwetten mit Quotenvergleich ({len(matches)} Spiele geladen)")
-        for match in matches:
+        for match in shuffled_matches:
             pick = get_profile_pick_mixed(match, risiko_profil, aktive_anbieter)
             
             st.markdown(f"""
@@ -593,7 +607,7 @@ else:
 
     elif g_typ == "🎯 Standard Kombiwette (Freie Anzahl Spiele)":
         anz_w = st.session_state.get('anzahl_wetten', 3)
-        ausgewaehlte = matches[:min(len(matches), anz_w)]
+        ausgewaehlte = shuffled_matches[:min(len(shuffled_matches), anz_w)]
         
         if len(ausgewaehlte) < 2:
             st.warning("⚠️ Nicht genügend Spiele im gewählten Zeitraum vorhanden, um eine Kombiwette mit deiner Wunschanzahl zu erstellen.")
@@ -605,7 +619,6 @@ else:
                 gesamtq *= p['quote']
                 picks_data.append((m, p))
                 
-            st.markdown(f"### 📜 Dein realistischer Kombi-Schein ({len(ausgewaehlte)}er Kombi)")
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 2px solid #00d47e; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 20px;">
                     <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">GESAMTQUOTE DER KOMBI</span><br>
@@ -633,7 +646,7 @@ else:
 
     elif g_typ == "🎁 Freebet-Modus (Gratiswette maximieren)":
         fb_w = st.session_state.get('freebet_wert', freebet_wert)
-        fb_picks = matches[:2]
+        fb_picks = shuffled_matches[:2]
         if len(fb_picks) < 2:
             st.warning("⚠️ Für den Freebet-Modus werden mindestens 2 Spiele benötigt.")
         else:
@@ -643,7 +656,6 @@ else:
             q_ges = round(p1['quote'] * p2['quote'], 2)
             netto = round((fb_w * q_ges) - fb_w, 2)
             
-            st.markdown("### 🎁 Freebet-Empfehlung")
             st.markdown(f"""
                 <div class="multi-ticket-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -671,9 +683,9 @@ else:
         bud = st.session_state.get('multi_budget', multi_budget)
         e1, e2, e3 = round(bud * 0.25, 2), round(bud * 0.50, 2), round(bud * 0.25, 2)
         
-        s1 = matches[0:1]
-        s2 = matches[1:3] if len(matches) >= 3 else matches[0:2]
-        s3 = matches[3:6] if len(matches) >= 6 else matches
+        s1 = shuffled_matches[0:1]
+        s2 = shuffled_matches[1:3] if len(shuffled_matches) >= 3 else shuffled_matches[0:2]
+        s3 = shuffled_matches[3:6] if len(shuffled_matches) >= 6 else shuffled_matches
 
         tickets = [
             {"name": "🛡️ Schein 1: Solider Anker (25% Budget)", "einsatz": e1, "matches": s1},
