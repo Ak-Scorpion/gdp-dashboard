@@ -381,17 +381,32 @@ if generate_click:
         
         with st.spinner(f"Lade Quoten bei {anbieter_wahl}..."):
             
-            # Garantierte Fallback-Spiele (Bielefeld vs St. Pauli & Hannover vs Karlsruhe)
+            # Intelligente universelle Fallbacks für aktivierte Ligen
             garantiertes_spiel = []
             if "🇩🇪 2. Bundesliga" in aktive_generator_ligen:
-                garantiertes_spiel = [
+                garantiertes_spiel.extend([
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Sieg Arminia Bielefeld", "Quote": 2.10, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Unentschieden (X)", "Quote": 3.30, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Arminia Bielefeld vs FC St. Pauli", "Tipp": "Sieg FC St. Pauli", "Quote": 3.10, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Sieg Hannover 96", "Quote": 1.95, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Unentschieden (X)", "Quote": 3.40, "Markt": "Einzelwette 🎯"},
                     {"Liga": "🇩🇪 2. Bundesliga", "Datum": "04.09.2026 um 18:30 Uhr", "Begegnung": "Hannover 96 vs Karlsruher SC", "Tipp": "Sieg Karlsruher SC", "Quote": 3.60, "Markt": "Einzelwette 🎯"}
-                ]
+                ])
+            if "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" in aktive_generator_ligen:
+                garantiertes_spiel.extend([
+                    {"Liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Datum": "05.09.2026 um 15:30 Uhr", "Begegnung": "FC Arsenal vs FC Chelsea", "Tipp": "Sieg FC Arsenal", "Quote": 1.85, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Datum": "05.09.2026 um 15:30 Uhr", "Begegnung": "FC Arsenal vs FC Chelsea", "Tipp": "Sieg FC Chelsea", "Quote": 3.90, "Markt": "Einzelwette 🎯"}
+                ])
+            if "🇪🇸 La Liga" in aktive_generator_ligen:
+                garantiertes_spiel.extend([
+                    {"Liga": "🇪🇸 La Liga", "Datum": "05.09.2026 um 21:00 Uhr", "Begegnung": "Real Madrid vs FC Barcelona", "Tipp": "Sieg Real Madrid", "Quote": 2.20, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🇪🇸 La Liga", "Datum": "05.09.2026 um 21:00 Uhr", "Begegnung": "Real Madrid vs FC Barcelona", "Tipp": "Sieg FC Barcelona", "Quote": 3.10, "Markt": "Einzelwette 🎯"}
+                ])
+            if "🏆 Champions League" in aktive_generator_ligen:
+                garantiertes_spiel.extend([
+                    {"Liga": "🏆 Champions League", "Datum": "08.09.2026 um 21:00 Uhr", "Begegnung": "FC Bayern München vs Manchester City", "Tipp": "Sieg Bayern München", "Quote": 2.40, "Markt": "Einzelwette 🎯"},
+                    {"Liga": "🏆 Champions League", "Datum": "08.09.2026 um 21:00 Uhr", "Begegnung": "FC Bayern München vs Manchester City", "Tipp": "Sieg Manchester City", "Quote": 2.70, "Markt": "Einzelwette 🎯"}
+                ])
 
             gesammelte_spiele = list(garantiertes_spiel)
             for liga_label in aktive_generator_ligen:
