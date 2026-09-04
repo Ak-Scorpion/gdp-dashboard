@@ -268,7 +268,7 @@ col_head, col_count = st.columns([3, 1])
 with col_head:
     st.markdown('<div class="owner-tag">📱 App von Pascal Gellers</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-title">⚽ KI Wettprognosen & Kombi Generator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">Inkl. DAZN Bet, Top-Ligen Schnellwahl, Spieltag & Kalender</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">Inkl. DAZN Bet, Top-Ligen mit Unterligen-Aufklapper, Spieltag & Kalender</div>', unsafe_allow_html=True)
 
 with col_count:
     total_rem, total_used = get_total_api_stats()
@@ -339,14 +339,14 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
 
     kalender_auswahl = None
     if gen_zeit_modus == "📅 Kalender-Bereich wählen":
-        st.markdown("<p style='color: #94a>p style='color: #94a3b8; font-size: 0.85rem;'>Tippe auf das Datumsfeld, um den Kalender zu öffnen:</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #94a3b8; font-size: 0.85rem;'>Tippe auf das Datumsfeld, um den Kalender zu öffnen:</p>", unsafe_allow_html=True)
         kalender_auswahl = st.date_input("Zeitraum für Wetten auswählen:", value=(date.today(), date.today() + timedelta(days=3)), key="kalender_input")
 
     st.markdown("---")
     st.markdown("#### 🏆 Ligen-Auswahl")
     
-    # SCHNELLWAHL FÜR NUR DIE 1. LIGEN DER TOP-NATIONEN
-    schnellwahl_top1 = st.checkbox("⭐ Nur 1. Ligen der Top-Nationen (Bundesliga, Premier League, La Liga, Serie A, Ligue 1)", value=True, key="chk_schnell_top1")
+    # Schnellwahl oben
+    schnellwahl_top1 = st.checkbox("⭐ Schnellwahl: Nur 1. Ligen der Top-Nationen", value=True, key="chk_schnell_top1")
 
     aktive_generator_ligen = []
 
@@ -358,37 +358,48 @@ with st.expander("⚙️ Wettanbieter, Spieltag, Zeitraum & Ligen einstellen (Hi
             "🇮🇹 Serie A",
             "🇫🇷 Ligue 1"
         ])
-    
-    with st.expander("🌍 Detaillierte Ligen-Auswahl nach Ländern (Aufklappen)", expanded=not schnellwahl_top1):
-        if st.checkbox("🇩🇪 1. Bundesliga", value=schnellwahl_top1, key="chk_de1"): 
-            if "🇩🇪 1. Bundesliga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+
+    st.markdown("---")
+    st.markdown("##### 🇩🇪 Deutschland")
+    chk_de1 = st.checkbox("🇩🇪 1. Bundesliga", value=schnellwahl_top1, key="chk_de1")
+    if chk_de1 and "🇩🇪 1. Bundesliga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
+    with st.expander("👉 Unterligen für Deutschland einblenden (2. & 3. Liga)", expanded=False):
         if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="chk_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
         if st.checkbox("🇩🇪 3. Liga", value=False, key="chk_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
 
-        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=schnellwahl_top1, key="chk_en1"): 
-            if "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" not in aktive_generator_ligen: aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+    st.markdown("##### 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England")
+    chk_en1 = st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=schnellwahl_top1, key="chk_en1")
+    if chk_en1 and "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League" not in aktive_generator_ligen: aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+    with st.expander("👉 Unterligen für England einblenden (Championship)", expanded=False):
         if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship", value=False, key="chk_en2"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship")
 
-        if st.checkbox("🇪🇸 La Liga", value=schnellwahl_top1, key="chk_es1"): 
-            if "🇪🇸 La Liga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇪🇸 La Liga")
+    st.markdown("##### 🇪🇸 Spanien")
+    chk_es1 = st.checkbox("🇪🇸 La Liga", value=schnellwahl_top1, key="chk_es1")
+    if chk_es1 and "🇪🇸 La Liga" not in aktive_generator_ligen: aktive_generator_ligen.append("🇪🇸 La Liga")
+    with st.expander("👉 Unterligen für Spanien einblenden (La Liga 2)", expanded=False):
         if st.checkbox("🇪🇸 La Liga 2", value=False, key="chk_es2"): aktive_generator_ligen.append("🇪🇸 La Liga 2")
 
-        if st.checkbox("🇮🇹 Serie A", value=schnellwahl_top1, key="chk_it1"): 
-            if "🇮🇹 Serie A" not in aktive_generator_ligen: aktive_generator_ligen.append("🇮🇹 Serie A")
+    st.markdown("##### 🇮🇹 Italien")
+    chk_it1 = st.checkbox("🇮🇹 Serie A", value=schnellwahl_top1, key="chk_it1")
+    if chk_it1 and "🇮🇹 Serie A" not in aktive_generator_ligen: aktive_generator_ligen.append("🇮🇹 Serie A")
+    with st.expander("👉 Unterligen für Italien einblenden (Serie B)", expanded=False):
         if st.checkbox("🇮🇹 Serie B", value=False, key="chk_it2"): aktive_generator_ligen.append("🇮🇹 Serie B")
 
-        if st.checkbox("🇫🇷 Ligue 1", value=schnellwahl_top1, key="chk_fr1"): 
-            if "🇫🇷 Ligue 1" not in aktive_generator_ligen: aktive_generator_ligen.append("🇫🇷 Ligue 1")
+    st.markdown("##### 🇫🇷 Frankreich")
+    chk_fr1 = st.checkbox("🇫🇷 Ligue 1", value=schnellwahl_top1, key="chk_fr1")
+    if chk_fr1 and "🇫🇷 Ligue 1" not in aktive_generator_ligen: aktive_generator_ligen.append("🇫🇷 Ligue 1")
+    with st.expander("👉 Unterligen für Frankreich einblenden (Ligue 2)", expanded=False):
         if st.checkbox("🇫🇷 Ligue 2", value=False, key="chk_fr2"): aktive_generator_ligen.append("🇫🇷 Ligue 2")
 
-        if st.checkbox("🇹🇷 Süper Lig", value=False, key="chk_tr"): aktive_generator_ligen.append("🇹🇷 Süper Lig")
-        if st.checkbox("🇳🇱 Eredivisie", value=False, key="chk_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
-        if st.checkbox("🇵🇹 Primeira Liga", value=False, key="chk_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
-        if st.checkbox("🏆 Champions League", value=False, key="chk_cl"): aktive_generator_ligen.append("🏆 Champions League")
-        if st.checkbox("🇪🇺 Europa League", value=False, key="chk_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
-        if st.checkbox("🌍 Conference League", value=False, key="chk_co"): aktive_generator_ligen.append("🌍 Conference League")
+    st.markdown("##### 🌍 Weitere Ligen & Europapokal")
+    if st.checkbox("🇹🇷 Süper Lig", value=False, key="chk_tr"): aktive_generator_ligen.append("🇹🇷 Süper Lig")
+    if st.checkbox("🇳🇱 Eredivisie", value=False, key="chk_nl"): aktive_generator_ligen.append("🇳🇱 Eredivisie")
+    if st.checkbox("🇵🇹 Primeira Liga", value=False, key="chk_pt"): aktive_generator_ligen.append("🇵🇹 Primeira Liga")
+    if st.checkbox("🏆 Champions League", value=False, key="chk_cl"): aktive_generator_ligen.append("🏆 Champions League")
+    if st.checkbox("🇪🇺 Europa League", value=False, key="chk_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+    if st.checkbox("🌍 Conference League", value=False, key="chk_co"): aktive_generator_ligen.append("🌍 Conference League")
 
-    # Doppelte Einträge entfernen falls kombiniert
+    # Doppelte Einträge sauber herausfiltern
     aktive_generator_ligen = list(dict.fromkeys(aktive_generator_ligen))
 
     st.markdown("---")
