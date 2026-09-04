@@ -3,13 +3,38 @@ import requests
 import pandas as pd
 import random
 
-st.set_page_config(page_title="KI Wettprognosen — Tipico Style", layout="wide")
+st.set_page_config(page_title="KI Wettprognosen — Tipico Premium", layout="wide")
 
-st.title("⚽ KI Wettprognosen — Tipico-Style Kombi Generator")
-st.write("Generiert vielseitige Scheine mit Siegwetten, Torschützen-Tipps, 'Beide treffen' & Doppelter Chance.")
+st.title("⚽ KI Wettprognosen — Tipico Full-Feature Generator")
+st.write("Erstellt abwechslungsreiche Kombis: Torschützen, Über 1.5 / 2.5 / 3.5 Tore, BTTS, Doppelte Chance & Handicap.")
 
 # DEIN FEST EINGEBAUTER API-KEY:
 API_KEY = '9fa7390d10404cdab8fd77d2445655e0'
+
+# Erweiterte Datenbank von Star-Stürmern
+TOP_STUERGME = {
+    "FC Bayern München": "Harry Kane",
+    "Bayern Munich": "Harry Kane",
+    "Eintracht Frankfurt": "Omar Marmoush",
+    "Borussia Dortmund": "Serhou Guirassy",
+    "Bayer Leverkusen": "Victor Boniface",
+    "RB Leipzig": "Loïs Openda",
+    "Manchester City": "Erling Haaland",
+    "Liverpool": "Mohamed Salah",
+    "Arsenal": "Bukayo Saka",
+    "Chelsea": "Cole Palmer",
+    "Tottenham Hotspur": "Son Heung-min",
+    "Real Madrid": "Kylian Mbappé",
+    "FC Barcelona": "Robert Lewandowski",
+    "Barcelona": "Robert Lewandowski",
+    "Atletico Madrid": "Antoine Griezmann",
+    "Inter Milan": "Lautaro Martínez",
+    "Inter": "Lautaro Martínez",
+    "Juventus": "Dušan Vlahović",
+    "Paris Saint-Germain": "Ousmane Dembélé",
+    "PSG": "Ousmane Dembélé",
+    "Sporting CP": "Viktor Gyökeres"
+}
 
 ligen = {
     "Deutschland (Bundesliga)": "soccer_germany_bundesliga",
@@ -66,11 +91,11 @@ if st.button("Spiele dieser Liga anzeigen"):
 
 st.divider()
 
-# --- BEREICH 2: TIPICO-STYLE KOMBI GENERATOR ---
-st.subheader("2. 🎯 Tipico-Style Kombi-Schein erstellen")
-st.write("Erstellt Kombinationen aus Siegen, Torschützen, 'Beide treffen' & Doppelter Chance.")
+# --- BEREICH 2: VIELSEITIGER TIPICO-KOMBI GENERATOR ---
+st.subheader("2. 🎯 Abwechslungsreichen Tipico-Kombi Schein erstellen")
+st.write("Generiert Scheine mit Torschützen, Über 1.5/2.5/3.5 Toren, BTTS, Handicap & Doppelter Chance.")
 
-if st.button("🔄 Tipico-Mix Schein generieren"):
+if st.button("🔄 Neuen Tipico-Mix Schein generieren"):
     fokus_ligen = {
         "Bundesliga": "soccer_germany_bundesliga",
         "Premier League": "soccer_epl",
@@ -81,7 +106,7 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
     
     moegliche_tipps = []
     
-    with st.spinner("Durchsuche Märkte nach Tipico-Wettoptionen..."):
+    with st.spinner("Durchsuche Märkte nach Tipico-Optionen (Tore, Stürmer, Handicaps)..."):
         for liga_label, code in fokus_ligen.items():
             url = f'https://api.the-odds-api.com/v4/sports/{code}/odds/?apiKey={API_KEY}&regions=eu&markets=h2h'
             try:
@@ -96,38 +121,61 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
                             q_home = next((item['price'] for item in odds if item['name'] == home), None)
                             q_away = next((item['price'] for item in odds if item['name'] == away), None)
                             
-                            if q_home and 1.20 <= q_home <= 1.65:
+                            # 1. Sehr deutlicher Favorit (z. B. Quote unter 1.45)
+                            if q_home and 1.20 <= q_home <= 1.45:
+                                stuermer = TOP_STUERGME.get(home, f"Top-Torjäger ({home})")
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Tor durch {stuermer}", "Quote": 1.70, "Markt": "Torschütze ⚽"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": "Über 2.5 Tore im Spiel", "Quote": 1.55, "Markt": "Über 2.5 Tore 🔥"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Sieg {home} & Über 2.5 Tore", "Quote": round(q_home * 1.45, 2), "Markt": "Sieg + Tore 💥"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Handicap Sieg (-1) {home}", "Quote": round(q_home * 1.5, 2), "Markt": "Handicap 🏆"
+                                })
+
+                            if q_away and 1.20 <= q_away <= 1.45:
+                                stuermer = TOP_STUERGME.get(away, f"Top-Torjäger ({away})")
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Tor durch {stuermer}", "Quote": 1.75, "Markt": "Torschütze ⚽"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": "Über 2.5 Tore im Spiel", "Quote": 1.60, "Markt": "Über 2.5 Tore 🔥"
+                                })
+
+                            # 2. Moderater Favorit (1.46 bis 1.85)
+                            if q_home and 1.46 <= q_home <= 1.85:
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
                                     "Tipp": f"Sieg {home}", "Quote": q_home, "Markt": "1X2 Hauptwette 🛡️"
                                 })
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Hauptstürmer ({home}) trifft im Spiel", "Quote": 1.75, "Markt": "Torschütze ⚽"
-                                })
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {home} & Über 1.5 Tore", "Quote": round(q_home * 1.3, 2), "Markt": "Sieg + Tore 💥"
+                                    "Tipp": "Über 1.5 Tore im Spiel", "Quote": 1.30, "Markt": "Über 1.5 Tore ⚽"
                                 })
 
-                            if q_away and 1.20 <= q_away <= 1.65:
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Sieg {away}", "Quote": q_away, "Markt": "1X2 Hauptwette 🛡️"
-                                })
-                                moegliche_tipps.append({
-                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Hauptstürmer ({away}) trifft im Spiel", "Quote": 1.80, "Markt": "Torschütze ⚽"
-                                })
-
-                            if (q_home and 1.70 <= q_home <= 2.60) or (q_away and 1.70 <= q_away <= 2.60):
+                            # 3. Offenes/Ausgeglichenes Match (Quote über 1.85)
+                            if (q_home and q_home > 1.85) or (q_away and q_away > 1.85):
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
                                     "Tipp": "Beide Teams treffen (Ja)", "Quote": 1.65, "Markt": "BTTS 🔥"
                                 })
                                 moegliche_tipps.append({
                                     "Liga": liga_label, "Begegnung": f"{home} vs {away}",
-                                    "Tipp": f"Doppelte Chance (1X {home})", "Quote": 1.35, "Markt": "Doppelte Chance 🔒"
+                                    "Tipp": "Über 3.5 Tore im Spiel", "Quote": 2.75, "Markt": "Über 3.5 Tore 🚀"
+                                })
+                                moegliche_tipps.append({
+                                    "Liga": liga_label, "Begegnung": f"{home} vs {away}",
+                                    "Tipp": f"Doppelte Chance (1X {home})", "Quote": 1.38, "Markt": "Doppelte Chance 🔒"
                                 })
             except Exception:
                 pass
@@ -138,6 +186,7 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
         ausgewaehlte_spiele = set()
         kombi_auswahl = []
         
+        # Wähle 3 völlig verschiedene Begegnungen aus
         for tipp in moegliche_tipps:
             if tipp['Begegnung'] not in ausgewaehlte_spiele:
                 kombi_auswahl.append(tipp)
@@ -146,13 +195,13 @@ if st.button("🔄 Tipico-Mix Schein generieren"):
                 break
         
         gesamtquote = 1.0
-        st.success("### 📜 Dein Tipico-Style Kombi-Schein:")
+        st.success("### 📜 Dein vielseitiger Tipico-Kombi-Schein:")
         
         for idx, tipp in enumerate(kombi_auswahl, 1):
-            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Wettart:** `{tipp['Markt']}`")
+            st.write(f"**Wette {idx} ({tipp['Liga']}):** {tipp['Begegnung']} — **Tipp:** `{tipp['Tipp']}` | **Quote:** `{tipp['Quote']}` | **Tipico-Wettart:** `{tipp['Markt']}`")
             gesamtquote *= tipp['Quote']
         
         st.metric(label="💥 Tipico Gesamtquote", value=f"{round(gesamtquote, 2)}")
-        st.info("💡 Drücke erneut auf den Button, um andere Tipico-Kombinationen zu testen!")
+        st.info("💡 Drücke erneut auf den Button, um bei jedem Klick völlig neue Tipico-Varianten zu erhalten!")
     else:
         st.warning("Keine passenden Spiele gefunden. Versuche es vor dem Spieltag erneut.")
