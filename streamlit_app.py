@@ -215,7 +215,7 @@ def get_secret(name):
     return ""
 
 
-FOOTBALL_API_KEY = get_secret("FOOTBALL_API_KEY")
+FOOTBALL_API_KEY = "sQdZjdabDGKqzbGywqlLtgKSm40hJsgZR0MQDQzZ"
 ODDS_API_KEY = get_secret("ODDS_API_KEY")
 
 
@@ -1357,12 +1357,6 @@ def get_market_odds_for_tip(
 
     if market == "Doppelte Chance":
 
-        # Die aktuelle API-Abfrage enthält
-        # h2h + totals.
-        #
-        # Double-Chance-Quoten werden daher
-        # nicht erfunden.
-
         return None
 
     # --------------------------------------------------------
@@ -1403,9 +1397,6 @@ def get_market_odds_for_tip(
 
                 except Exception:
                     pass
-
-    # BTTS ist in dieser Odds-Abfrage
-    # nicht enthalten.
 
     return None
 
@@ -1535,19 +1526,11 @@ def calculate_confidence_score(
     data_quality,
 ):
 
-    # --------------------------------------------------------
-    # Modellstärke
-    # --------------------------------------------------------
-
     model_score = clamp(
         probability,
         0,
         100,
     )
-
-    # --------------------------------------------------------
-    # Form
-    # --------------------------------------------------------
 
     form_component = clamp(
         form_score,
@@ -1555,26 +1538,17 @@ def calculate_confidence_score(
         100,
     )
 
-    # --------------------------------------------------------
-    # Value
-    # --------------------------------------------------------
-
     if value is None:
 
         value_component = 50
 
     else:
 
-        # +10 % Value → sehr guter Bonus.
         value_component = clamp(
             50 + value * 500,
             0,
             100,
         )
-
-    # --------------------------------------------------------
-    # Gesamt
-    # --------------------------------------------------------
 
     score = (
         model_score * WEIGHT_MODEL
@@ -1655,10 +1629,6 @@ def analyze_fixture(
         "Auswärts",
     )
 
-    # --------------------------------------------------------
-    # API Prediction
-    # --------------------------------------------------------
-
     prediction_raw, prediction_error = (
         get_predictions(
             fixture_id
@@ -1669,19 +1639,11 @@ def analyze_fixture(
         prediction_raw
     )
 
-    # --------------------------------------------------------
-    # xG
-    # --------------------------------------------------------
-
     home_xg, away_xg, xg_source = (
         derive_xg_from_prediction(
             prediction
         )
     )
-
-    # --------------------------------------------------------
-    # Poisson
-    # --------------------------------------------------------
 
     probabilities = (
         poisson_market_probabilities(
@@ -1690,18 +1652,10 @@ def analyze_fixture(
         )
     )
 
-    # --------------------------------------------------------
-    # Markt
-    # --------------------------------------------------------
-
     market_result = market_analysis(
         probabilities,
         selected_market,
     )
-
-    # --------------------------------------------------------
-    # Form
-    # --------------------------------------------------------
 
     home_form = parse_form_string(
         prediction.get(
@@ -1724,7 +1678,6 @@ def analyze_fixture(
         )
     )
 
-    # Form-Signal des gewählten Tipps
     form_score = 50
 
     if selected_market == "1X2":
@@ -1781,7 +1734,6 @@ def analyze_fixture(
 
     else:
 
-        # Für Tor-Märkte ist Form weniger direkt.
         form_score = 50
 
     form_score = clamp(
@@ -1789,10 +1741,6 @@ def analyze_fixture(
         0,
         100,
     )
-
-    # --------------------------------------------------------
-    # Ergebnis
-    # --------------------------------------------------------
 
     result = {
 
@@ -1840,10 +1788,6 @@ def analyze_fixture(
         "error": prediction_error,
     }
 
-    # --------------------------------------------------------
-    # Wahrscheinlichster Score
-    # --------------------------------------------------------
-
     likely_home, likely_away, likely_probability = (
         most_likely_score(
             home_xg,
@@ -1863,22 +1807,6 @@ def analyze_fixture(
     ] = probability_to_percent(
         likely_probability
     )
-
-    # --------------------------------------------------------
-    # Odds
-    # --------------------------------------------------------
-
-    if ODDS_API_KEY:
-
-        # Odds werden später gesetzt.
-        # Das passiert außerhalb der Funktion,
-        # damit alle Sportkeys gemeinsam geladen werden.
-
-        pass
-
-    # --------------------------------------------------------
-    # Datenqualität
-    # --------------------------------------------------------
 
     result["data_quality"] = (
         calculate_data_quality(
@@ -2043,18 +1971,6 @@ if not FOOTBALL_API_KEY:
     st.warning(
         """
         ### 🔑 Football API-Key fehlt
-
-        Lege deinen API-Key in
-
-        `.streamlit/secrets.toml`
-
-        unter `FOOTBALL_API_KEY` ab.
-
-        Beispiel:
-
-        `FOOTBALL_API_KEY = "DEIN_KEY"`
-
-        Danach Streamlit neu starten.
         """
     )
 
@@ -2341,10 +2257,6 @@ for index, fixture in enumerate(
             bookmaker,
         )
 
-        # ----------------------------------------------------
-        # Odds Event suchen
-        # ----------------------------------------------------
-
         if ODDS_API_KEY:
 
             event = find_odds_for_match(
@@ -2428,7 +2340,6 @@ for index, fixture in enumerate(
                     odds,
                 )
 
-            # Datenqualität neu berechnen
             analysis[
                 "data_quality"
             ] = calculate_data_quality(
@@ -2440,10 +2351,6 @@ for index, fixture in enumerate(
                 ],
                 odds,
             )
-
-        # ----------------------------------------------------
-        # Score neu berechnen
-        # ----------------------------------------------------
 
         if analysis.get(
             "market"
@@ -2481,10 +2388,6 @@ for index, fixture in enumerate(
         st.session_state.analysis_cache[
             cache_key
         ] = analysis
-
-    # --------------------------------------------------------
-    # Filter
-    # --------------------------------------------------------
 
     probability = None
 
@@ -2593,15 +2496,6 @@ if not analyses:
         """
         Für deine Filter wurden keine
         ausreichenden Modell-Daten gefunden.
-
-        Versuch z. B.:
-
-        • Mindestwahrscheinlichkeit reduzieren
-        • Mindest-Analyse-Score reduzieren
-        • anderen Markt auswählen
-        • weitere Wettbewerbe auswählen
-        • „Nur positives Value“ deaktivieren
-        • API-Daten prüfen
         """
     )
 
@@ -2610,10 +2504,6 @@ else:
     st.success(
         f"{len(analyses)} Spiele erfüllen deine Kriterien."
     )
-
-    # ========================================================
-    # TOP 3
-    # ========================================================
 
     st.markdown(
         "### ⭐ Top-Signale"
@@ -2842,10 +2732,6 @@ for analysis in analyses:
         "NS",
     )
 
-    # --------------------------------------------------------
-    # Match Card
-    # --------------------------------------------------------
-
     st.markdown(
         f"""
         <div class="match-card">
@@ -2934,10 +2820,6 @@ for analysis in analyses:
             "🎫 Schein",
         ]
     )
-
-    # ========================================================
-    # MODELL
-    # ========================================================
 
     with tabs[0]:
 
@@ -3112,10 +2994,6 @@ for analysis in analyses:
             f"{analysis['data_quality']}/100"
         )
 
-    # ========================================================
-    # FORM
-    # ========================================================
-
     with tabs[1]:
 
         c1, c2 = st.columns(2)
@@ -3202,10 +3080,6 @@ for analysis in analyses:
             f"Form-Score: "
             f"{analysis['form_score']:.0f}/100"
         )
-
-        # ----------------------------------------------------
-        # H2H
-        # ----------------------------------------------------
 
         with st.expander(
             "🤝 Direkte Duelle laden"
@@ -3314,10 +3188,6 @@ for analysis in analyses:
                         hide_index=True,
                     )
 
-    # ========================================================
-    # QUOTEN
-    # ========================================================
-
     with tabs[2]:
 
         if odds is not None:
@@ -3336,66 +3206,11 @@ for analysis in analyses:
                     f"**{analysis['bookmaker']}**",
                 )
 
-            if (
-                analysis.get(
-                    "requested_bookmaker_found"
-                )
-            ):
-
-                st.success(
-                    f"✅ Gewünschter "
-                    f"Buchmacher "
-                    f"**{bookmaker}** "
-                    f"gefunden."
-                )
-
-            else:
-
-                st.warning(
-                    f"⚠️ {bookmaker} "
-                    f"wurde nicht gefunden. "
-                    f"Die angezeigte Quote stammt "
-                    f"von "
-                    f"**{analysis.get('bookmaker') or 'unbekannt'}**."
-                )
-
         else:
 
             st.info(
-                """
-                Für diesen Markt wurde keine
-                passende echte Quote gefunden.
-
-                Die App erfindet bewusst keine Quote.
-                """
+                "Für diesen Markt wurde keine passende echte Quote gefunden."
             )
-
-            if market == "Doppelte Chance":
-
-                st.caption(
-                    "Double-Chance-Quoten werden "
-                    "in der aktuellen Odds-Abfrage "
-                    "nicht künstlich aus 1X2-Quoten "
-                    "berechnet."
-                )
-
-            elif market == "Beide Teams treffen":
-
-                st.caption(
-                    "BTTS wird derzeit nicht "
-                    "aus einer nicht vorhandenen "
-                    "Quote abgeleitet."
-                )
-
-            if not ODDS_API_KEY:
-
-                st.warning(
-                    "ODDS_API_KEY ist nicht hinterlegt."
-                )
-
-    # ========================================================
-    # VALUE
-    # ========================================================
 
     with tabs[3]:
 
@@ -3444,45 +3259,11 @@ for analysis in analyses:
                     ),
                 )
 
-            if value is not None:
-
-                if value > 0:
-
-                    st.success(
-                        f"📈 Positives Value-Signal: "
-                        f"**{value * 100:+.1f}%**"
-                    )
-
-                elif value < 0:
-
-                    st.warning(
-                        f"📉 Negatives Value-Signal: "
-                        f"**{value * 100:+.1f}%**"
-                    )
-
-                else:
-
-                    st.info(
-                        "⚖️ Modell und Quote "
-                        "liegen ungefähr gleich."
-                    )
-
-            st.caption(
-                "EV = Modellwahrscheinlichkeit × "
-                "Quote − 1. Das ist ein mathematisches "
-                "Modellmaß und keine Gewinnzusage."
-            )
-
         else:
 
             st.info(
-                "Keine echte Quote vorhanden – "
-                "Value kann nicht berechnet werden."
+                "Keine echte Quote vorhanden."
             )
-
-    # ========================================================
-    # SCHEIN
-    # ========================================================
 
     with tabs[4]:
 
@@ -3529,14 +3310,9 @@ for analysis in analyses:
             else:
 
                 st.info(
-                    "Dieses Spiel ist bereits "
-                    "im Wettschein."
+                    "Dieses Spiel ist bereits im Wettschein."
                 )
 
-
-# ============================================================
-# WETTSCHEIN
-# ============================================================
 
 st.markdown("---")
 
@@ -3556,9 +3332,7 @@ if not ticket:
 else:
 
     ticket_odds = []
-
     ticket_probabilities = []
-
     valid_ticket_items = []
 
     for index, item in enumerate(
@@ -3592,15 +3366,6 @@ else:
                 f"Modell: "
                 f"**{item['probability']:.0f}%**"
             )
-
-            if item.get(
-                "value"
-            ) is not None:
-
-                st.caption(
-                    f"EV: "
-                    f"{item['value'] * 100:+.1f}%"
-                )
 
         with c3:
 
@@ -3656,10 +3421,6 @@ else:
             ticket_odds
         )
 
-        # ----------------------------------------------------
-        # Naive combined probability
-        # ----------------------------------------------------
-
         combined_probability = math.prod(
             ticket_probabilities
         )
@@ -3667,11 +3428,6 @@ else:
         st.write(
             f"### Gesamtquote: "
             f"**{combined_odds:.2f}**"
-        )
-
-        st.write(
-            f"Modell-Kombiwahrscheinlichkeit: "
-            f"**{combined_probability * 100:.2f}%**"
         )
 
         stake = st.number_input(
@@ -3698,7 +3454,7 @@ else:
         with c2:
 
             st.metric(
-                "Rechnerischer Auszahlungsbetrag",
+                "Möglicher Gewinn",
                 f"{possible_return:.2f} €",
             )
 
@@ -3715,23 +3471,10 @@ else:
                 f"{expected_value:+.2f} €",
             )
 
-        st.caption(
-            "Die Kombiwahrscheinlichkeit multipliziert "
-            "die einzelnen Modellwahrscheinlichkeiten "
-            "und nimmt Unabhängigkeit der Tipps an. "
-            "Das ist nur eine Modellrechnung."
-        )
-
     else:
 
         st.warning(
-            """
-            Für mindestens ein ausgewähltes Spiel
-            wurde keine echte Quote gefunden.
-
-            Deshalb kann keine vollständige
-            Gesamtquote berechnet werden.
-            """
+            "Für mindestens ein ausgewähltes Spiel wurde keine echte Quote gefunden."
         )
 
     if st.button(
@@ -3744,25 +3487,9 @@ else:
         st.rerun()
 
 
-# ============================================================
-# FOOTER
-# ============================================================
-
 st.markdown("---")
 
 st.caption(
     "⚠️ Fußballwetten sind mit Risiko verbunden. "
-    "Modellwahrscheinlichkeiten sind keine Garantien. "
-    "Quoten können sich jederzeit ändern."
+    "Modellwahrscheinlichkeiten sind keine Garantien."
 )
-
-st.caption(
-    "Das Poisson-Modell dient zur statistischen "
-    "Bewertung von Torverteilungen und Märkten. "
-    "Es stellt keine sichere Gewinnprognose dar."
-)
-
-st.caption(
-    "Daten werden von den konfigurierten "
-    "API-Anbietern bereitgestellt."
-        )
