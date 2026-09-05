@@ -88,12 +88,16 @@ def get_team_rating(team_name):
     return 75
 
 def calculate_dynamic_xg(home_team, away_team):
-    r_home = get_team_rating(home_team) + 4
+    """Präzise xG-Berechnung mit starker Gewichtung von Spitzenmannschaften (z.B. Bayern vs Schalke)"""
+    r_home = get_team_rating(home_team) + 5  # Heimvorteil
     r_away = get_team_rating(away_team)
-    ratio_home = r_home / float(r_away)
-    ratio_away = r_away / float(r_home)
-    xg_home = round(max(0.4, min(4.2, 1.55 * (ratio_home ** 1.9))), 2)
-    xg_away = round(max(0.4, min(3.8, 1.20 * (ratio_away ** 1.8))), 2)
+    
+    # Nicht-lineare Skalierung für realistische Favoriten-Dominanz
+    factor_home = (r_home / 75.0) ** 2.4
+    factor_away = (r_away / 75.0) ** 2.4
+    
+    xg_home = round(max(0.3, min(4.2, 1.6 * (factor_home / max(0.4, factor_away)))), 2)
+    xg_away = round(max(0.3, min(3.5, 1.0 * (factor_away / max(0.4, factor_home)))), 2)
     return xg_home, xg_away
 
 def get_team_form(team_name):
@@ -247,10 +251,10 @@ def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
                 live_odds = o_dict
                 break
 
-    q_home = live_odds.get('home', round((1.0 / p_home) / 1.04, 2)) if live_odds and 'home' in live_odds else round((1.0 / p_home) / 1.04, 2)
-    q_draw = live_odds.get('draw', round((1.0 / p_draw) / 1.04, 2)) if live_odds and 'draw' in live_odds else round((1.0 / p_draw) / 1.04, 2)
-    q_away = live_odds.get('away', round((1.0 / p_away) / 1.04, 2)) if live_odds and 'away' in live_odds else round((1.0 / p_away) / 1.04, 2)
-    q_over25 = live_odds.get('over25', round((1.0 / p_over25) / 1.04, 2)) if live_odds and 'over25' in live_odds else round((1.0 / p_over25) / 1.04, 2)
+    q_home = live_odds.get('home', round((1.0 / max(0.05, p_home)) / 1.04, 2)) if live_odds and 'home' in live_odds else round((1.0 / max(0.05, p_home)) / 1.04, 2)
+    q_draw = live_odds.get('draw', round((1.0 / max(0.05, p_draw)) / 1.04, 2)) if live_odds and 'draw' in live_odds else round((1.0 / max(0.05, p_draw)) / 1.04, 2)
+    q_away = live_odds.get('away', round((1.0 / max(0.05, p_away)) / 1.04, 2)) if live_odds and 'away' in live_odds else round((1.0 / max(0.05, p_away)) / 1.04, 2)
+    q_over25 = live_odds.get('over25', round((1.0 / max(0.05, p_over25)) / 1.04, 2)) if live_odds and 'over25' in live_odds else round((1.0 / max(0.05, p_over25)) / 1.04, 2)
 
     return {
         "1X2": {
@@ -259,28 +263,28 @@ def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
             "2": {"prob": round(p_away * 100, 1), "base_q": q_away}
         },
         "DC": {
-            "1X": {"prob": round(p_dc_1x * 100, 1), "base_q": round(max(1.05, q_home * 0.76), 2)},
-            "X2": {"prob": round(p_dc_x2 * 100, 1), "base_q": round(max(1.05, q_away * 0.86), 2)},
-            "12": {"prob": round(p_dc_12 * 100, 1), "base_q": round(max(1.05, q_home * 0.81), 2)}
+            "1X": {"prob": round(p_dc_1x * 100, 1), "base_q": round(max(1.02, q_home * 0.70), 2)},
+            "X2": {"prob": round(p_dc_x2 * 100, 1), "base_q": round(max(1.05, q_away * 0.85), 2)},
+            "12": {"prob": round(p_dc_12 * 100, 1), "base_q": round(max(1.02, q_home * 0.75), 2)}
         },
         "DNB": {
-            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "base_q": round(max(1.05, q_home * 1.15), 2)},
+            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "base_q": round(max(1.02, q_home * 1.08), 2)},
             "2 DNB": {"prob": round(p_dnb_2 * 100, 1), "base_q": round(max(1.05, q_away * 1.35), 2)}
         },
         "Tore": {
-            "Über 1.5": {"prob": round(p_over15 * 100, 1), "base_q": round((1.0 / p_over15) / 1.04, 2)},
+            "Über 1.5": {"prob": round(p_over15 * 100, 1), "base_q": round((1.0 / max(0.05, p_over15)) / 1.04, 2)},
             "Über 2.5": {"prob": round(p_over25 * 100, 1), "base_q": q_over25},
-            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "base_q": round((1.0 / p_under25) / 1.04, 2)}
+            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "base_q": round((1.0 / max(0.05, p_under25)) / 1.04, 2)}
         },
         "BTTS": {
-            "Ja": {"prob": round(p_btts_ja * 100, 1), "base_q": round((1.0 / p_btts_ja) / 1.04, 2)}
+            "Ja": {"prob": round(p_btts_ja * 100, 1), "base_q": round((1.0 / max(0.05, p_btts_ja)) / 1.04, 2)}
         }
     }
 
 def get_best_bookmaker_odds(base_quote, bm_name):
     margins = {"Bet365": 1.03, "Betano": 1.035, "Neo.bet": 1.04, "bwin": 1.045, "Tipico": 1.05, "DAZN Bet": 1.04, "Oddset": 1.055, "Bet-at-home": 1.05}
     factor = margins.get(bm_name, 1.04)
-    return max(1.05, min(round(base_quote * (1.04 / factor), 2), 50.00))
+    return max(1.02, min(round(base_quote * (1.04 / factor), 2), 50.00))
 
 # --- UI STYLING ---
 st.markdown("""
@@ -313,7 +317,7 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">APP VON PASCAL GELLERS</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">100% Strikte Ligen-Filterung & Echte Live-Quoten • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Kalibrierte xG-Engine (Realistische Favoriten-Quoten) • Ziel: 58€ ➔ 100€</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -397,10 +401,9 @@ if generate_click or not st.session_state['matches_cache']:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade Blitz-Live-Quoten & filtere Ligen..."):
+        with st.spinner("Lade kalibrierte Live-Quoten & filtere Ligen..."):
             all_loaded = []
             
-            # Nur für die TATSÄCHLICH angekreuzten Ligen Daten laden!
             sport_key_cache = {}
             for liga in aktive_generator_ligen:
                 s_key = LEAGUE_SPORT_KEYS.get(liga)
@@ -440,7 +443,6 @@ if generate_click or not st.session_state['matches_cache']:
                         except:
                             continue
 
-            # Doppelt abgesicherte Filterung: Es wird NUR übernommen, was auch in aktive_generator_ligen ist!
             st.session_state['matches_cache'] = [m for m in all_loaded if m['liga'] in aktive_generator_ligen]
 
 matches = [m for m in st.session_state.get('matches_cache', []) if m['liga'] in aktive_generator_ligen]
@@ -622,4 +624,3 @@ else:
             st.session_state['saved_tickets'] = []
             st.rerun()
     st.code(text_share, language="markdown")
-
