@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 import math
 import hashlib
 import random
@@ -32,72 +31,89 @@ if 'matches_cache' not in st.session_state:
 if 'reroll_key' not in st.session_state:
     st.session_state['reroll_key'] = 0
 
-# --- API-SCHLÜSSEL ROTATIONS-LISTE (FAILOVER) ---
-ODDS_API_KEYS = [
-    "912672acdd43a99efc9ee4ad5afe33a6",
-    "a5e0323a0a14698cdeec004e3b9b18cc",
-    "796a27287d73f08d0257cc838ebb6cd9",
-    "e66bcb054c6ace9de606da63612c8f4c",
-    "e36dbfffe1a22ab682e2759aea044180",
-    "5d317d36dab0f21697792fe154902716",
-    "25d237353cf0c5920d358d1e79f9450c",
-    "0339fb12fa7a92411c4fe5ca32d3755c",
-    "1aa566d1bdb18c77b5c1210904adf5d5",
-    "f0dc02ac1e10f8e6c0e607698964b5a6"
-]
-
-LEAGUE_SPORT_KEYS = {
-    "🇩🇪 1. Bundesliga": "soccer_germany_bundesliga",
-    "🇩🇪 2. Bundesliga": "soccer_germany_bundesliga2",
-    "🇩🇪 3. Liga": "soccer_germany_liga3",
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": "soccer_epl",
-    "🇪🇸 La Liga": "soccer_spain_la_liga",
-    "🇮🇹 Serie A": "soccer_italy_serie_a",
-    "🇫🇷 Ligue 1": "soccer_france_ligue_one",
-    "🏆 Champions League": "soccer_uefa_champions_league",
-    "🇪🇺 Europa League": "soccer_uefa_europa_league",
-    "🇪🇺 Conference League": "soccer_uefa_europa_conference_league"
-}
-
+# --- UMFASSENDE TEAM-RATINGS FÜR ALLE LIGEN & VEREINE ---
 TEAM_RATINGS = {
-    "bayern": 96, "dortmund": 87, "leverkusen": 91, "leipzig": 86, 
-    "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
-    "freiburg": 78, "union berlin": 75, "mainz": 74, "augsburg": 73,
-    "werder bremen": 75, "hoffenheim": 76, "heidenheim": 73, "st. pauli": 70,
-    "bochum": 68, "holstein kiel": 67, "schalke": 78,
-    "hsv": 74, "hamburger sv": 74, "köln": 74, "hertha": 73,
-    "duesseldorf": 74, "düsseldorf": 74, "hannover": 72, "paderborn": 71,
-    "karlsruhe": 72, "kaiserslautern": 71, "dresden": 66, "aachen": 63,
-    "essen": 64, "1860 münchen": 64, "osnabrück": 65, "rostock": 65,
+    # 🇩🇪 1. Bundesliga
+    "bayern": 96, "bayern münchen": 96, "dortmund": 87, "borussia dortmund": 87,
+    "leverkusen": 91, "bayer leverkusen": 91, "leipzig": 86, "rb leipzig": 86,
+    "stuttgart": 83, "vfb stuttgart": 83, "frankfurt": 82, "eintracht frankfurt": 82,
+    "wolfsburg": 76, "vfl wolfsburg": 76, "gladbach": 75, "borussia mönchengladbach": 75,
+    "freiburg": 78, "sc freiburg": 78, "union berlin": 75, "1. fc union berlin": 75,
+    "mainz": 74, "mainz 05": 74, "augsburg": 73, "fc augsburg": 73,
+    "werder bremen": 75, "bremen": 75, "hoffenheim": 76, "tsg hoffenheim": 76,
+    "heidenheim": 73, "fc heidenheim": 73, "st. pauli": 70, "fc st. pauli": 70,
+    "bochum": 68, "vfl bochum": 68, "holstein kiel": 67, "kiel": 67,
+
+    # 🇩🇪 2. Bundesliga & 3. Liga
+    "schalke": 69, "schalke 04": 69, "fc schalke 04": 69, "hsv": 72, "hamburger sv": 72,
+    "köln": 73, "1. fc köln": 73, "hertha": 71, "hertha bsc": 71,
+    "duesseldorf": 71, "düsseldorf": 71, "fortuna düsseldorf": 71,
+    "hannover": 71, "hannover 96": 71, "paderborn": 70, "sc paderborn": 70,
+    "karlsruhe": 70, "ksc": 70, "kaiserslautern": 70, "fck": 70,
+    "nürnberg": 70, "1. fc nürnberg": 70, "magdeburg": 69, "fcm": 69,
+    "elversberg": 68, "greuther fürth": 69, "fürth": 69, "braunschweig": 67,
+    "regensburg": 66, "münster": 66, "ulm": 66, "dresden": 65, "dynamo dresden": 65,
+    "aachen": 62, "essen": 63, "1860 münchen": 63, "osnabrück": 64, "rostock": 64,
+
+    # 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League
     "manchester city": 95, "man city": 95, "arsenal": 92, "liverpool": 93,
     "chelsea": 85, "manchester united": 83, "man utd": 83, "tottenham": 83,
     "newcastle": 84, "aston villa": 84, "brighton": 79, "west ham": 78,
+    "crystal palace": 77, "fulham": 77, "brentford": 76, "everton": 75,
+    "wolves": 75, "wolverhampton": 75, "bournemouth": 76, "nottingham forest": 75,
+    "leicester": 74, "ipswich": 71, "southampton": 72,
+
+    # 🇪🇸 La Liga
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86, "athletic bilbao": 81,
-    "real sociedad": 81, "girona": 80, "villarreal": 80, "betis": 79, "sevilla": 77,
-    "inter": 91, "juventus": 86, "ac milan": 86, "milan": 86, "napoli": 86,
-    "atalanta": 85, "roma": 82, "lazio": 81, "fiorentina": 80,
+    "real sociedad": 81, "girona": 80, "villarreal": 80, "real betis": 79,
+    "sevilla": 77, "celta vigo": 75, "osasuna": 75, "valencia": 76,
+    "getafe": 74, "mallorca": 74, "rayo vallecano": 74, "alaves": 73,
+    "las palmas": 73, "leganes": 70, "valladolid": 70, "espanyol": 72,
+
+    # 🇮🇹 Serie A
+    "inter": 91, "inter mailand": 91, "juventus": 86, "ac milan": 86, "milan": 86,
+    "napoli": 86, "atalanta": 85, "roma": 82, "as rom": 82, "lazio": 81,
+    "fiorentina": 80, "bologna": 79, "torino": 77, "monza": 74, "udinese": 75,
+    "genoa": 74, "lecce": 72, "cagliari": 73, "verona": 73, "empoli": 72,
+    "parma": 73, "como": 72, "venezia": 70,
+
+    # 🇫🇷 Ligue 1
     "paris saint-germain": 93, "psg": 93, "monaco": 82, "marseille": 82,
-    "lille": 81, "lyon": 80, "rennes": 78, "lens": 78
+    "lille": 81, "lyon": 80, "rennes": 78, "lens": 78, "nice": 79,
+    "brest": 77, "reims": 75, "strasbourg": 74, "toulouse": 74,
+    "montpellier": 73, "nantes": 73, "le havre": 70, "auxerre": 71,
+    "angers": 70, "saint-etienne": 72
 }
 
-def get_team_rating(team_name):
+LEAGUE_BASE_RATINGS = {
+    "🇩🇪 1. Bundesliga": 78,
+    "🇩🇪 2. Bundesliga": 71,
+    "🇩🇪 3. Liga": 65,
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": 82,
+    "🇪🇸 La Liga": 78,
+    "🇮🇹 Serie A": 78,
+    "🇫🇷 Ligue 1": 76,
+    "🏆 Champions League": 88,
+    "🇪🇺 Europa League": 77,
+    "🇪🇺 Conference League": 73
+}
+
+def get_team_rating(team_name, league_name="🇩🇪 1. Bundesliga"):
     name_clean = team_name.lower().strip()
     for key, rating in TEAM_RATINGS.items():
         if key in name_clean:
             return rating
-    return 75
+    return LEAGUE_BASE_RATINGS.get(league_name, 75)
 
-def calculate_dynamic_xg(home_team, away_team):
-    """Präzise xG-Berechnung mit starker Gewichtung von Spitzenmannschaften (z.B. Bayern vs Schalke)"""
-    r_home = get_team_rating(home_team) + 5  # Heimvorteil
-    r_away = get_team_rating(away_team)
+def calculate_dynamic_xg(home_team, away_team, league_name):
+    r_home = get_team_rating(home_team, league_name) + 4 # Heimvorteil
+    r_away = get_team_rating(away_team, league_name)
     
-    # Nicht-lineare Skalierung für realistische Favoriten-Dominanz
-    factor_home = (r_home / 75.0) ** 2.4
-    factor_away = (r_away / 75.0) ** 2.4
+    factor_home = (r_home / 75.0) ** 2.5
+    factor_away = (r_away / 75.0) ** 2.5
     
-    xg_home = round(max(0.3, min(4.2, 1.6 * (factor_home / max(0.4, factor_away)))), 2)
-    xg_away = round(max(0.3, min(3.5, 1.0 * (factor_away / max(0.4, factor_home)))), 2)
+    xg_home = round(max(0.2, min(5.0, 1.45 * (factor_home / max(0.3, factor_away)))), 2)
+    xg_away = round(max(0.2, min(4.0, 1.05 * (factor_away / max(0.3, factor_home)))), 2)
     return xg_home, xg_away
 
 def get_team_form(team_name):
@@ -123,31 +139,6 @@ def render_form_badges(form_list):
             html += "<span style='background-color: #dc2626; color: white; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 0.65rem; font-weight: bold;'>N</span>"
     html += "</div>"
     return html
-
-ANBIETER_URLS = {
-    "Tipico": "https://www.tipico.de",
-    "bwin": "https://sports.bwin.de",
-    "Bet365": "https://www.bet365.de",
-    "Betano": "https://www.betano.de",
-    "DAZN Bet": "https://www.daznbet.de",
-    "Neo.bet": "https://www.neo.bet/de",
-    "Oddset": "https://www.oddset.de",
-    "Bet-at-home": "https://www.bet-at-home.com"
-}
-
-@st.cache_data(ttl=300)
-def fetch_live_odds_for_sport(sport_key):
-    for key in ODDS_API_KEYS:
-        if not key.strip():
-            continue
-        try:
-            url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={key}&regions=eu&markets=h2h,totals"
-            res = requests.get(url, timeout=3)
-            if res.status_code == 200:
-                return res.json()
-        except Exception:
-            continue
-    return []
 
 @st.cache_data(ttl=300)
 def fetch_openliga_matches(shortcut):
@@ -201,7 +192,7 @@ def dixon_coles_tau(h, a, home_xg, away_xg, rho=-0.13):
         return max(0.2, 1.0 - rho)
     return 1.0
 
-def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
+def build_markets(home_xg, away_xg):
     matrix = [[0.0 for _ in range(7)] for _ in range(7)]
     for h in range(7):
         for a in range(7):
@@ -228,33 +219,22 @@ def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
     p_under25 = 1.0 - p_over25
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
 
-    live_odds = None
-    for ev in odds_cache:
-        if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
-            bms = ev.get('bookmakers', [])
-            if bms:
-                mkts = bms[0].get('markets', [])
-                o_dict = {}
-                for m in mkts:
-                    if m['key'] == 'h2h':
-                        for out in m['outcomes']:
-                            if out['name'].lower() == home_team.lower():
-                                o_dict['home'] = out['price']
-                            elif out['name'].lower() == away_team.lower():
-                                o_dict['away'] = out['price']
-                            else:
-                                o_dict['draw'] = out['price']
-                    elif m['key'] == 'totals':
-                        for out in m['outcomes']:
-                            if out.get('name') == 'Over' and out.get('point') == 2.5:
-                                o_dict['over25'] = out['price']
-                live_odds = o_dict
-                break
-
-    q_home = live_odds.get('home', round((1.0 / max(0.05, p_home)) / 1.04, 2)) if live_odds and 'home' in live_odds else round((1.0 / max(0.05, p_home)) / 1.04, 2)
-    q_draw = live_odds.get('draw', round((1.0 / max(0.05, p_draw)) / 1.04, 2)) if live_odds and 'draw' in live_odds else round((1.0 / max(0.05, p_draw)) / 1.04, 2)
-    q_away = live_odds.get('away', round((1.0 / max(0.05, p_away)) / 1.04, 2)) if live_odds and 'away' in live_odds else round((1.0 / max(0.05, p_away)) / 1.04, 2)
-    q_over25 = live_odds.get('over25', round((1.0 / max(0.05, p_over25)) / 1.04, 2)) if live_odds and 'over25' in live_odds else round((1.0 / max(0.05, p_over25)) / 1.04, 2)
+    margin = 1.045
+    q_home = round((1.0 / max(0.001, p_home)) / margin, 2)
+    q_draw = round((1.0 / max(0.001, p_draw)) / margin, 2)
+    q_away = round((1.0 / max(0.001, p_away)) / margin, 2)
+    
+    q_dc_1x = round((1.0 / max(0.001, p_dc_1x)) / margin, 2)
+    q_dc_x2 = round((1.0 / max(0.001, p_dc_x2)) / margin, 2)
+    q_dc_12 = round((1.0 / max(0.001, p_dc_12)) / margin, 2)
+    
+    q_dnb_1 = round((1.0 / max(0.001, p_dnb_1)) / margin, 2)
+    q_dnb_2 = round((1.0 / max(0.001, p_dnb_2)) / margin, 2)
+    
+    q_over15 = round((1.0 / max(0.001, p_over15)) / margin, 2)
+    q_over25 = round((1.0 / max(0.001, p_over25)) / margin, 2)
+    q_under25 = round((1.0 / max(0.001, p_under25)) / margin, 2)
+    q_btts = round((1.0 / max(0.001, p_btts_ja)) / margin, 2)
 
     return {
         "1X2": {
@@ -263,28 +243,23 @@ def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
             "2": {"prob": round(p_away * 100, 1), "base_q": q_away}
         },
         "DC": {
-            "1X": {"prob": round(p_dc_1x * 100, 1), "base_q": round(max(1.02, q_home * 0.70), 2)},
-            "X2": {"prob": round(p_dc_x2 * 100, 1), "base_q": round(max(1.05, q_away * 0.85), 2)},
-            "12": {"prob": round(p_dc_12 * 100, 1), "base_q": round(max(1.02, q_home * 0.75), 2)}
+            "1X": {"prob": round(p_dc_1x * 100, 1), "base_q": q_dc_1x},
+            "X2": {"prob": round(p_dc_x2 * 100, 1), "base_q": q_dc_x2},
+            "12": {"prob": round(p_dc_12 * 100, 1), "base_q": q_dc_12}
         },
         "DNB": {
-            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "base_q": round(max(1.02, q_home * 1.08), 2)},
-            "2 DNB": {"prob": round(p_dnb_2 * 100, 1), "base_q": round(max(1.05, q_away * 1.35), 2)}
+            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "base_q": q_dnb_1},
+            "2 DNB": {"prob": round(p_dnb_2 * 100, 1), "base_q": q_dnb_2}
         },
         "Tore": {
-            "Über 1.5": {"prob": round(p_over15 * 100, 1), "base_q": round((1.0 / max(0.05, p_over15)) / 1.04, 2)},
+            "Über 1.5": {"prob": round(p_over15 * 100, 1), "base_q": q_over15},
             "Über 2.5": {"prob": round(p_over25 * 100, 1), "base_q": q_over25},
-            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "base_q": round((1.0 / max(0.05, p_under25)) / 1.04, 2)}
+            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "base_q": q_under25}
         },
         "BTTS": {
-            "Ja": {"prob": round(p_btts_ja * 100, 1), "base_q": round((1.0 / max(0.05, p_btts_ja)) / 1.04, 2)}
+            "Ja": {"prob": round(p_btts_ja * 100, 1), "base_q": q_btts}
         }
     }
-
-def get_best_bookmaker_odds(base_quote, bm_name):
-    margins = {"Bet365": 1.03, "Betano": 1.035, "Neo.bet": 1.04, "bwin": 1.045, "Tipico": 1.05, "DAZN Bet": 1.04, "Oddset": 1.055, "Bet-at-home": 1.05}
-    factor = margins.get(bm_name, 1.04)
-    return max(1.02, min(round(base_quote * (1.04 / factor), 2), 50.00))
 
 # --- UI STYLING ---
 st.markdown("""
@@ -317,7 +292,7 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">APP VON PASCAL GELLERS</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Kalibrierte xG-Engine (Realistische Favoriten-Quoten) • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Inkl. Flashscore Live-Quotenvergleich • Ziel: 58€ ➔ 100€</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -345,23 +320,6 @@ with st.expander("⚙️ Einstellungen & Ligen-Auswahl (100% Strikter Filter)", 
         multi_budget = st.number_input("Gesamtbudget (€):", min_value=1.0, value=20.0)
     elif "Kombiwette" in gen_typ:
         anzahl_wetten = st.number_input("Spiele im Kombischein:", min_value=2, max_value=10, value=3)
-
-    st.markdown("---")
-    st.markdown("#### 🏪 Wettanbieter:")
-    aktive_anbieter = []
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        if st.checkbox("Tipico", value=True, key="b1"): aktive_anbieter.append("Tipico")
-        if st.checkbox("bwin", value=True, key="b2"): aktive_anbieter.append("bwin")
-    with c2:
-        if st.checkbox("Bet365", value=True, key="b3"): aktive_anbieter.append("Bet365")
-        if st.checkbox("Betano", value=True, key="b4"): aktive_anbieter.append("Betano")
-    with c3:
-        if st.checkbox("DAZN Bet", value=True, key="b5"): aktive_anbieter.append("DAZN Bet")
-        if st.checkbox("Neo.bet", value=True, key="b6"): aktive_anbieter.append("Neo.bet")
-    with c4:
-        if st.checkbox("Oddset", value=True, key="b7"): aktive_anbieter.append("Oddset")
-        if st.checkbox("Bet-at-home", value=True, key="b8"): aktive_anbieter.append("Bet-at-home")
 
     st.markdown("---")
     st.markdown("#### 🏆 Ligen-Auswahl (Strikte Filterung):")
@@ -398,22 +356,11 @@ else:
 if generate_click or not st.session_state['matches_cache']:
     if not aktive_generator_ligen:
         st.error("Bitte wähle mindestens eine Liga aus!")
-    elif not aktive_anbieter:
-        st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade kalibrierte Live-Quoten & filtere Ligen..."):
+        with st.spinner("Lade Ligen & berechne präzise Quoten..."):
             all_loaded = []
-            
-            sport_key_cache = {}
-            for liga in aktive_generator_ligen:
-                s_key = LEAGUE_SPORT_KEYS.get(liga)
-                if s_key and s_key not in sport_key_cache:
-                    sport_key_cache[s_key] = fetch_live_odds_for_sport(s_key)
 
             for liga_label in aktive_generator_ligen:
-                s_key = LEAGUE_SPORT_KEYS.get(liga_label)
-                odds_cache = sport_key_cache.get(s_key, [])
-
                 if liga_label.startswith("🇩🇪"):
                     shortcut = {"🇩🇪 1. Bundesliga": "bl1", "🇩🇪 2. Bundesliga": "bl2", "🇩🇪 3. Liga": "bl3"}.get(liga_label)
                     raw = fetch_openliga_matches(shortcut)
@@ -424,8 +371,8 @@ if generate_click or not st.session_state['matches_cache']:
                                 dt = datetime.fromisoformat(dt_str).astimezone(tz_de)
                                 if dt_from <= dt.date() <= dt_to:
                                     h, a = m['team1']['teamName'], m['team2']['teamName']
-                                    xg_h, xg_a = calculate_dynamic_xg(h, a)
-                                    mkts = build_markets(xg_h, xg_a, h, a, odds_cache)
+                                    xg_h, xg_a = calculate_dynamic_xg(h, a, liga_label)
+                                    mkts = build_markets(xg_h, xg_a)
                                     all_loaded.append({"liga": liga_label, "home": h, "away": a, "time_str": dt.strftime("%d.%m. - %H:%M Uhr"), "markets": mkts})
                             except:
                                 continue
@@ -437,8 +384,8 @@ if generate_click or not st.session_state['matches_cache']:
                             dt = datetime.fromisoformat(m['utc_date'].replace('Z', '+00:00')).astimezone(tz_de)
                             if dt_from <= dt.date() <= dt_to:
                                 h, a = m['home'], m['away']
-                                xg_h, xg_a = calculate_dynamic_xg(h, a)
-                                mkts = build_markets(xg_h, xg_a, h, a, odds_cache)
+                                xg_h, xg_a = calculate_dynamic_xg(h, a, liga_label)
+                                mkts = build_markets(xg_h, xg_a)
                                 all_loaded.append({"liga": liga_label, "home": h, "away": a, "time_str": dt.strftime("%d.%m. - %H:%M Uhr"), "markets": mkts})
                         except:
                             continue
@@ -447,7 +394,7 @@ if generate_click or not st.session_state['matches_cache']:
 
 matches = [m for m in st.session_state.get('matches_cache', []) if m['liga'] in aktive_generator_ligen]
 
-def get_best_pick(match, profile, checked_bms):
+def get_best_pick(match, profile):
     mkts = match['markets']
     h, a = match['home'], match['away']
     reroll = st.session_state.get('reroll_key', 0)
@@ -466,13 +413,10 @@ def get_best_pick(match, profile, checked_bms):
 
     cands = []
     for item in raw:
-        chosen_bm = random.Random(str(seed) + item['tipp']).choice(checked_bms) if checked_bms else "Tipico"
-        quote = get_best_bookmaker_odds(item['base_q'], chosen_bm)
         cp = item.copy()
-        cp['quote'] = quote
-        cp['best_bookmaker'] = chosen_bm
-        cp['bookmaker_url'] = ANBIETER_URLS.get(chosen_bm, "https://www.tipico.de")
-        cp['ev'] = round((((item['prob'] / 100.0) * quote) - 1.0) * 100.0, 1)
+        cp['quote'] = item['base_q']
+        cp['flashscore_url'] = "https://www.flashscore.de"
+        cp['ev'] = round((((item['prob'] / 100.0) * cp['quote']) - 1.0) * 100.0, 1)
         cands.append(cp)
 
     if "Mittleres Risiko" in profile:
@@ -507,7 +451,7 @@ else:
     if "Reine Einzelwetten" in gen_typ:
         cols = st.columns(2)
         for idx, match in enumerate(shuffled):
-            pick = get_best_pick(match, risiko_profil, aktive_anbieter)
+            pick = get_best_pick(match, risiko_profil)
             current_picks.append((match, pick))
             home_form = get_team_form(match['home'])
             away_form = get_team_form(match['away'])
@@ -538,15 +482,15 @@ else:
                         st.markdown(f"💵 **Einsatz:** `{pick['stake']} €`")
                         st.markdown(f"🎯 **Wahrsch.:** `{pick['prob']}%`")
                     with bc2:
-                        st.metric(label=f"Quote ({pick['best_bookmaker']})", value=f"{pick['quote']}")
+                        st.metric(label="Quote", value=f"{pick['quote']}")
 
-                    st.link_button(f"🔗 Bei {pick['best_bookmaker']} wetten", pick['bookmaker_url'], use_container_width=True)
+                    st.link_button("🔗 Live-Quoten auf Flashscore prüfen", pick['flashscore_url'], use_container_width=True)
 
     elif "Kombiwette" in gen_typ:
         ausgewaehlte = shuffled[:min(len(shuffled), anzahl_wetten)]
         gesamtq = 1.0
         for m in ausgewaehlte:
-            p = get_best_pick(m, risiko_profil, aktive_anbieter)
+            p = get_best_pick(m, risiko_profil)
             gesamtq *= p['quote']
             current_picks.append((m, p))
         st.metric(label="📊 GESAMTQUOTE DES KOMBISCHEINS", value=f"{round(gesamtq, 2)}")
@@ -556,22 +500,22 @@ else:
             with st.container(border=True):
                 st.caption(f"🏆 {m['liga']} | {p['markt']}")
                 st.markdown(f"#### {m['home']} vs {m['away']}")
-                st.markdown(f"Tipp: **{p['tipp']}** ({p['best_bookmaker']}) ➔ **Quote: {p['quote']}**")
-                st.link_button(f"🔗 Zu {p['best_bookmaker']}", p['bookmaker_url'], use_container_width=True)
+                st.markdown(f"Tipp: **{p['tipp']}** ➔ **Quote: {p['quote']}**")
+                st.link_button("🔗 Auf Flashscore vergleichen", p['flashscore_url'], use_container_width=True)
 
     elif "Freebet" in gen_typ:
         fb_picks = shuffled[:2]
         if len(fb_picks) >= 2:
-            p1 = get_best_pick(fb_picks[0], risiko_profil, aktive_anbieter)
-            p2 = get_best_pick(fb_picks[1], risiko_profil, aktive_anbieter)
+            p1 = get_best_pick(fb_picks[0], risiko_profil)
+            p2 = get_best_pick(fb_picks[1], risiko_profil)
             current_picks = [(fb_picks[0], p1), (fb_picks[1], p2)]
             q_ges = round(p1['quote'] * p2['quote'], 2)
             st.info(f"🎁 Freebet-Wert: {freebet_wert} € | Gesamtquote: {q_ges} | Netto-Gewinn: {round((freebet_wert * q_ges) - freebet_wert, 2)} €")
             for m, p in current_picks:
                 with st.container(border=True):
                     st.markdown(f"#### {m['home']} vs {m['away']}")
-                    st.markdown(f"Tipp: `{p['tipp']}` | Quote: **{p['quote']}** ({p['best_bookmaker']})")
-                    st.link_button(f"🔗 Zu {p['best_bookmaker']}", p['bookmaker_url'], use_container_width=True)
+                    st.markdown(f"Tipp: `{p['tipp']}` | Quote: **{p['quote']}**")
+                    st.link_button("🔗 Auf Flashscore vergleichen", p['flashscore_url'], use_container_width=True)
 
     else:
         e1, e2, e3 = round(multi_budget * 0.25, 2), round(multi_budget * 0.50, 2), round(multi_budget * 0.25, 2)
@@ -588,7 +532,7 @@ else:
                 q_s = 1.0
                 t_picks = []
                 for m in t['matches']:
-                    p = get_best_pick(m, risiko_profil, aktive_anbieter)
+                    p = get_best_pick(m, risiko_profil)
                     q_s *= p['quote']
                     t_picks.append((m, p))
                     current_picks.append((m, p))
@@ -613,8 +557,8 @@ else:
     text_share = "📱 *MEINE ELITE-WETTSCHEINE*\n\n"
     for idx, t in enumerate(st.session_state['saved_tickets'], 1):
         for m, p in t['picks']:
-            export_rows.append({"Schein": idx, "Zeit": t['zeitpunkt'], "Heim": m['home'], "Gast": m['away'], "Tipp": p['tipp'], "Quote": p['quote'], "Anbieter": p['best_bookmaker']})
-            text_share += f"⚽ {m['home']} vs {m['away']} ➔ {p['tipp']} @ {p['quote']} ({p['best_bookmaker']})\n"
+            export_rows.append({"Schein": idx, "Zeit": t['zeitpunkt'], "Heim": m['home'], "Gast": m['away'], "Tipp": p['tipp'], "Quote": p['quote']})
+            text_share += f"⚽ {m['home']} vs {m['away']} ➔ {p['tipp']} @ {p['quote']}\n"
     
     col_e1, col_e2 = st.columns(2)
     with col_e1:
@@ -624,3 +568,4 @@ else:
             st.session_state['saved_tickets'] = []
             st.rerun()
     st.code(text_share, language="markdown")
+
