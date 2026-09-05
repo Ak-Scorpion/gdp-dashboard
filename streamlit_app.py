@@ -6,9 +6,10 @@ import math
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from itertools import combinations
+import random
 
 # ============================================================
-# WETT-KI – STRIKTE SPIELTAGS-VERSION
+# WETT-KI – KOMBI-GENERATOR & REROLL VERSION
 # ============================================================
 
 st.set_page_config(
@@ -42,6 +43,8 @@ if "last_update" not in st.session_state:
     st.session_state.last_update = None
 if "errors" not in st.session_state:
     st.session_state.errors = []
+if "reroll_seed" not in st.session_state:
+    st.session_state.reroll_seed = 42
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -127,8 +130,6 @@ def get_current_matchday_fixtures(token, selected_league_names):
             continue
 
         matches = matches_data.get("matches", [])
-        
-        # Fallback: Wenn alle Spiele des aktuellen Spieltags bereits vorbei sind, nimm den nächsten Spieltag
         future_matches = [m for m in matches if parse_utc(m.get("utcDate")) and parse_utc(m.get("utcDate")) > current_time]
         if not future_matches and current_matchday:
             next_matchday = current_matchday + 1
@@ -307,7 +308,7 @@ def analyze_match(row, stats):
 # ============================================================
 
 st.title("⚽ WETT-KI Live")
-st.caption("Aktueller Spieltag der Top-Ligen mit Echtzeit-Quoten & Kelly-Formel")
+st.caption("Aktueller Spieltag der Top-Ligen mit Echtzeit-Quoten, Kelly & Kombi-Generator")
 
 st.sidebar.header("⚙️ Konfiguration")
 football_token = st.sidebar.text_input("football-data.org Token", value=st.session_state.football_token, type="password")
@@ -318,7 +319,7 @@ selected_leagues = st.sidebar.multiselect("Wettbewerbe", list(LEAGUES.keys()), d
 selected_risks = st.sidebar.multiselect("Risiko-Filter", ["LOW", "MID", "HIGH"], default=["LOW", "MID", "HIGH"])
 budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, value=100.0, step=10.0)
 
-if st.sidebar.button("🔄 AKTUELLEN SPIELTAG LADEN", use_container_width=True):
+if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
     with st.spinner("Lade aktuellen Spieltag aller Top-Ligen und Quoten..."):
         fixtures, err1 = get_current_matchday_fixtures(st.session_state.football_token, selected_leagues)
         historical = get_historical_matches(st.session_state.football_token, selected_leagues)
@@ -360,10 +361,10 @@ if not df.empty and selected_risks:
     df = df[df["risk"].isin(selected_risks)]
 
 if df.empty:
-    st.info("Klicke in der Sidebar auf **'Aktuellen Spieltag laden'**, um die offenen Partien des aktuellen Spieltags anzuzeigen.")
+    st.info("Klicke in der Sidebar auf **'Spiele & Quoten laden'**, um die offenen Partien des aktuellen Spieltags anzuzeigen.")
     st.stop()
 
-tab1, tab2, tab3 = st.tabs(["🔥 Top Value & Kelly", "🤖 KI-Analyse", "📊 Live-Quoten"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔥 Top Value & Kelly", "🎟️ Kombi-Generator", "🤖 KI-Analyse", "📊 Live-Quoten"])
 
 with tab1:
     st.subheader("🎯 Empfohlene Value Bets mit Kelly-Einsatz")
@@ -375,10 +376,49 @@ with tab1:
         st.divider()
 
 with tab2:
+    st.subheader("🎟️ Automatischer Kombi-Schein Generator")
+    
+    col_k1, col_k2 = st.columns([2, 2])
+    with col_k1:
+        num_legs = st.number_input("Anzahl Spiele im Kombi-Schein (Legs)", min_value=2, max_value=10, value=3, step=1)
+    with col_k2:
+        st.write("")
+        st.write("")
+        if st.button("🎲 Neue Scheine generieren (Reroll)", use_container_width=True):
+            st.session_state.reroll_seed = np.random.randint(0, 100000)
+            st.rerun()
+
+    if len(df) < num_legs:
+        st.warning(f"Nicht genügend Spiele vorhanden, um einen Kombi-Schein mit {num_legs} Legs zu erstellen (aktuell verfügbar: {len(df)}).")
+    else:
+        # Zufällige Auswahl basierend auf dem Reroll-Seed
+        shuffled_df = df.sample(frac=1.0, random_state=st.session_state.reroll_seed).reset_index(drop=True)
+        kombi_rows = shuffled_df.head(num_legs)
+
+        total_kombi_odd = 1.0
+        combined_conf = 1.0
+
+        st.markdown(f"### 📋 Kombi-Schein ({numerische_bezeichnung := num_legs}er-Kombi)")
+        
+        for _, row in kombi_rows.iterrows():
+            sel_odd = row['odd_1'] if row['prediction'] == '1' else (row['odd_x'] if row['prediction'] == 'X' else row['odd_2'])
+            total_kombi_odd *= sel_odd
+            combined_conf *= row['confidence']
+            st.write(f"• **{row['league']}**: {row['home']} vs {row['away']} → Tipp: **{row['prediction']}** (Quote: {sel_odd:.2f})")
+
+        st.markdown("---")
+        st.metric("Gesamtquote", f"{total_kombi_odd:.2f}")
+        st.metric("Modell-Gesamtwahrscheinlichkeit", f"{combined_conf * 100:.2f}%")
+        
+        kombi_stake = min(budget * 0.1, 10.0) # Empfohlener kleiner Einsatz für Kombis
+        potential_payout = kombi_stake * total_kombi_odd
+        st.info(empfehlung_text := f"Empfohlener Kombi-Einsatz: **{kombi_stake:.2f} €** | Möglicher Gewinn: **{potential_payout:.2f} €**")
+
+with tab3:
     st.subheader("Vollständige Spielmatrix")
     st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "prediction", "confidence", "risk"]], use_container_width=True)
 
-with tab3:
+with tab4:
     st.subheader("Aktuelle Buchmacherquoten & Fallback")
     st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "odd_1", "odd_x", "odd_2", "bookmaker_1"]], use_container_width=True)
 
