@@ -133,7 +133,6 @@ ANBIETER_URLS = {
 
 @st.cache_data(ttl=300)
 def fetch_live_odds_for_sport(sport_key):
-    """Zentrale, blitzschnelle Abfrage mit automatischem Key-Failover für echte Quoten."""
     for key in ODDS_API_KEYS:
         if not key.strip():
             continue
@@ -225,7 +224,6 @@ def build_markets(home_xg, away_xg, home_team, away_team, odds_cache):
     p_under25 = 1.0 - p_over25
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
 
-    # Echte Live-Quoten aus dem API-Cache matchen
     live_odds = None
     for ev in odds_cache:
         if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
@@ -319,7 +317,7 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-with st.expander("⚙️ Einstellungen & Ligen-Auswahl (Strikte Filterung)", expanded=True):
+with st.expander("⚙️ Einstellungen & Ligen-Auswahl (100% Strikter Filter)", expanded=True):
     col_bank1, col_bank2 = st.columns(2)
     with col_bank1:
         total_bankroll = st.number_input("💰 Gesamt-Bankroll (€):", min_value=1.0, value=58.0, step=1.0)
@@ -349,20 +347,20 @@ with st.expander("⚙️ Einstellungen & Ligen-Auswahl (Strikte Filterung)", exp
     aktive_anbieter = []
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        if st.checkbox("Tipico", value=True): aktive_anbieter.append("Tipico")
-        if st.checkbox("bwin", value=True): aktive_anbieter.append("bwin")
+        if st.checkbox("Tipico", value=True, key="b1"): aktive_anbieter.append("Tipico")
+        if st.checkbox("bwin", value=True, key="b2"): aktive_anbieter.append("bwin")
     with c2:
-        if st.checkbox("Bet365", value=True): aktive_anbieter.append("Bet365")
-        if st.checkbox("Betano", value=True): aktive_anbieter.append("Betano")
+        if st.checkbox("Bet365", value=True, key="b3"): aktive_anbieter.append("Bet365")
+        if st.checkbox("Betano", value=True, key="b4"): aktive_anbieter.append("Betano")
     with c3:
-        if st.checkbox("DAZN Bet", value=True): aktive_anbieter.append("DAZN Bet")
-        if st.checkbox("Neo.bet", value=True): aktive_anbieter.append("Neo.bet")
+        if st.checkbox("DAZN Bet", value=True, key="b5"): aktive_anbieter.append("DAZN Bet")
+        if st.checkbox("Neo.bet", value=True, key="b6"): aktive_anbieter.append("Neo.bet")
     with c4:
-        if st.checkbox("Oddset", value=True): aktive_anbieter.append("Oddset")
-        if st.checkbox("Bet-at-home", value=True): aktive_anbieter.append("Bet-at-home")
+        if st.checkbox("Oddset", value=True, key="b7"): aktive_anbieter.append("Oddset")
+        if st.checkbox("Bet-at-home", value=True, key="b8"): aktive_anbieter.append("Bet-at-home")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Exakt aktiv):")
+    st.markdown("#### 🏆 Ligen-Auswahl (Strikte Filterung):")
     aktive_generator_ligen = []
     l1, l2 = st.columns(2)
     with l1:
@@ -399,10 +397,10 @@ if generate_click or not st.session_state['matches_cache']:
     elif not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade Live-Quoten & filtere Ligen..."):
+        with st.spinner("Lade Blitz-Live-Quoten & filtere Ligen..."):
             all_loaded = []
             
-            # Globaler Quoten-Cache für alle aktiv gewählten Ligen holen
+            # Nur für die TATSÄCHLICH angekreuzten Ligen Daten laden!
             sport_key_cache = {}
             for liga in aktive_generator_ligen:
                 s_key = LEAGUE_SPORT_KEYS.get(liga)
@@ -442,7 +440,7 @@ if generate_click or not st.session_state['matches_cache']:
                         except:
                             continue
 
-            # STRIKTE FILTERUNG: Nur Spiele behalten, deren Liga aktiv in aktive_generator_ligen ist!
+            # Doppelt abgesicherte Filterung: Es wird NUR übernommen, was auch in aktive_generator_ligen ist!
             st.session_state['matches_cache'] = [m for m in all_loaded if m['liga'] in aktive_generator_ligen]
 
 matches = [m for m in st.session_state.get('matches_cache', []) if m['liga'] in aktive_generator_ligen]
@@ -624,3 +622,4 @@ else:
             st.session_state['saved_tickets'] = []
             st.rerun()
     st.code(text_share, language="markdown")
+
