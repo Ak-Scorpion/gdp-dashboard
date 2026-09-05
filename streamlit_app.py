@@ -4425,4 +4425,4 @@ st.caption(
     "Value/Kelly/Kombi ausschließlich mit echten "
     "Buchmacherquoten. Modellwahrscheinlichkeiten sind "
     "Schätzungen und keine Gewinn- oder Wettgarantie."
-        )
+    )
