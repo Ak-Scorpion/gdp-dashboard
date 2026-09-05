@@ -289,7 +289,7 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Dixon-Coles Modell • Präzise Quoten-Filter (Safe / Balanced / High-Risk) • Bankroll Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Dixon-Coles Modell • Striktes Liga-Filtering • Bankroll Ziel: 58€ ➔ 100€</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
             <span>🔄 <b>Auto-Refresh:</b> Alle 20 Min</span>
@@ -350,13 +350,13 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
         if st.checkbox("Bet-at-home", value=True, key="bm_bah"): aktive_anbieter.append("Bet-at-home")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Top-Ligen (Optimale Datenqualität):")
+    st.markdown("#### 🏆 Ausgewählte Ligen (Nur diese werden geladen):")
     aktive_generator_ligen = []
     col_l1, col_l2 = st.columns(2)
     with col_l1:
         if st.checkbox("🇩🇪 1. Bundesliga", value=True, key="h_de1"): aktive_generator_ligen.append("🇩🇪 1. Bundesliga")
-        if st.checkbox("🇩🇪 2. Bundesliga", value=True, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
-        if st.checkbox("🇩🇪 3. Liga", value=True, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
+        if st.checkbox("🇩🇪 2. Bundesliga", value=False, key="h_de2"): aktive_generator_ligen.append("🇩🇪 2. Bundesliga")
+        if st.checkbox("🇩🇪 3. Liga", value=False, key="h_de3"): aktive_generator_ligen.append("🇩🇪 3. Liga")
         if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=True, key="h_en1"): aktive_generator_ligen.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
         if st.checkbox("🇪🇸 La Liga", value=True, key="h_es1"): aktive_generator_ligen.append("🇪🇸 La Liga")
     with col_l2:
@@ -409,9 +409,10 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
     elif generate_click and not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Analysiere Dixon-Coles xG, Team-Form & Quoten..."):
+        with st.spinner("Lade ausschließlich ausgewählte Ligen & berechne Dixon-Coles..."):
             all_loaded_matches = []
             
+            # STRIKTE FILTERUNG: Es werden nur die Ligen durchlaufen, die der Nutzer im Checkbox-Menü markiert hat!
             for liga_label in aktive_generator_ligen:
                 if liga_label in OPENLIGA_SHORTCUTS:
                     shortcut = OPENLIGA_SHORTCUTS[liga_label]
@@ -497,7 +498,6 @@ def get_best_pick(match, profile, checked_bookmakers):
         {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen", "key": "btts_ja"}
     ]
 
-    # Präzises Filtern nach Quoten-Wünschen des Nutzers
     if "Mittleres Risiko" in profile:
         valid = [c for c in candidates if 1.50 <= c['base_q'] <= 2.10]
         if not valid: 
@@ -506,7 +506,7 @@ def get_best_pick(match, profile, checked_bookmakers):
         valid = [c for c in candidates if c['base_q'] > 2.10]
         if not valid: 
             valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:3]
-    else: # Safe Mode
+    else: 
         valid = [c for c in candidates if c['base_q'] < 1.50]
         if not valid: 
             valid = sorted(candidates, key=lambda x: x['base_q'])[:3]
@@ -532,7 +532,7 @@ def get_best_pick(match, profile, checked_bookmakers):
     }
 
 if not matches:
-    st.info(f"ℹ️ Keine Ansetzungen im gewählten Zeitraum gefunden. Bitte klicke auf 'Elite-Spiele laden'.")
+    st.info(f"ℹ️ Keine Ansetzungen für die ausgewählten Ligen im gewählten Zeitraum gefunden.")
 else:
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
@@ -715,3 +715,4 @@ else:
 
     st.markdown("**📋 Teilen-Text:**")
     st.code(text_share, language="markdown")
+
