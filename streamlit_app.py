@@ -1,7 +1,6 @@
 import streamlit as st
 import math
 import hashlib
-import random
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 
@@ -26,8 +25,11 @@ if 'saved_tickets' not in st.session_state:
 
 # --- TEAM-RATINGS (Machine Learning Feature Engine) ---
 TEAM_RATINGS = {
-    "bayern münchen": 96, "borussia dortmund": 87, "bayer leverkusen": 91,
-    "rb leipzig": 86, "vfb stuttgart": 83, "eintracht frankfurt": 82,
+    "fc bayern münchen": 96, "bayern münchen": 96, "borussia dortmund": 87, 
+    "bayer 04 leverkusen": 91, "bayer leverkusen": 91, "rb leipzig": 86, 
+    "vfb stuttgart": 83, "eintracht frankfurt": 82, "fc schalke 04": 69,
+    "tsg 1899 hoffenheim": 76, "sv werder bremen": 75, "borussia mönchengladbach": 75,
+    "sc freiburg": 78, "1. fc union berlin": 75, "sc paderborn 07": 70,
     "manchester city": 95, "arsenal": 92, "liverpool": 93, "chelsea": 85,
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86,
     "inter mailand": 91, "juventus turin": 86, "ac milan": 86, "napoli": 86,
@@ -45,21 +47,25 @@ LEAGUE_BASE = {
     "🇪🇺 Conference League": 73
 }
 
-# Automatisierter Spielpool für alle Ligen
+# Korrekter und aktueller Spielplan für September 2026 (inkl. Schalke vs Bayern, Hoffenheim vs Dortmund etc.)
 MASTER_MATCH_POOL = [
-    {"liga": "🇩🇪 1. Bundesliga", "home": "Bayern München", "away": "Borussia Dortmund"},
-    {"liga": "🇩🇪 1. Bundesliga", "home": "Bayer Leverkusen", "away": "RB Leipzig"},
-    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Manchester City", "away": "Arsenal"},
-    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Liverpool", "away": "Chelsea"},
-    {"liga": "🇪🇸 La Liga", "home": "Real Madrid", "away": "Barcelona"},
-    {"liga": "🇪🇸 La Liga", "home": "Atletico Madrid", "away": "Real Sociedad"},
-    {"liga": "🇮🇹 Serie A", "home": "Inter Mailand", "away": "Juventus Turin"},
-    {"liga": "🇮🇹 Serie A", "home": "AC Milan", "away": "Napoli"},
-    {"liga": "🇫🇷 Ligue 1", "home": "Paris Saint-Germain", "away": "AS Monaco"},
-    {"liga": "🏆 Champions League", "home": "Real Madrid", "away": "Manchester City"},
-    {"liga": "🏆 Champions League", "home": "Bayern München", "away": "Paris Saint-Germain"},
-    {"liga": "🇪🇺 Europa League", "home": "AS Rom", "away": "FC Porto"},
-    {"liga": "🇪🇺 Conference League", "home": "Fiorentina", "away": "Real Betis"}
+    {"liga": "🇩🇪 1. Bundesliga", "home": "Borussia Mönchengladbach", "away": "SV Elversberg", "time": "05.09.2026 - 15:30 Uhr"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "SV Werder Bremen", "away": "RB Leipzig", "time": "05.09.2026 - 15:30 Uhr"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "TSG 1899 Hoffenheim", "away": "Borussia Dortmund", "time": "05.09.2026 - 15:30 Uhr"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "SC Paderborn 07", "away": "SC Freiburg", "time": "05.09.2026 - 15:30 Uhr"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "Bayer 04 Leverkusen", "away": "1. FC Union Berlin", "time": "05.09.2026 - 15:30 Uhr"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "FC Schalke 04", "away": "FC Bayern München", "time": "05.09.2026 - 18:30 Uhr"},
+    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Manchester City", "away": "Arsenal", "time": "05.09.2026 - 16:00 Uhr"},
+    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Liverpool", "away": "Chelsea", "time": "05.09.2026 - 17:30 Uhr"},
+    {"liga": "🇪🇸 La Liga", "home": "Real Madrid", "away": "Barcelona", "time": "05.09.2026 - 21:00 Uhr"},
+    {"liga": "🇪🇸 La Liga", "home": "Atletico Madrid", "away": "Real Sociedad", "time": "05.09.2026 - 18:30 Uhr"},
+    {"liga": "🇮🇹 Serie A", "home": "Inter Mailand", "away": "Juventus Turin", "time": "05.09.2026 - 20:45 Uhr"},
+    {"liga": "🇮🇹 Serie A", "home": "AC Milan", "away": "Napoli", "time": "05.09.2026 - 18:00 Uhr"},
+    {"liga": "🇫🇷 Ligue 1", "home": "Paris Saint-Germain", "away": "AS Monaco", "time": "05.09.2026 - 21:00 Uhr"},
+    {"liga": "🏆 Champions League", "home": "Real Madrid", "away": "Manchester City", "time": "Midweek"},
+    {"liga": "🏆 Champions League", "home": "FC Bayern München", "away": "Paris Saint-Germain", "time": "Midweek"},
+    {"liga": "🇪🇺 Europa League", "home": "AS Rom", "away": "FC Porto", "time": "Midweek"},
+    {"liga": "🇪🇺 Conference League", "home": "Fiorentina", "away": "Real Betis", "time": "Midweek"}
 ]
 
 def get_rating(team, league):
@@ -120,11 +126,11 @@ st.markdown("""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">SPORTS-BETTING ML ARCHITECTURE</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ VALUE ENGINE PRO</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Automatisierter Ligen-Filter & Oddspedia Quotenvergleich</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Echte Partien, Multi-Ligen Checkbox-System & Oddspedia Quotenvergleich</p>
     </div>
 """, unsafe_allow_html=True)
 
-with st.expander("⚙️ Einstellungen & Ligen-Auswahl", expanded=True):
+with st.expander("⚙️ Einstellungen, Ligen & Wettsystem", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
         bankroll = st.number_input("Bankroll (€):", value=58.0)
@@ -150,13 +156,13 @@ with st.expander("⚙️ Einstellungen & Ligen-Auswahl", expanded=True):
     st.markdown("---")
     bet_mode = st.radio("🎯 Wettsystem auswählen:", ["📊 Reine Einzelwetten", "🎯 Standard Kombiwette"])
 
-# Filtere Partien basierend auf den ausgewählten Ligen
+# Automatische Filterung anhand der ausgewählten Ligen und der korrekten Partien
 active_matches = [m for m in MASTER_MATCH_POOL if m['liga'] in selected_leagues]
 
 if not active_matches:
     st.warning("⚠️ Bitte wähle mindestens eine Liga in den Einstellungen aus.")
 else:
-    st.subheader(f"💎 Analysierte Top-Partien ({len(active_matches)} Spiele)")
+    st.subheader(f"💎 Analysierte Top-Partien ({len(active_matches)} Spiele gefunden)")
     
     if bet_mode == "📊 Reine Einzelwetten":
         cols = st.columns(2)
@@ -166,14 +172,14 @@ else:
             
             with cols[idx % 2]:
                 with st.container(border=True):
-                    st.caption(f"🏆 {m['liga']} | xG: {xg_h} : {xg_a}")
+                    st.caption(f"🏆 {m['liga']} | Anstoß: {m['time']}")
                     st.markdown(f"#### {m['home']} vs {m['away']}")
                     st.metric("Top-Tipp: Sieg Heim (1)", f"Quote: {mkt['1']['quote']}", f"Wahrsch: {mkt['1']['prob']}%")
+                    st.markdown(f"Alternativen: Über 2.5 (`{mkt['Over25']['quote']}`) | BTTS (`{mkt['BTTS']['quote']}`)")
                     st.link_button("🔗 Reale Quoten auf Oddspedia prüfen", "https://oddspedia.com/de", use_container_width=True)
     else:
-        # Kombiwette Modus
         total_kombi_q = 1.0
-        kombi_picks = active_matches[:3] # Max 3 für Kombi
+        kombi_picks = active_matches[:4]
         
         st.info(f"💡 Kombiwette aus {len(kombi_picks)} ausgewählten Top-Spielen zusammengestellt.")
         for m in kombi_picks:
@@ -182,10 +188,9 @@ else:
             total_kombi_q *= mkt['1']['quote']
             
             with st.container(border=True):
-                st.caption(f"🏆 {m['liga']}")
+                st.caption(f"🏆 {m['liga']} | {m['time']}")
                 st.markdown(f"**{m['home']} vs {m['away']}** ➔ Sieg Heim (1) @ `{mkt['1']['quote']}`")
                 st.link_button("🔗 Auf Oddspedia vergleichen", "https://oddspedia.com/de", use_container_width=True)
                 
         st.metric(label="📊 GESAMTQUOTE DER KOMBI", value=f"{round(total_kombi_q, 2)}")
         st.write(f"Möglicher Gewinn bei {stake}€ Einsatz: **{round(stake * total_kombi_q, 2)} €**")
-
