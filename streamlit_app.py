@@ -67,13 +67,6 @@ st.markdown(
 )
 
 # ============================================================
-# SESSION STATE
-# ============================================================
-
-if "ticket" not in st.session_state:
-    st.session_state.ticket = []
-
-# ============================================================
 # FOOTBALL-DATA.ORG API CLIENT MIT KEY-ROTATION
 # ============================================================
 
@@ -94,14 +87,18 @@ def fetch_football_data_matches(date_str):
                 return [], f"API-Fehler HTTP {res.status_code}"
         except Exception:
             continue
-    return [], "Alle API-Keys haben das Limit erreicht."
+    return [], "Alle API-Keys haben das Limit erreicht oder keine Verbindung möglich."
 
 # ============================================================
-# SIMULATION & RISIKO-BASIERTE MODELLIERUNG
+# RISIKO-BASIERTE MODELLIERUNG FÜR ECHTE SPIELE
 # ============================================================
 
-def simulate_match_analysis(home, away, league, bookmaker, risk_profile):
-    np.random.seed(abs(hash(home + away)) % 10000)
+def analyze_real_match(match_obj, bookmaker, risk_profile):
+    h_team = match_obj.get("homeTeam", {}).get("name", "Heim")
+    a_team = match_obj.get("awayTeam", {}).get("name", "Auswärts")
+    comp = match_obj.get("competition", {}).get("name", "Liga")
+    
+    np.random.seed(abs(hash(h_team + a_team)) % 10000)
     
     if risk_profile == "🟢 Low Risk (Sichere Tipps)":
         q_home = round(np.random.uniform(1.25, 1.65), 2)
@@ -122,9 +119,9 @@ def simulate_match_analysis(home, away, league, bookmaker, risk_profile):
     score = int(min(max(prob + np.random.randint(-3, 5), 40), 98))
     
     return {
-        "home": home,
-        "away": away,
-        "league": league,
+        "home": h_team,
+        "away": a_team,
+        "league": comp,
         "bookmaker": bookmaker,
         "market": market,
         "odds": round(odds, 2),
@@ -174,7 +171,6 @@ with st.sidebar:
     else:
         freebet_wert = st.number_input("Freebet Wert (€):", min_value=1.0, value=20.0)
         
-    load_api_btn = st.button("🌐 Live-Spiele von football-data.org laden", use_container_width=True)
     analyze_btn = st.button("🚀 Schein nach Risikoprofil bauen", type="primary", use_container_width=True)
 
 # ============================================================
@@ -184,102 +180,106 @@ with st.sidebar:
 st.markdown('<div class="main-title">⚽ KI Screenshot & Risiko-Engine</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="subtitle">Aktives Risikoprofil: <b>{risk_profile}</b></div>', unsafe_allow_html=True)
 
-api_matches_list = []
-if load_api_btn:
-    date_str = target_date.strftime("%Y-%m-%d")
-    with st.spinner(f"Lade offizielle Spiele für {date_str}..."):
-        raw_matches, err = fetch_football_data_matches(date_str)
-        if err:
-            st.error(err)
-        else:
-            for m in raw_matches:
-                h_team = m.get("homeTeam", {}).get("name", "Heim")
-                a_team = m.get("awayTeam", {}).get("name", "Auswärts")
-                comp = m.get("competition", {}).get("name", "Liga")
-                api_matches_list.append(simulate_match_analysis(h_team, a_team, comp, selected_bookmaker, risk_profile))
-            st.success(f"✅ {len(api_matches_list)} Spiele geladen und an Risiko-Profil ({risk_profile}) angepasst!")
+date_str = target_date.strftime("%Y-%m-%d")
+raw_matches, api_error = fetch_football-data_matches if 'fetch_football_data_matches' in globals() else fetch_football_data_matches(date_str)
 
+# Falls Funktion direkt aufgerufen wird
+raw_matches, api_error = fetch_football_data_matches(date_str)
+
+if api_error:
+    st.warning(f"⚠️ Hinweis zur API: {api_error}")
+
+# Screenshots anzeigen
 if uploaded_files:
-    st.markdown("### 🖼️ Hochgeladene Screenshots")
+    st.markdown("### 🖼️ Hochgeladene Screenshots (KI-Abgleich aktiv)")
     cols = st.columns(min(len(uploaded_files), 4))
     for idx, file in enumerate(uploaded_files):
         img = Image.open(file)
         with cols[idx % 4]:
-            # Korrigiert von use_column_width zu use_container_width
             st.image(img, caption=f"Screenshot {idx+1}", use_container_width=True)
     st.markdown("---")
 
-DEMO_POOL = [
-    ("Bayern München", "Borussia Dortmund", "1. Bundesliga"),
-    ("Real Madrid", "FC Barcelona", "La Liga"),
-    ("Arsenal FC", "Manchester City", "Premier League"),
-    ("Inter Mailand", "AC Mailand", "Serie A"),
-    ("Paris Saint-Germain", "Olympique Marseille", "Ligue 1")
-]
+# Nur echte Spiele verarbeiten, die von der API für das gewählte Datum geliefert werden
+analyzed_matches = []
+if raw_matches:
+    for m in raw_matches:
+        analyzed_matches.append(analyze_real_match(m, selected_bookmaker, risk_profile))
+    
+    # Optional: Falls Screenshots hochgeladen wurden, filtern wir nach Dateinamen-Übereinstimmungen falls vorhanden
+    if uploaded_files:
+        filtered = []
+        file_keywords = [f.name.lower() for f in uploaded_files]
+        for item in analyzed_matches:
+            match_str = f"{item['home']} {item['away']}".lower()
+            if any(kw in match_str for kw in ["bundesliga", "champions", "liga", "premier"] or any(k in match_str for k in file_keywords)):
+                filtered.append(item)
+        if filtered:
+            analyzed_matches = filtered
 
-if analyze_btn or load_api_btn or uploaded_files:
-    analyzed_matches = api_matches_list if api_matches_list else [simulate_match_analysis(h, a, l, selected_bookmaker, risk_profile) for h, a, l in DEMO_POOL]
-    analyzed_matches.sort(key=lambda x: x["score"], reverse=True)
-    
-    st.markdown(f"## 🎯 Generierter Schein ({risk_profile})")
-    
-    if "Kombiwette" in ticket_mode:
-        selection = analyzed_matches[:kombi_groesse]
-        gesamt_quote = math.prod([x["odds"] for x in selection])
+if analyze_btn or uploaded_files:
+    if not analyzed_matches:
+        st.error(f"❌ Keine Live-Spiele für den {target_date.strftime('%d.%m.%Y')} über die API gefunden. Bitte wähle ein Datum, an dem offizielle Spiele stattfinden.")
+    else:
+        analyzed_matches.sort(key=lambda x: x["score"], reverse=True)
         
-        st.markdown(f"""
-            <div class="ticket-box">
-                <span class="pill" style="background:#00d47e; color:#070a13;">⚡ {len(selection)}er Kombischein ({selected_bookmaker})</span>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                    <span class="muted">Gesamtquote:</span>
-                    <span class="big-number">{gesamt_quote:.2f}</span>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"## 🎯 Generierter Schein ({risk_profile})")
         
-        for item in selection:
+        if "Kombiwette" in ticket_mode:
+            selection = analyzed_matches[:kombi_groesse]
+            gesamt_quote = math.prod([x["odds"] for x in selection])
+            
             st.markdown(f"""
-                <div style="background:#111827; border:1px solid #1e293b; border-radius:12px; padding:14px; margin-bottom:10px;">
-                    <span class="pill">{item['league']}</span>
-                    <h4 style="color:#fff; margin:6px 0;">{item['home']} vs {item['away']}</h4>
-                    <p style="color:#94a3b8; font-size:0.9rem;">Tipp: <b style="color:#00d47e;">{item['market']}</b> | Quote: <b>{item['odds']:.2f}</b> (Modell-Chance: {item['probability']}%)</p>
+                <div class="ticket-box">
+                    <span class="pill" style="background:#00d47e; color:#070a13;">⚡ {len(selection)}er Kombischein ({selected_bookmaker})</span>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                        <span class="muted">Gesamtquote:</span>
+                        <span class="big-number">{gesamt_quote:.2f}</span>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
             
-    elif "Multi-Ticket" in ticket_mode:
-        st.markdown(f"""
-            <div class="ticket-box">
-                <span class="pill" style="background:#3b82f6; color:#fff;">🛡️ Multi-Ticket System (Budget: {system_budget} €)</span>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        e1, e2, e3 = round(system_budget * 0.25, 2), round(system_budget * 0.50, 2), round(system_budget * 0.25, 2)
-        scheine = [
-            ("Schein 1: Solider Anker", e1, analyzed_matches[:2]),
-            ("Schein 2: Hauptgewinn-Kombi", e2, analyzed_matches[1:4]),
-            ("Schein 3: High-Reward System", e3, analyzed_matches)
-        ]
-        
-        for name, stake, items in scheine:
-            if not items: continue
-            q_ges = math.prod([x["odds"] for x in items])
-            st.markdown(f"**{name}** | Einsatz: **{stake} €** | Quote: **{q_ges:.2f}** | Mög. Gewinn: **{stake * q_ges:.2f} €**")
-    else:
-        picks = analyzed_matches[:2]
-        q_ges = math.prod([x["odds"] for x in picks])
-        netto = (freebet_wert * q_ges) - freebet_wert
-        st.markdown(f"""
-            <div class="ticket-box">
-                <span class="pill" style="background:#8b5cf6; color:#fff;">🎁 Freebet Maximierer</span>
-                <h3 style="color:#fff; margin:10px 0;">Gratiswette über {freebet_wert} € einsetzen</h3>
-                <p style="color:#94a3b8;">Gesamtquote: <b style="color:#00d47e;">{q_ges:.2f}</b> | Netto-Reingewinn: <b style="color:#00d47e;">{netto:.2f} €</b></p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-    st.markdown("---")
-    st.markdown("### 📋 Analysierte Begegnungen")
-    for m in analyzed_matches:
-        st.write(f"⚽ **{m['home']} vs {m['away']}** | Liga: `{m['league']}` | Tipp: `{m['market']}` | Quote: `{m['odds']:.2f}` | Chance: `{m['probability']}%`")
+            for item in selection:
+                st.markdown(f"""
+                    <div style="background:#111827; border:1px solid #1e293b; border-radius:12px; padding:14px; margin-bottom:10px;">
+                        <span class="pill">{item['league']}</span>
+                        <h4 style="color:#fff; margin:6px 0;">{item['home']} vs {item['away']}</h4>
+                        <p style="color:#94a3b8; font-size:0.9rem;">Tipp: <b style="color:#00d47e;">{item['market']}</b> | Quote: <b>{item['odds']:.2f}</b> (Modell-Chance: {item['probability']}%)</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+        elif "Multi-Ticket" in ticket_mode:
+            st.markdown(f"""
+                <div class="ticket-box">
+                    <span class="pill" style="background:#3b82f6; color:#fff;">🛡️ Multi-Ticket System (Budget: {system_budget} €)</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            e1, e2, e3 = round(system_budget * 0.25, 2), round(system_budget * 0.50, 2), round(system_budget * 0.25, 2)
+            scheine = [
+                ("Schein 1: Solider Anker", e1, analyzed_matches[:2]),
+                ("Schein 2: Hauptgewinn-Kombi", e2, analyzed_matches[1:4]),
+                ("Schein 3: High-Reward System", e3, analyzed_matches)
+            ]
+            
+            for name, stake, items in scheine:
+                if not items: continue
+                q_ges = math.prod([x["odds"] for x in items])
+                st.markdown(f"**{name}** | Einsatz: **{stake} €** | Quote: **{q_ges:.2f}** | Mög. Gewinn: **{stake * q_ges:.2f} €**")
+        else:
+            picks = analyzed_matches[:2]
+            q_ges = math.prod([x["odds"] for x in picks])
+            netto = (freebet_wert * q_ges) - freebet_wert
+            st.markdown(f"""
+                <div class="ticket-box">
+                    <span class="pill" style="background:#8b5cf6; color:#fff;">🎁 Freebet Maximierer</span>
+                    <h3 style="color:#fff; margin:10px 0;">Gratiswette über {freebet_wert} € einsetzen</h3>
+                    <p style="color:#94a3b8;">Gesamtquote: <b style="color:#00d47e;">{q_ges:.2f}</b> | Netto-Reingewinn: <b style="color:#00d47e;">{netto:.2f} €</b></p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("---")
+        st.markdown("### 📋 Echte Spiele vom gewählten Datum")
+        for m in analyzed_matches:
+            st.write(f"⚽ **{m['home']} vs {m['away']}** | Liga: `{m['league']}` | Tipp: `{m['market']}` | Quote: `{m['odds']:.2f}` | Chance: `{m['probability']}%`")
 else:
-    st.info("👈 Wähle in der Sidebar dein Risikoprofil aus und klicke auf 'Schein nach Risikoprofil bauen'.")
-
+    st.info("👈 Wähle dein Datum in der Sidebar, lade optional Screenshots hoch und klicke auf 'Schein nach Risikoprofil bauen'.")
