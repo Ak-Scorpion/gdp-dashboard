@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 import requests
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from itertools import combinations
 
 # ============================================================
-# WETT-KI – AKTUELLER SPIELTAG TOP-LIGEN
+# WETT-KI – KORRIGIERTE VERSION
 # ============================================================
 
 st.set_page_config(
@@ -107,7 +107,6 @@ def get_current_matchday_fixtures(token, competition_codes):
     errors = []
 
     for code in competition_codes:
-        # 1. Wettbewerbsdetails abrufen, um den aktuellen Spieltag (currentMatchday) zu ermitteln
         comp_url = f"{FOOTBALL_DATA_URL}/competitions/{code}"
         comp_data, error = api_get_cached(comp_url, headers=headers)
         if error:
@@ -120,7 +119,6 @@ def get_current_matchday_fixtures(token, competition_codes):
 
         comp_name = comp_data.get("name")
 
-        # 2. Spiele für diesen exakten Spieltag abrufen
         matches_url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
         matches_data, error = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
         if error:
