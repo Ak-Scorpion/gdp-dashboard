@@ -13,7 +13,7 @@ from difflib import SequenceMatcher
 # ============================================================
 
 st.set_page_config(
-    page_title="KI Screenshot & Football-Data Engine",
+    page_title="KI Screenshot & Risiko-Engine",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -103,7 +103,7 @@ def fetch_football_data_matches(date_str):
 def simulate_match_analysis(home, away, league, bookmaker, risk_profile):
     np.random.seed(abs(hash(home + away)) % 10000)
     
-    if risk_profile == "🟢 Low Risk (Sicher)":
+    if risk_profile == "🟢 Low Risk (Sichere Tipps)":
         q_home = round(np.random.uniform(1.25, 1.65), 2)
         prob = round(np.random.uniform(75.0, 92.0), 1)
         market = "Doppelte Chance 1X"
@@ -205,7 +205,8 @@ if uploaded_files:
     for idx, file in enumerate(uploaded_files):
         img = Image.open(file)
         with cols[idx % 4]:
-            st.image(img, caption=f"Screenshot {idx+1}", use_column_width=True)
+            # Korrigiert von use_column_width zu use_container_width
+            st.image(img, caption=f"Screenshot {idx+1}", use_container_width=True)
     st.markdown("---")
 
 DEMO_POOL = [
