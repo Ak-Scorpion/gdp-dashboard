@@ -79,10 +79,10 @@ def fetch_live_schedule(sport, keys):
         try:
             response = requests.get(url, params=params, timeout=10)
             if response.status_code == 200:
-                st.session_state['api_key_idx'] = current_idx # Erfolgreichen Key merken
+                st.session_state['api_key_idx'] = current_idx
                 return response.json(), None
             elif response.status_code in [401, 429]:
-                continue # Nächsten Key versuchen
+                continue
             else:
                 return None, f"API Fehler {response.status_code}: {response.text}"
         except Exception as e:
@@ -111,8 +111,8 @@ with st.spinner("Lade aktuelle Live-Spiele und Quoten..."):
             
             with cols[i % 2]:
                 with st.container(border=True):
-                    st.caption(📅 Anstoß: {commence} | Anbieter: {tipico['title'] if tipico else 'Keine Quoten'})
-                    st.markdown(### {home} vs {away})
+                    st.caption(f"📅 Anstoß: {commence} | Anbieter: {tipico['title'] if tipico else 'Keine Quoten'}")
+                    st.markdown(f"### {home} vs {away}")
                     
                     if tipico and tipico.get('markets'):
                         outcomes = tipico['markets'][0]['outcomes']
