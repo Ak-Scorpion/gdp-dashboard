@@ -51,8 +51,8 @@ TEAM_RATINGS = {
     "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
     "freiburg": 78, "union berlin": 75, "mainz": 74, "augsburg": 73,
     "werder bremen": 75, "hoffenheim": 76, "heidenheim": 73, "st. pauli": 70,
-    "bochum": 68, "holstein kiel": 67,
-    "hsv": 74, "hamburger sv": 74, "köln": 74, "hertha": 73, "schalke": 71,
+    "bochum": 68, "holstein kiel": 67, "schalke": 78,
+    "hsv": 74, "hamburger sv": 74, "köln": 74, "hertha": 73,
     "duesseldorf": 74, "düsseldorf": 74, "hannover": 72, "paderborn": 71,
     "karlsruhe": 72, "kaiserslautern": 71, "dresden": 66, "aachen": 63,
     "essen": 64, "1860 münchen": 64, "osnabrück": 65, "rostock": 65,
@@ -72,7 +72,7 @@ def get_team_rating(team_name):
     for key, rating in TEAM_RATINGS.items():
         if key in name_clean:
             return rating
-    return 73
+    return 75
 
 def calculate_dynamic_xg(home_team, away_team):
     r_home = get_team_rating(home_team) + 4
@@ -179,7 +179,6 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
 
 @st.cache_data(ttl=600)
 def get_cached_live_odds():
-    """Lädt die Quoten einmalig zentral über die API-Schlüssel, um Blockaden zu verhindern."""
     sport_keys = ["soccer_germany_bundesliga", "soccer_epl", "soccer_uefa_champions_league"]
     for key in ODDS_API_KEYS:
         if not key or not key.strip():
@@ -235,7 +234,6 @@ def calculate_poisson_markets(home_xg, away_xg, home_team, away_team, global_odd
     p_under25 = 1.0 - p_over25
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
 
-    # Schneller lokaler Cache-Abgleich statt HTTP-Request pro Spiel
     live_odds = None
     for ev in global_odds_cache:
         if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
@@ -342,10 +340,10 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">High-Speed Cache-Engine & Conference League aktiv • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Schalke (1. Bundesliga) integriert • Blitz-Cache & Conference League aktiv</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
-            <span>🔄 <b>Performance:</b> Blitzschnell optimiert</span>
+            <span>🔄 <b>Engine:</b> Optimiert</span>
             <span>⚡ <b>Update:</b> {last_update_str}</span>
             <span style="color: #34d399; font-weight: 700;">🎯 Startkapital: 58.00 € (Ziel: 100€+)</span>
         </div>
@@ -764,3 +762,4 @@ else:
 
     st.markdown("**📋 Teilen-Text:**")
     st.code(text_share, language="markdown")
+
