@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from itertools import combinations
 
 # ============================================================
-# WETT-KI – KORRIGIERTE VERSION
+# WETT-KI – ROBUSTE QUOTEN & KELLY VERSION
 # ============================================================
 
 st.set_page_config(
@@ -34,10 +34,8 @@ LEAGUES = {
 
 if "football_token" not in st.session_state:
     st.session_state.football_token = "1e330696e0324932848d33cc95be84f0"
-
 if "odds_key" not in st.session_state:
     st.session_state.odds_key = "d0d0d6f9c7c493345eee17b80f3ded05"
-
 if "fixtures" not in st.session_state:
     st.session_state.fixtures = pd.DataFrame()
 if "last_update" not in st.session_state:
@@ -78,17 +76,21 @@ def format_local_datetime(value):
 def normalize_name(name):
     if not name:
         return ""
-    replacements = {" FC": "", " CF": "", " AFC": "", " United": "", " Utd": "", "Football Club": ""}
-    result = str(name).strip()
-    for old, new in replacements.items():
-        result = result.replace(old, new)
-    return result.lower().replace(".", "").replace("-", " ").replace("'", "").strip()
+    replacements = {"fc": "", "cf": "", "afc": "", "united": "", "utd": "", "tsg": "", "sv": "", "sc": "", "bv": ""}
+    words = str(name).lower().replace(".", "").replace("-", " ").replace("'", "").split()
+    filtered = [w for w in words if w not in replacements]
+    return " ".join(filtered).strip()
 
 def names_match(a, b):
-    a, b = normalize_name(a), normalize_name(b)
-    if not a or not b:
+    na, nb = normalize_name(a), normalize_name(b)
+    if not na or not nb:
         return False
-    return a == b or a in b or b in a
+    if na == nb or na in nb or nb in na:
+        return True
+    set_a, set_b = set(na.split()), set(nb.split())
+    if set_a & set_b: # Mindestens ein Kernwort stimmt überein (z.B. "Dortmund")
+        return True
+    return False
 
 @st.cache_data(ttl=300)
 def api_get_cached(url, headers=None, params=None):
@@ -118,7 +120,6 @@ def get_current_matchday_fixtures(token, competition_codes):
             continue
 
         comp_name = comp_data.get("name")
-
         matches_url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
         matches_data, error = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
         if error:
@@ -187,18 +188,11 @@ def build_team_stats(historical_matches):
 
         for team in [home_name, away_name]:
             if team not in stats:
-                stats[team] = {"played": 0, "wins": 0, "draws": 0, "losses": 0, "gf": 0, "ga": 0, "home_played": 0, "home_gf": 0, "home_ga": 0, "recent": []}
+                stats[team] = {"played": 0, "wins": 0, "draws": 0, "losses": 0, "gf": 0, "ga": 0, "home_played": 0, "home_gf": 0, "home_ga": 0}
 
         hs, aws = stats[home_name], stats[away_name]
         hs["played"] += 1; hs["gf"] += hg; hs["ga"] += ag; hs["home_played"] += 1; hs["home_gf"] += hg; hs["home_ga"] += ag
         aws["played"] += 1; aws["gf"] += ag; aws["ga"] += hg
-
-        if hg > ag:
-            hs["wins"] += 1; aws["losses"] += 1; hs["recent"].append("W"); aws["recent"].append("L")
-        elif hg < ag:
-            hs["losses"] += 1; aws["wins"] += 1; hs["recent"].append("L"); aws["recent"].append("W")
-        else:
-            hs["draws"] += 1; aws["draws"] += 1; hs["recent"].append("D"); aws["recent"].append("D")
     return stats
 
 def calculate_advanced_markets(home_lambda, away_lambda):
@@ -236,7 +230,7 @@ def get_fresh_odds(odds_key, sport_key):
     return data if isinstance(data, list) else []
 
 def extract_best_odds(event):
-    result = {"odd_1": None, "odd_x": None, "odd_2": None, "bookmaker_1": None, "bookmaker_x": None, "bookmaker_2": None}
+    result = {"odd_1": None, "odd_x": None, "odd_2": None, "bookmaker_1": None}
     home, away = event.get("home_team"), event.get("away_team")
     for bm in event.get("bookmakers", []):
         bm_name = bm.get("title") or bm.get("key")
@@ -248,25 +242,33 @@ def extract_best_odds(event):
                 if names_match(name, home) and (result["odd_1"] is None or price > result["odd_1"]):
                     result["odd_1"], result["bookmaker_1"] = price, bm_name
                 elif names_match(name, away) and (result["odd_2"] is None or price > result["odd_2"]):
-                    result["odd_2"], result["bookmaker_2"] = price, bm_name
+                    result["odd_2"] = price
                 elif str(name).lower() in {"draw", "tie", "unentschieden"} and (result["odd_x"] is None or price > result["odd_x"]):
-                    result["odd_x"], result["bookmaker_x"] = price, bm_name
+                    result["odd_x"] = price
     return result
 
 def analyze_match(row, stats):
     model = calculate_model(row["home"], row["away"], stats)
     p1, px, p2 = model["1"], model["X"], model["2"]
     
-    market = None
-    if row.get("odd_1") and row.get("odd_x") and row.get("odd_2"):
-        raw = np.array([1/row["odd_1"], 1/row["odd_x"], 1/row["odd_2"]])
-        norm = raw / raw.sum()
-        market = {"1": float(norm[0]), "X": float(norm[1]), "2": float(norm[2])}
+    # Fallback-Quoten generieren, falls The Odds API keine liefert
+    odd_1 = row.get("odd_1")
+    odd_x = row.get("odd_x")
+    odd_2 = row.get("odd_2")
+    
+    if not odd_1 or not odd_x or not odd_2:
+        odd_1 = round(1.0 / max(p1, 0.05) * 0.92, 2)
+        odd_x = round(1.0 / max(px, 0.05) * 0.92, 2)
+        odd_2 = round(1.0 / max(p2, 0.05) * 0.92, 2)
+        row["bookmaker_1"] = "WETT-KI Modell-Quote"
+
+    market = np.array([1/odd_1, 1/odd_x, 1/odd_2])
+    market = market / market.sum()
 
     final = {
-        "1": 0.70 * p1 + 0.30 * market["1"] if market else p1,
-        "X": 0.70 * px + 0.30 * market["X"] if market else px,
-        "2": 0.70 * p2 + 0.30 * market["2"] if market else p2,
+        "1": 0.70 * p1 + 0.30 * market[0],
+        "X": 0.70 * px + 0.30 * market[1],
+        "2": 0.70 * p2 + 0.30 * market[2],
     }
     total = sum(final.values())
     final = {k: v / total for k, v in final.items()}
@@ -277,15 +279,13 @@ def analyze_match(row, stats):
 
     risk = "LOW" if confidence >= 0.64 and gap >= 0.20 else ("MID" if confidence >= 0.54 and gap >= 0.10 else "HIGH")
     
-    selected_odd = row.get("odd_1") if prediction == "1" else (row.get("odd_x") if prediction == "X" else row.get("odd_2"))
-    value = (confidence * selected_odd - 1) if selected_odd and selected_odd > 1 else None
-
-    kelly = 0.0
-    if value and value > 0 and selected_odd > 1:
-        kelly = max(0.0, (confidence * selected_odd - 1) / (selected_odd - 1)) * 0.25
+    selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
+    value = (confidence * selected_odd - 1) if selected_odd > 1 else 0.0
+    kelly = max(0.0, (confidence * selected_odd - 1) / (selected_odd - 1)) * 0.25 if selected_odd > 1 else 0.0
 
     return {
         "p1": final["1"], "px": final["X"], "p2": final["2"],
+        "odd_1": odd_1, "odd_x": odd_x, "odd_2": odd_2,
         "prediction": prediction, "confidence": confidence, "risk": risk, "value": value, "kelly": kelly
     }
 
@@ -305,7 +305,7 @@ selected_leagues = st.sidebar.multiselect("Wettbewerbe", list(LEAGUES.keys()), d
 budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, value=100.0, step=10.0)
 
 if st.sidebar.button("🔄 AKTUELLEN SPIELTAG LADEN", use_container_width=True):
-    with st.spinner("Lade aktuellen Spieltag und frische Quoten..."):
+    with st.spinner("Lade aktuellen Spieltag und Quoten..."):
         codes = [LEAGUES[l]["football_data"] for l in selected_leagues]
         fixtures, err1 = get_current_matchday_fixtures(st.session_state.football_token, codes)
         historical, _ = get_historical_matches(st.session_state.football_token, codes)
@@ -342,7 +342,7 @@ if st.sidebar.button("🔄 AKTUELLEN SPIELTAG LADEN", use_container_width=True):
 df = st.session_state.fixtures.copy()
 
 if df.empty:
-    st.info("Klicke in der Sidebar auf **'Aktuellen Spieltag laden'**, um die offenen Partien des aktuellen Spieltags abzurufen.")
+    st.info("Klicke in der Sidebar auf **'Aktuellen Spieltag laden'**, um die offenen Partien abzurufen.")
     st.stop()
 
 tab1, tab2, tab3 = st.tabs(["🔥 Top Value & Kelly", "🤖 KI-Analyse", "📊 Live-Quoten"])
@@ -351,8 +351,9 @@ with tab1:
     st.subheader("🎯 Empfohlene Value Bets mit Kelly-Einsatz")
     for _, row in df.sort_values("value", ascending=False).head(5).iterrows():
         kelly_stake = row["kelly"] * budget
+        selected_quote = row['odd_1'] if row['prediction'] == '1' else (row['odd_x'] if row['prediction'] == 'X' else row['odd_2'])
         st.markdown(f"**{row['league']} (Spieltag {row['matchday']})** | {row['home']} vs {row['away']} ({row['local_datetime']})")
-        st.write(f"Tipp: **{row['prediction']}** | Quote: **{row.get('odd_1' if row['prediction']=='1' else 'odd_2', '—')}** | Kelly-Empfehlung: **{kelly_stake:.2f} €** ({row['kelly']*100:.1f}% der Bankroll)")
+        st.write(f"Tipp: **{row['prediction']}** | Quote: **{selected_quote:.2f}** ({row.get('bookmaker_1', 'Buchmacher')}) | Kelly-Empfehlung: **{kelly_stake:.2f} €** ({row['kelly']*100:.1f}% der Bankroll)")
         st.divider()
 
 with tab2:
@@ -360,6 +361,6 @@ with tab2:
     st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "prediction", "confidence", "risk"]], use_container_width=True)
 
 with tab3:
-    st.subheader("Aktuelle Buchmacherquoten (Live)")
-    st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "odd_1", "odd_x", "odd_2"]], use_container_width=True)
+    st.subheader("Aktuelle Buchmacherquoten & Fallback")
+    st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "odd_1", "odd_x", "odd_2", "bookmaker_1"]], use_container_width=True)
 
