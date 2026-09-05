@@ -138,7 +138,7 @@ ESPN_LEAGUE_CODES = {
 def fetch_openliga_matches(shortcut):
     url = f"https://api.openligadb.de/getmatchdata/{shortcut}"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200:
             return res.json()
     except Exception:
@@ -149,7 +149,7 @@ def fetch_openliga_matches(shortcut):
 def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
     url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={start_date_str}-{end_date_str}"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=3)
         if res.status_code == 200:
             data = res.json()
             events = data.get('events', [])
@@ -177,8 +177,9 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
-def fetch_live_market_odds(home_team, away_team):
-    """Durchläuft automatisch die API-Schlüssel nacheinander (Failover), falls einer leer ist oder fehlschlägt."""
+@st.cache_data(ttl=600)
+def get_cached_live_odds():
+    """Lädt die Quoten einmalig zentral über die API-Schlüssel, um Blockaden zu verhindern."""
     sport_keys = ["soccer_germany_bundesliga", "soccer_epl", "soccer_uefa_champions_league"]
     for key in ODDS_API_KEYS:
         if not key or not key.strip():
@@ -186,28 +187,12 @@ def fetch_live_market_odds(home_team, away_team):
         for sport_key in sport_keys:
             try:
                 url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={key}&regions=eu&markets=h2h,totals"
-                res = requests.get(url, timeout=3)
+                res = requests.get(url, timeout=2)
                 if res.status_code == 200:
-                    events = res.json()
-                    for ev in events:
-                        if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
-                            bookmakers = ev.get('bookmakers', [])
-                            if bookmakers:
-                                markets = bookmakers[0].get('markets', [])
-                                odds_dict = {}
-                                for m in markets:
-                                    if m['key'] == 'h2h':
-                                        for outcome in m['outcomes']:
-                                            if outcome['name'].lower() == home_team.lower():
-                                                odds_dict['home'] = outcome['price']
-                                            elif outcome['name'].lower() == away_team.lower():
-                                                odds_dict['away'] = outcome['price']
-                                            else:
-                                                odds_dict['draw'] = outcome['price']
-                                return odds_dict
+                    return res.json()
             except Exception:
                 continue
-    return None
+    return []
 
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
@@ -223,7 +208,7 @@ def dixon_coles_tau(h, a, home_xg, away_xg, rho=-0.13):
         return max(0.2, 1.0 - rho)
     return 1.0
 
-def calculate_poisson_markets(home_xg, away_xg, home_team, away_team):
+def calculate_poisson_markets(home_xg, away_xg, home_team, away_team, global_odds_cache):
     matrix = [[0.0 for _ in range(7)] for _ in range(7)]
     for h in range(7):
         for a in range(7):
@@ -250,7 +235,26 @@ def calculate_poisson_markets(home_xg, away_xg, home_team, away_team):
     p_under25 = 1.0 - p_over25
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
 
-    live_odds = fetch_live_market_odds(home_team, away_team)
+    # Schneller lokaler Cache-Abgleich statt HTTP-Request pro Spiel
+    live_odds = None
+    for ev in global_odds_cache:
+        if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
+            bookmakers = ev.get('bookmakers', [])
+            if bookmakers:
+                markets = bookmakers[0].get('markets', [])
+                odds_dict = {}
+                for m in markets:
+                    if m['key'] == 'h2h':
+                        for outcome in m['outcomes']:
+                            if outcome['name'].lower() == home_team.lower():
+                                odds_dict['home'] = outcome['price']
+                            elif outcome['name'].lower() == away_team.lower():
+                                odds_dict['away'] = outcome['price']
+                            else:
+                                odds_dict['draw'] = outcome['price']
+                live_odds = odds_dict
+                break
+
     if live_odds and 'home' in live_odds:
         q_home = live_odds.get('home', 1.85)
         q_draw = live_odds.get('draw', 3.40)
@@ -338,10 +342,10 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Multi-Key Failover & Conference League aktiv • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">High-Speed Cache-Engine & Conference League aktiv • Ziel: 58€ ➔ 100€</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
-            <span>🔄 <b>API-Rotation:</b> 10 Schlüssel aktiv</span>
+            <span>🔄 <b>Performance:</b> Blitzschnell optimiert</span>
             <span>⚡ <b>Update:</b> {last_update_str}</span>
             <span style="color: #34d399; font-weight: 700;">🎯 Startkapital: 58.00 € (Ziel: 100€+)</span>
         </div>
@@ -457,8 +461,9 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
     elif generate_click and not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade Live-Quoten via API-Failover & xG-Analysen..."):
+        with st.spinner("Lade Live-Quoten im Eilverfahren & xG-Analysen..."):
             all_loaded_matches = []
+            global_odds_cache = get_cached_live_odds()
             
             for liga_label in aktive_generator_ligen:
                 if liga_label in OPENLIGA_SHORTCUTS:
@@ -480,7 +485,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
                                     away = m['team2']['teamName']
                                     
                                     home_xg, away_xg = calculate_dynamic_xg(home, away)
-                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away, global_odds_cache)
                                     
                                     all_loaded_matches.append({
                                         "liga": liga_label,
@@ -509,7 +514,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
                                     away = m['away']
                                     
                                     home_xg, away_xg = calculate_dynamic_xg(home, away)
-                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away, global_odds_cache)
                                     
                                     all_loaded_matches.append({
                                         "liga": liga_label,
