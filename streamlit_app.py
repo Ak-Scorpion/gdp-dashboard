@@ -32,6 +32,20 @@ if 'matches_cache' not in st.session_state:
 if 'reroll_key' not in st.session_state:
     st.session_state['reroll_key'] = 0
 
+# --- AUTOMATISCHE API-SCHLÜSSEL ROTATIONS-LISTE (FAILOVER) ---
+ODDS_API_KEYS = [
+    "912672acdd43a99efc9ee4ad5afe33a6",
+    "a5e0323a0a14698cdeec004e3b9b18cc",
+    "796a27287d73f08d0257cc838ebb6cd9",
+    "e66bcb054c6ace9de606da63612c8f4c",
+    "e36dbfffe1a22ab682e2759aea044180",
+    "5d317d36dab0f21697792fe154902716",
+    "25d237353cf0c5920d358d1e79f9450c",
+    "0339fb12fa7a92411c4fe5ca32d3755c",
+    "1aa566d1bdb18c77b5c1210904adf5d5",
+    "f0dc02ac1e10f8e6c0e607698964b5a6"
+]
+
 TEAM_RATINGS = {
     "bayern": 96, "dortmund": 87, "leverkusen": 91, "leipzig": 86, 
     "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
@@ -116,7 +130,8 @@ ESPN_LEAGUE_CODES = {
     "🇮🇹 Serie A": "ita.1",
     "🇫🇷 Ligue 1": "fra.1",
     "🏆 Champions League": "uefa.champions",
-    "🇪🇺 Europa League": "uefa.europa"
+    "🇪🇺 Europa League": "uefa.europa",
+    "🇪🇺 Conference League": "uefa.europa.conf"
 }
 
 @st.cache_data(ttl=300)
@@ -162,6 +177,38 @@ def fetch_espn_keyless_matches(league_code, start_date_str, end_date_str):
         pass
     return []
 
+def fetch_live_market_odds(home_team, away_team):
+    """Durchläuft automatisch die API-Schlüssel nacheinander (Failover), falls einer leer ist oder fehlschlägt."""
+    sport_keys = ["soccer_germany_bundesliga", "soccer_epl", "soccer_uefa_champions_league"]
+    for key in ODDS_API_KEYS:
+        if not key or not key.strip():
+            continue
+        for sport_key in sport_keys:
+            try:
+                url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds/?apiKey={key}&regions=eu&markets=h2h,totals"
+                res = requests.get(url, timeout=3)
+                if res.status_code == 200:
+                    events = res.json()
+                    for ev in events:
+                        if home_team.lower() in ev.get('home_team', '').lower() or away_team.lower() in ev.get('away_team', '').lower():
+                            bookmakers = ev.get('bookmakers', [])
+                            if bookmakers:
+                                markets = bookmakers[0].get('markets', [])
+                                odds_dict = {}
+                                for m in markets:
+                                    if m['key'] == 'h2h':
+                                        for outcome in m['outcomes']:
+                                            if outcome['name'].lower() == home_team.lower():
+                                                odds_dict['home'] = outcome['price']
+                                            elif outcome['name'].lower() == away_team.lower():
+                                                odds_dict['away'] = outcome['price']
+                                            else:
+                                                odds_dict['draw'] = outcome['price']
+                                return odds_dict
+            except Exception:
+                continue
+    return None
+
 def poisson_pmf(lmbda, k):
     return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
 
@@ -176,7 +223,7 @@ def dixon_coles_tau(h, a, home_xg, away_xg, rho=-0.13):
         return max(0.2, 1.0 - rho)
     return 1.0
 
-def calculate_poisson_markets(home_xg, away_xg):
+def calculate_poisson_markets(home_xg, away_xg, home_team, away_team):
     matrix = [[0.0 for _ in range(7)] for _ in range(7)]
     for h in range(7):
         for a in range(7):
@@ -203,62 +250,50 @@ def calculate_poisson_markets(home_xg, away_xg):
     p_under25 = 1.0 - p_over25
     p_btts_ja = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
 
+    live_odds = fetch_live_market_odds(home_team, away_team)
+    if live_odds and 'home' in live_odds:
+        q_home = live_odds.get('home', 1.85)
+        q_draw = live_odds.get('draw', 3.40)
+        q_away = live_odds.get('away', 4.10)
+    else:
+        q_home = round((1.0 / p_home) / 1.05, 2) if p_home > 0 else 2.00
+        q_draw = round((1.0 / p_draw) / 1.05, 2) if p_draw > 0 else 3.40
+        q_away = round((1.0 / p_away) / 1.05, 2) if p_away > 0 else 3.50
+
+    q_over25 = round((1.0 / p_over25) / 1.05, 2) if p_over25 > 0 else 1.85
+    q_over15 = round((1.0 / p_over15) / 1.05, 2) if p_over15 > 0 else 1.30
+    q_btts = round((1.0 / p_btts_ja) / 1.05, 2) if p_btts_ja > 0 else 1.75
+
     return {
         "1X2": {
-            "1": {"prob": round(p_home * 100, 1), "p_val": p_home},
-            "X": {"prob": round(p_draw * 100, 1), "p_val": p_draw},
-            "2": {"prob": round(p_away * 100, 1), "p_val": p_away}
+            "1": {"prob": round(p_home * 100, 1), "base_quote": q_home},
+            "X": {"prob": round(p_draw * 100, 1), "base_quote": q_draw},
+            "2": {"prob": round(p_away * 100, 1), "base_quote": q_away}
         },
         "DC": {
-            "1X": {"prob": round(p_dc_1x * 100, 1), "p_val": p_dc_1x},
-            "X2": {"prob": round(p_dc_x2 * 100, 1), "p_val": p_dc_x2},
-            "12": {"prob": round(p_dc_12 * 100, 1), "p_val": p_dc_12}
+            "1X": {"prob": round(p_dc_1x * 100, 1), "base_quote": round(max(1.05, q_home * 0.75), 2)},
+            "X2": {"prob": round(p_dc_x2 * 100, 1), "base_quote": round(max(1.05, q_away * 0.85), 2)},
+            "12": {"prob": round(p_dc_12 * 100, 1), "base_quote": round(max(1.05, q_home * 0.8), 2)}
         },
         "DNB": {
-            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "p_val": p_dnb_1},
-            "2 DNB": {"prob": round(p_dnb_2 * 100, 1), "p_val": p_dnb_2}
+            "1 DNB": {"prob": round(p_dnb_1 * 100, 1), "base_quote": round(max(1.05, q_home * 1.15), 2)},
+            "2 DNB": {"prob": round(p_dnb_2 * 100, 1), "base_quote": round(max(1.05, q_away * 1.35), 2)}
         },
         "Tore": {
-            "Über 1.5": {"prob": round(p_over15 * 100, 1), "p_val": p_over15},
-            "Über 2.5": {"prob": round(p_over25 * 100, 1), "p_val": p_over25},
-            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "p_val": p_under25}
+            "Über 1.5": {"prob": round(p_over15 * 100, 1), "base_quote": q_over15},
+            "Über 2.5": {"prob": round(p_over25 * 100, 1), "base_quote": q_over25},
+            "Unter 2.5": {"prob": round(p_under25 * 100, 1), "base_quote": round((1.0 / p_under25) / 1.05, 2)}
         },
         "BTTS": {
-            "Ja": {"prob": round(p_btts_ja * 100, 1), "p_val": p_btts_ja}
+            "Ja": {"prob": round(p_btts_ja * 100, 1), "base_quote": q_btts}
         }
     }
 
-def get_exact_bookmaker_quote(p_val, bookmaker_name):
-    # Exakte mathematische Buchmacher-Margen (Neo.bet und Tipico haben typischerweise 5-6% Marge, Bet365 ca. 3.5%)
-    margins = {
-        "Bet365": 1.035,
-        "Betano": 1.040,
-        "Neo.bet": 1.052,
-        "bwin": 1.050,
-        "Tipico": 1.055,
-        "DAZN Bet": 1.045,
-        "Oddset": 1.060,
-        "Bet-at-home": 1.055
-    }
-    margin = margins.get(bookmaker_name, 1.05)
-    if p_val <= 0.001: 
-        return 50.00
-    
-    # Exakte Formel: Buchmacher-Quote = (1 / Wahrscheinlichkeit) / Margenfaktor
-    quote = round((1.0 / p_val) / margin, 2)
+def get_best_bookmaker_odds(base_quote, bookmaker_name):
+    bm_margins = {"Bet365": 1.03, "Betano": 1.035, "Neo.bet": 1.052, "bwin": 1.05, "Tipico": 1.055, "DAZN Bet": 1.045, "Oddset": 1.06, "Bet-at-home": 1.055}
+    m_factor = bm_margins.get(bookmaker_name, 1.05)
+    quote = round(base_quote * (1.05 / m_factor), 2)
     return max(1.05, min(quote, 50.00))
-
-def get_best_bookmaker_odds(p_val, checked_bookmakers):
-    if not checked_bookmakers:
-        checked_bookmakers = ["Tipico"]
-    
-    bm_odds = {}
-    for bm in checked_bookmakers:
-        bm_odds[bm] = get_exact_bookmaker_quote(p_val, bm)
-        
-    best_bm = max(bm_odds, key=bm_odds.get)
-    best_quote = bm_odds[best_bm]
-    return best_bm, best_quote
 
 # --- EXKLUSIVES PROFI-UI STYLING ---
 st.markdown("""
@@ -303,10 +338,10 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Präzise Neo.bet & Tipico Quoten-Modellierung • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Multi-Key Failover & Conference League aktiv • Ziel: 58€ ➔ 100€</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
-            <span>🔄 <b>Quoten-Engine:</b> Mathematisch fixiert</span>
+            <span>🔄 <b>API-Rotation:</b> 10 Schlüssel aktiv</span>
             <span>⚡ <b>Update:</b> {last_update_str}</span>
             <span style="color: #34d399; font-weight: 700;">🎯 Startkapital: 58.00 € (Ziel: 100€+)</span>
         </div>
@@ -320,8 +355,6 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
         total_bankroll = st.number_input("💰 Gesamt-Bankroll (€):", min_value=1.0, max_value=50000.0, value=58.0, step=1.0)
     with col_bank2:
         fixed_stake_mode = st.checkbox("Fester 5€ Einsatz pro Wette", value=True)
-        if not fixed_stake_mode:
-            max_kelly_pct = st.slider("Max. Kelly-Limit (%):", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 
     st.markdown("---")
     gen_typ = st.selectbox(
@@ -364,7 +397,7 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
         if st.checkbox("Bet-at-home", value=True, key="bm_bah"): aktive_anbieter.append("Bet-at-home")
 
     st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Auswahl (Strikte Trennung):")
+    st.markdown("#### 🏆 Ligen-Auswahl:")
     aktive_generator_ligen = []
     col_l1, col_l2 = st.columns(2)
     with col_l1:
@@ -378,6 +411,7 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
         if st.checkbox("🇫🇷 Ligue 1", value=True, key="h_fr1"): aktive_generator_ligen.append("🇫🇷 Ligue 1")
         if st.checkbox("🏆 Champions League", value=True, key="h_cl"): aktive_generator_ligen.append("🏆 Champions League")
         if st.checkbox("🇪🇺 Europa League", value=True, key="h_el"): aktive_generator_ligen.append("🇪🇺 Europa League")
+        if st.checkbox("🇪🇺 Conference League", value=True, key="h_conf"): aktive_generator_ligen.append("🇪🇺 Conference League")
 
     st.markdown("---")
     gen_zeit_modus = st.selectbox(
@@ -423,7 +457,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
     elif generate_click and not aktive_anbieter:
         st.error("Bitte wähle mindestens einen Wettanbieter aus!")
     else:
-        with st.spinner("Lade Live-Quoten & xG-Analysen für ausgewählte Ligen..."):
+        with st.spinner("Lade Live-Quoten via API-Failover & xG-Analysen..."):
             all_loaded_matches = []
             
             for liga_label in aktive_generator_ligen:
@@ -446,7 +480,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
                                     away = m['team2']['teamName']
                                     
                                     home_xg, away_xg = calculate_dynamic_xg(home, away)
-                                    p_markets = calculate_poisson_markets(home_xg, away_xg)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away)
                                     
                                     all_loaded_matches.append({
                                         "liga": liga_label,
@@ -475,7 +509,7 @@ if generate_click or 'matches_cache' not in st.session_state or not st.session_s
                                     away = m['away']
                                     
                                     home_xg, away_xg = calculate_dynamic_xg(home, away)
-                                    p_markets = calculate_poisson_markets(home_xg, away_xg)
+                                    p_markets = calculate_poisson_markets(home_xg, away_xg, home, away)
                                     
                                     all_loaded_matches.append({
                                         "liga": liga_label,
@@ -501,25 +535,26 @@ def get_best_pick(match, profile, checked_bookmakers):
     match_seed = int(hashlib.md5(seed_raw.encode()).hexdigest(), 16)
     
     raw_candidates = [
-        {"tipp": f"Sieg {home} (1)", "p_val": mkts['1X2']['1']['p_val'], "prob": mkts['1X2']['1']['prob'], "markt": "1X2 Siegwette"},
-        {"tipp": f"Sieg {away} (2)", "p_val": mkts['1X2']['2']['p_val'], "prob": mkts['1X2']['2']['prob'], "markt": "1X2 Siegwette"},
-        {"tipp": f"Doppelte Chance 1X ({home} / X)", "p_val": mkts['DC']['1X']['p_val'], "prob": mkts['DC']['1X']['prob'], "markt": "Doppelte Chance"},
-        {"tipp": f"Doppelte Chance X2 (X / {away})", "p_val": mkts['DC']['X2']['p_val'], "prob": mkts['DC']['X2']['prob'], "markt": "Doppelte Chance"},
-        {"tipp": f"Sieg {home} (Draw No Bet)", "p_val": mkts['DNB']['1 DNB']['p_val'], "prob": mkts['DNB']['1 DNB']['prob'], "markt": "DNB"},
-        {"tipp": "Über 1.5 Tore", "p_val": mkts['Tore']['Über 1.5']['p_val'], "prob": mkts['Tore']['Über 1.5']['prob'], "markt": "Tor-Markt"},
-        {"tipp": "Über 2.5 Tore", "p_val": mkts['Tore']['Über 2.5']['p_val'], "prob": mkts['Tore']['Über 2.5']['prob'], "markt": "Tor-Markt"},
-        {"tipp": "Beide Teams treffen - Ja", "p_val": mkts['BTTS']['Ja']['p_val'], "prob": mkts['BTTS']['Ja']['prob'], "markt": "Beide treffen"}
+        {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette"},
+        {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette"},
+        {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance"},
+        {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance"},
+        {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "DNB"},
+        {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt"},
+        {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt"},
+        {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen"}
     ]
 
     candidates = []
     for c in raw_candidates:
-        best_bm, best_quote = get_best_bookmaker_odds(c['p_val'], checked_bookmakers)
+        chosen_bm = random.Random(seed_raw + c['tipp']).choice(checked_bookmakers) if checked_bookmakers else "Tipico"
+        quote = get_best_bookmaker_odds(c['base_q'], chosen_bm)
         c_copy = c.copy()
-        c_copy['quote'] = best_quote
-        c_copy['best_bookmaker'] = best_bm
-        c_copy['bookmaker_url'] = ANBIETER_URLS.get(best_bm, "https://www.tipico.de")
-        p_dec = c['p_val']
-        c_copy['ev'] = round(((p_dec * best_quote) - 1.0) * 100.0, 1)
+        c_copy['quote'] = quote
+        c_copy['best_bookmaker'] = chosen_bm
+        c_copy['bookmaker_url'] = ANBIETER_URLS.get(chosen_bm, "https://www.tipico.de")
+        p_dec = c['prob'] / 100.0
+        c_copy['ev'] = round(((p_dec * quote) - 1.0) * 100.0, 1)
         candidates.append(c_copy)
 
     if "Mittleres Risiko" in profile:
@@ -545,7 +580,7 @@ if not matches:
 else:
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
-        st.subheader(f"💎 Elite-Analysen & Präzise Quoten ({len(matches)} Partien)")
+        st.subheader(f"💎 Elite-Analysen & Markt-Quoten ({len(matches)} Partien)")
     with col_t_btn:
         if st.button("🎲 Neue Analysen mischen", type="primary", use_container_width=True, key="btn_shuffle"):
             st.session_state['reroll_key'] += 1
