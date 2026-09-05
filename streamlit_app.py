@@ -22,7 +22,6 @@ st.set_page_config(
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
 LOCAL_TZ = ZoneInfo("Europe/Berlin")
 
-# Hinterlegte API-Keys für automatische Rotation / Fallback
 FOOTBALL_DATA_API_KEYS = [
     "5e9aef9e11b34df482fb0601a010b62f",
     "8155bce7eeb8403cac96585212cb64c1"
@@ -74,16 +73,13 @@ st.markdown(
 if "ticket" not in st.session_state:
     st.session_state.ticket = []
 
-if "extracted_matches" not in st.session_state:
-    st.session_state.extracted_matches = []
-
 # ============================================================
 # FOOTBALL-DATA.ORG API CLIENT MIT KEY-ROTATION
 # ============================================================
 
 @st.cache_data(ttl=300)
 def fetch_football_data_matches(date_str):
-    for idx, key in enumerate(FOOTBALL_DATA_API_KEYS):
+    for key in FOOTBALL_DATA_API_KEYS:
         headers = {"X-Auth-Token": key}
         try:
             url = f"{FOOTBALL_DATA_BASE}/matches"
@@ -93,61 +89,64 @@ def fetch_football_data_matches(date_str):
                 data = res.json()
                 return data.get("matches", []), None
             elif res.status_code == 429:
-                # Rate limit erreicht, versuche nächsten Key
                 continue
             else:
-                return [], f"API-Fehler HTTP {res.status_code}: {res.text[:200]}"
-        except Exception as exc:
+                return [], f"API-Fehler HTTP {res.status_code}"
+        except Exception:
             continue
-    return [], "Alle API-Keys haben das Limit erreicht oder sind ungültig."
+    return [], "Alle API-Keys haben das Limit erreicht."
 
 # ============================================================
-# SIMULATION & POISSON MODELL FÜR SCREENSHOTS
+# SIMULATION & RISIKO-BASIERTE MODELLIERUNG
 # ============================================================
 
-def simulate_match_analysis(home, away, league, bookmaker):
+def simulate_match_analysis(home, away, league, bookmaker, risk_profile):
     np.random.seed(abs(hash(home + away)) % 10000)
-    home_xg = round(np.random.uniform(1.15, 2.45), 2)
-    away_xg = round(np.random.uniform(0.95, 2.10), 2)
     
-    q_home = round(np.random.uniform(1.45, 2.40), 2)
-    prob_home = round(1 / q_home * 92, 1)
-    score = int(min(max(prob_home + np.random.randint(-5, 8), 55), 98))
-    
-    markets = ["Doppelte Chance 1X", "Über 1.5 Tore", "Beide Teams treffen (BTTS)", "1X2 Heimsieg"]
-    chosen_market = markets[abs(hash(home)) % len(markets)]
-    
-    odds_map = {
-        "Doppelte Chance 1X": round(q_home * 0.7 + 0.4, 2),
-        "Über 1.5 Tore": 1.32,
-        "Beide Teams treffen (BTTS)": 1.75,
-        "1X2 Heimsieg": q_home
-    }
+    if risk_profile == "🟢 Low Risk (Sicher)":
+        q_home = round(np.random.uniform(1.25, 1.65), 2)
+        prob = round(np.random.uniform(75.0, 92.0), 1)
+        market = "Doppelte Chance 1X"
+        odds = q_home * 0.75 + 0.3
+    elif risk_profile == "🔥 High Risk (High Reward)":
+        q_home = round(np.random.uniform(2.40, 4.50), 2)
+        prob = round(np.random.uniform(35.0, 58.0), 1)
+        market = "1X2 Auswärtssieg / Risiko"
+        odds = q_home
+    else:  # Mid Risk
+        q_home = round(np.random.uniform(1.70, 2.35), 2)
+        prob = round(np.random.uniform(60.0, 74.0), 1)
+        market = "Beide Teams treffen (BTTS)"
+        odds = 1.78
+
+    score = int(min(max(prob + np.random.randint(-3, 5), 40), 98))
     
     return {
         "home": home,
         "away": away,
         "league": league,
         "bookmaker": bookmaker,
-        "market": chosen_market,
-        "odds": odds_map.get(chosen_market, 1.85),
-        "probability": prob_home,
-        "score": score,
-        "home_xg": home_xg,
-        "away_xg": away_xg
+        "market": market,
+        "odds": round(odds, 2),
+        "probability": prob,
+        "score": score
     }
 
 # ============================================================
-# SIDEBAR: UPLOAD & STRATEGIE
+# SIDEBAR: UPLOAD, RISIKO & STRATEGIE
 # ============================================================
 
 with st.sidebar:
-    st.markdown("## 📸 Screenshot & API Engine")
-    st.caption("Mit integrierten football-data.org Keys")
+    st.markdown("## 📸 Screenshot & Risiko Engine")
     
     target_date = st.date_input("📅 Spieltag wählen", value=datetime.now(LOCAL_TZ).date())
     
     st.markdown("---")
+    risk_profile = st.selectbox(
+        "🧠 KI Risikoprofil:",
+        ["🟢 Low Risk (Sichere Tipps)", "🟡 Mid Risk (Ausgewogener Value)", "🔥 High Risk (High Reward)"]
+    )
+    
     uploaded_files = st.file_uploader(
         "Screenshots hochladen (PNG, JPG):",
         type=["png", "jpg", "jpeg"],
@@ -176,19 +175,19 @@ with st.sidebar:
         freebet_wert = st.number_input("Freebet Wert (€):", min_value=1.0, value=20.0)
         
     load_api_btn = st.button("🌐 Live-Spiele von football-data.org laden", use_container_width=True)
-    analyze_btn = st.button("🚀 Screenshots analysieren & Schein bauen", type="primary", use_container_width=True)
+    analyze_btn = st.button("🚀 Schein nach Risikoprofil bauen", type="primary", use_container_width=True)
 
 # ============================================================
 # HAUPTBEREICH
 # ============================================================
 
-st.markdown('<div class="main-title">⚽ KI Screenshot & Football-Data Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Echtzeit-Daten via football-data.org kombiniert mit intelligentem Screenshot-Ticket-Builder</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">⚽ KI Screenshot & Risiko-Engine</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="subtitle">Aktives Risikoprofil: <b>{risk_profile}</b></div>', unsafe_allow_html=True)
 
 api_matches_list = []
 if load_api_btn:
     date_str = target_date.strftime("%Y-%m-%d")
-    with st.spinner(f"Lade offizielle Spiele für {date_str} von football-data.org..."):
+    with st.spinner(f"Lade offizielle Spiele für {date_str}..."):
         raw_matches, err = fetch_football_data_matches(date_str)
         if err:
             st.error(err)
@@ -197,8 +196,8 @@ if load_api_btn:
                 h_team = m.get("homeTeam", {}).get("name", "Heim")
                 a_team = m.get("awayTeam", {}).get("name", "Auswärts")
                 comp = m.get("competition", {}).get("name", "Liga")
-                api_matches_list.append(simulate_match_analysis(h_team, a_team, comp, selected_bookmaker))
-            st.success(f"✅ {len(api_matches_list)} Spiele erfolgreich von football-data.org geladen!")
+                api_matches_list.append(simulate_match_analysis(h_team, a_team, comp, selected_bookmaker, risk_profile))
+            st.success(f"✅ {len(api_matches_list)} Spiele geladen und an Risiko-Profil ({risk_profile}) angepasst!")
 
 if uploaded_files:
     st.markdown("### 🖼️ Hochgeladene Screenshots")
@@ -207,7 +206,6 @@ if uploaded_files:
         img = Image.open(file)
         with cols[idx % 4]:
             st.image(img, caption=f"Screenshot {idx+1}", use_column_width=True)
-    st.success("✅ Screenshots eingelesen und von der KI verarbeitet.")
     st.markdown("---")
 
 DEMO_POOL = [
@@ -219,10 +217,10 @@ DEMO_POOL = [
 ]
 
 if analyze_btn or load_api_btn or uploaded_files:
-    analyzed_matches = api_matches_list if api_matches_list else [simulate_match_analysis(h, a, l, selected_bookmaker) for h, a, l in DEMO_POOL]
+    analyzed_matches = api_matches_list if api_matches_list else [simulate_match_analysis(h, a, l, selected_bookmaker, risk_profile) for h, a, l in DEMO_POOL]
     analyzed_matches.sort(key=lambda x: x["score"], reverse=True)
     
-    st.markdown("## 🎯 Generierter Perfekter Schein")
+    st.markdown(f"## 🎯 Generierter Schein ({risk_profile})")
     
     if "Kombiwette" in ticket_mode:
         selection = analyzed_matches[:kombi_groesse]
@@ -243,7 +241,7 @@ if analyze_btn or load_api_btn or uploaded_files:
                 <div style="background:#111827; border:1px solid #1e293b; border-radius:12px; padding:14px; margin-bottom:10px;">
                     <span class="pill">{item['league']}</span>
                     <h4 style="color:#fff; margin:6px 0;">{item['home']} vs {item['away']}</h4>
-                    <p style="color:#94a3b8; font-size:0.9rem;">Empfohlener Tipp: <b style="color:#00d47e;">{item['market']}</b> | Quote: <b>{item['odds']:.2f}</b> (Modell-Chance: {item['probability']}%)</p>
+                    <p style="color:#94a3b8; font-size:0.9rem;">Tipp: <b style="color:#00d47e;">{item['market']}</b> | Quote: <b>{item['odds']:.2f}</b> (Modell-Chance: {item['probability']}%)</p>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -278,12 +276,9 @@ if analyze_btn or load_api_btn or uploaded_files:
         """, unsafe_allow_html=True)
         
     st.markdown("---")
-    st.markdown("### 📋 Analysierte Begegnungen & Quoten")
+    st.markdown("### 📋 Analysierte Begegnungen")
     for m in analyzed_matches:
-        st.write(f"⚽ **{m['home']} vs {m['away']}** | Liga: `{m['league']}` | Tipp: `{m['market']}` | Quote: `{m['odds']:.2f}` | Confidence: `{m['score']}/100`")
+        st.write(f"⚽ **{m['home']} vs {m['away']}** | Liga: `{m['league']}` | Tipp: `{m['market']}` | Quote: `{m['odds']:.2f}` | Chance: `{m['probability']}%`")
 else:
-    st.info("👈 Klicke auf 'Live-Spiele von football-data.org laden' oder lade Screenshots hoch, um deinen Wettschein zu erstellen.")
-
-st.markdown("---")
-st.caption("⚠️ Die beiden API-Keys wurden fest integriert und rotieren automatisch im Hintergrund, um Ratenlimits abzufangen.")
+    st.info("👈 Wähle in der Sidebar dein Risikoprofil aus und klicke auf 'Schein nach Risikoprofil bauen'.")
 
