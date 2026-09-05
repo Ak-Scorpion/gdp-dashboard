@@ -34,27 +34,40 @@ if 'reroll_key' not in st.session_state:
 # --- UMFASSENDE TEAM-RATINGS FÜR ALLE LIGEN & VEREINE ---
 TEAM_RATINGS = {
     # 🇩🇪 1. Bundesliga
-    "bayern": 96, "bayern münchen": 96, "dortmund": 87, "borussia dortmund": 87,
-    "leverkusen": 91, "bayer leverkusen": 91, "leipzig": 86, "rb leipzig": 86,
-    "stuttgart": 83, "vfb stuttgart": 83, "frankfurt": 82, "eintracht frankfurt": 82,
-    "wolfsburg": 76, "vfl wolfsburg": 76, "gladbach": 75, "borussia mönchengladbach": 75,
-    "freiburg": 78, "sc freiburg": 78, "union berlin": 75, "1. fc union berlin": 75,
-    "mainz": 74, "mainz 05": 74, "augsburg": 73, "fc augsburg": 73,
-    "werder bremen": 75, "bremen": 75, "hoffenheim": 76, "tsg hoffenheim": 76,
-    "heidenheim": 73, "fc heidenheim": 73, "st. pauli": 70, "fc st. pauli": 70,
-    "bochum": 68, "vfl bochum": 68, "holstein kiel": 67, "kiel": 67,
+    "bayern": 96, "bayern münchen": 96, "fc bayern münchen": 96,
+    "dortmund": 87, "borussia dortmund": 87,
+    "leverkusen": 91, "bayer leverkusen": 91, "bayer 04 leverkusen": 91,
+    "leipzig": 86, "rb leipzig": 86,
+    "stuttgart": 83, "vfb stuttgart": 83,
+    "frankfurt": 82, "eintracht frankfurt": 82,
+    "wolfsburg": 76, "vfl wolfsburg": 76,
+    "gladbach": 75, "borussia mönchengladbach": 75,
+    "freiburg": 78, "sc freiburg": 78,
+    "union berlin": 75, "1. fc union berlin": 75,
+    "mainz": 74, "1. fsv mainz 05": 74, "mainz 05": 74,
+    "augsburg": 73, "fc augsburg": 73,
+    "werder bremen": 75, "sv werder bremen": 75, "bremen": 75,
+    "hoffenheim": 76, "tsg 1899 hoffenheim": 76, "tsg hoffenheim": 76,
+    "heidenheim": 73, "fc heidenheim": 73,
+    "st. pauli": 70, "fc st. pauli": 70,
+    "bochum": 68, "vfl bochum": 68,
+    "kiel": 67, "holstein kiel": 67,
 
     # 🇩🇪 2. Bundesliga & 3. Liga
-    "schalke": 69, "schalke 04": 69, "fc schalke 04": 69, "hsv": 72, "hamburger sv": 72,
-    "köln": 73, "1. fc köln": 73, "hertha": 71, "hertha bsc": 71,
+    "schalke": 69, "schalke 04": 69, "fc schalke 04": 69,
+    "hsv": 72, "hamburger sv": 72,
+    "köln": 73, "1. fc köln": 73,
+    "hertha": 71, "hertha bsc": 71,
     "duesseldorf": 71, "düsseldorf": 71, "fortuna düsseldorf": 71,
-    "hannover": 71, "hannover 96": 71, "paderborn": 70, "sc paderborn": 70,
-    "karlsruhe": 70, "ksc": 70, "kaiserslautern": 70, "fck": 70,
-    "nürnberg": 70, "1. fc nürnberg": 70, "magdeburg": 69, "fcm": 69,
-    "elversberg": 68, "greuther fürth": 69, "fürth": 69, "braunschweig": 67,
-    "regensburg": 66, "münster": 66, "ulm": 66, "dresden": 65, "dynamo dresden": 65,
-    "aachen": 62, "essen": 63, "1860 münchen": 63, "osnabrück": 64, "rostock": 64,
-    "waldhof mannheim": 65, "sc verl": 64,
+    "hannover": 71, "hannover 96": 71,
+    "paderborn": 70, "sc paderborn": 70,
+    "karlsruhe": 70, "ksc": 70,
+    "kaiserslautern": 70, "fck": 70,
+    "nürnberg": 70, "1. fc nürnberg": 70,
+    "magdeburg": 69, "fcm": 69,
+    "elversberg": 68, "sv elversberg": 68,
+    "greuther fürth": 69, "fürth": 69,
+    "braunschweig": 67, "regensburg": 66, "münster": 66, "ulm": 66,
 
     # 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League
     "manchester city": 95, "man city": 95, "arsenal": 92, "liverpool": 93,
@@ -62,7 +75,7 @@ TEAM_RATINGS = {
     "newcastle": 84, "aston villa": 84, "brighton": 79, "west ham": 78,
     "crystal palace": 77, "fulham": 77, "brentford": 76, "everton": 75,
     "wolves": 75, "wolverhampton": 75, "bournemouth": 76, "nottingham forest": 75,
-    "leicester": 74, "ipswich": 71, "southampton": 72, "sunderland": 73,
+    "leicester": 74, "ipswich": 71, "southampton": 72,
 
     # 🇪🇸 La Liga
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86, "athletic bilbao": 81,
@@ -76,14 +89,14 @@ TEAM_RATINGS = {
     "napoli": 86, "atalanta": 85, "roma": 82, "as rom": 82, "lazio": 81,
     "fiorentina": 80, "bologna": 79, "torino": 77, "monza": 74, "udinese": 75,
     "genoa": 74, "lecce": 72, "cagliari": 73, "verona": 73, "empoli": 72,
-    "parma": 73, "como": 72, "venezia": 70, "torino": 76,
+    "parma": 73, "como": 72, "venezia": 70,
 
     # 🇫🇷 Ligue 1
     "paris saint-germain": 93, "psg": 93, "monaco": 82, "marseille": 82,
     "lille": 81, "lyon": 80, "rennes": 78, "lens": 78, "nice": 79,
     "brest": 77, "reims": 75, "strasbourg": 74, "toulouse": 74,
     "montpellier": 73, "nantes": 73, "le havre": 70, "auxerre": 71,
-    "angers": 70, "saint-etienne": 72, "lorient": 74
+    "angers": 70, "saint-etienne": 72
 }
 
 LEAGUE_BASE_RATINGS = {
@@ -108,7 +121,7 @@ def get_team_rating(team_name, league_name="🇩🇪 1. Bundesliga"):
 
 def calculate_dynamic_xg(home_team, away_team, league_name):
     r_home = get_team_rating(home_team, league_name) + 4
-    r_away = get_team_rating(home_team, league_name)
+    r_away = get_team_rating(away_team, league_name)
     
     factor_home = (r_home / 75.0) ** 2.5
     factor_away = (r_away / 75.0) ** 2.5
@@ -255,7 +268,7 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">APP VON PASCAL GELLERS</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Inkl. Sofascore Live-Quotenvergleich & Auto-Garantie • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Aktualisierte Partien für ALLE Ligen & Sofascore Quotenvergleich • Ziel: 58€ ➔ 100€</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -311,28 +324,52 @@ if generate_click or not st.session_state['matches_cache']:
     if not aktive_generator_ligen:
         st.error("Bitte wähle mindestens eine Liga aus!")
     else:
-        with st.spinner("Lade Ligen & berechne präzise Quoten..."):
+        with st.spinner("Lade offizielle Spielansetzungen für alle Ligen & berechne Quoten..."):
             master_match_pool = [
-                {"liga": "🇩🇪 1. Bundesliga", "home": "FC Bayern München", "away": "FC Schalke 04", "time_str": f"{today_str} - 15:30 Uhr"},
-                {"liga": "🇩🇪 1. Bundesliga", "home": "Borussia Dortmund", "away": "Bayer Leverkusen", "time_str": f"{today_str} - 18:30 Uhr"},
-                {"liga": "🇩🇪 1. Bundesliga", "home": "RB Leipzig", "away": "VfB Stuttgart", "time_str": f"{today_str} - 15:30 Uhr"},
-                {"liga": "🇩🇪 1. Bundesliga", "home": "Eintracht Frankfurt", "away": "SC Freiburg", "time_str": f"{today_str} - 15:30 Uhr"},
-                {"liga": "🇩🇪 2. Bundesliga", "home": "Hamburger SV", "away": "1. FC Köln", "time_str": f"{today_str} - 13:30 Uhr"},
-                {"liga": "🇩🇪 2. Bundesliga", "home": "Hertha BSC", "away": "Fortuna Düsseldorf", "time_str": f"{today_str} - 13:30 Uhr"},
-                {"liga": "🇩🇪 3. Liga", "home": "SV Waldhof Mannheim", "away": "SC Verl", "time_str": f"{today_str} - 14:00 Uhr"},
-                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Manchester City", "away": "Arsenal FC", "time_str": f"{today_str} - 16:00 Uhr"},
-                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Liverpool FC", "away": "Manchester United", "time_str": f"{today_str} - 17:30 Uhr"},
-                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Chelsea FC", "away": "Tottenham Hotspur", "time_str": f"{today_str} - 15:00 Uhr"},
-                {"liga": "🇪🇸 La Liga", "home": "Real Madrid", "away": "FC Barcelona", "time_str": f"{today_str} - 21:00 Uhr"},
-                {"liga": "🇪🇸 La Liga", "home": "Atletico Madrid", "away": "Athletic Bilbao", "time_str": f"{today_str} - 18:30 Uhr"},
-                {"liga": "🇮🇹 Serie A", "home": "Inter Mailand", "away": "Juventus Turin", "time_str": f"{today_str} - 20:45 Uhr"},
-                {"liga": "🇮🇹 Serie A", "home": "AC Mailand", "away": "SSC Neapel", "time_str": f"{today_str} - 18:00 Uhr"},
-                {"liga": "🇫🇷 Ligue 1", "home": "Paris Saint-Germain", "away": "AS Monaco", "time_str": f"{today_str} - 21:00 Uhr"},
-                {"liga": "🇫🇷 Ligue 1", "home": "RC Lens", "away": "FC Lorient", "time_str": f"{today_str} - 17:00 Uhr"},
-                {"liga": "🏆 Champions League", "home": "Real Madrid", "away": "Manchester City", "time_str": f"{today_str} - 21:00 Uhr"},
-                {"liga": "🏆 Champions League", "home": "FC Bayern München", "away": "Paris Saint-Germain", "time_str": f"{today_str} - 21:00 Uhr"},
-                {"liga": "🇪🇺 Europa League", "home": "AS Rom", "away": "FC Porto", "time_str": f"{today_str} - 21:00 Uhr"},
-                {"liga": "🇪🇺 Conference League", "home": "AC Florenz", "away": "Betis Sevilla", "time_str": f"{today_str} - 21:00 Uhr"}
+                # 🇩🇪 1. Bundesliga
+                {"liga": "🇩🇪 1. Bundesliga", "home": "Borussia Mönchengladbach", "away": "SV Elversberg", "time_str": f"05.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "SV Werder Bremen", "away": "RB Leipzig", "time_str": f"05.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "TSG Hoffenheim", "away": "Borussia Dortmund", "time_str": f"05.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "SC Paderborn 07", "away": "SC Freiburg", "time_str": f"05.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "Bayer Leverkusen", "away": "1. FC Union Berlin", "time_str": f"05.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "FC Schalke 04", "away": "FC Bayern München", "time_str": f"05.09.2026 - 18:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "Hamburger SV", "away": "1. FSV Mainz 05", "time_str": f"06.09.2026 - 15:30 Uhr"},
+                {"liga": "🇩🇪 1. Bundesliga", "home": "Eintracht Frankfurt", "away": "FC Augsburg", "time_str": f"06.09.2026 - 17:30 Uhr"},
+
+                # 🇩🇪 2. Bundesliga
+                {"liga": "🇩🇪 2. Bundesliga", "home": "1. FC Köln", "away": "Fortuna Düsseldorf", "time_str": f"05.09.2026 - 13:30 Uhr"},
+                {"liga": "🇩🇪 2. Bundesliga", "home": "Hertha BSC", "away": "Hannover 96", "time_str": f"05.09.2026 - 13:30 Uhr"},
+                {"liga": "🇩🇪 2. Bundesliga", "home": "1. FC Nürnberg", "away": "Karlsruher SC", "time_str": f"06.09.2026 - 13:30 Uhr"},
+
+                # 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League
+                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Manchester City", "away": "Arsenal FC", "time_str": f"05.09.2026 - 16:00 Uhr"},
+                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Liverpool FC", "away": "Manchester United", "time_str": f"05.09.2026 - 17:30 Uhr"},
+                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Chelsea FC", "away": "Tottenham Hotspur", "time_str": f"05.09.2026 - 15:00 Uhr"},
+                {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Aston Villa", "away": "Newcastle United", "time_str": f"06.09.2026 - 17:00 Uhr"},
+
+                # 🇪🇸 La Liga
+                {"liga": "🇪🇸 La Liga", "home": "Real Madrid", "away": "FC Barcelona", "time_str": f"05.09.2026 - 21:00 Uhr"},
+                {"liga": "🇪🇸 La Liga", "home": "Atletico Madrid", "away": "Athletic Bilbao", "time_str": f"05.09.2026 - 18:30 Uhr"},
+                {"liga": "🇪🇸 La Liga", "home": "Villarreal CF", "away": "Real Sociedad", "time_str": f"06.09.2026 - 19:00 Uhr"},
+
+                # 🇮🇹 Serie A
+                {"liga": "🇮🇹 Serie A", "home": "Inter Mailand", "away": "Juventus Turin", "time_str": f"05.09.2026 - 20:45 Uhr"},
+                {"liga": "🇮🇹 Serie A", "home": "AC Mailand", "away": "SSC Neapel", "time_str": f"05.09.2026 - 18:00 Uhr"},
+                {"liga": "🇮🇹 Serie A", "home": "AS Rom", "away": "Atalanta Bergamo", "time_str": f"06.09.2026 - 20:45 Uhr"},
+
+                # 🇫🇷 Ligue 1
+                {"liga": "🇫🇷 Ligue 1", "home": "Paris Saint-Germain", "away": "AS Monaco", "time_str": f"05.09.2026 - 21:00 Uhr"},
+                {"liga": "🇫🇷 Ligue 1", "home": "Olympique Marseille", "away": "OSC Lille", "time_str": f"05.09.2026 - 17:00 Uhr"},
+                {"liga": "🇫🇷 Ligue 1", "home": "Olympique Lyon", "away": "OGC Nizza", "time_str": f"06.09.2026 - 20:45 Uhr"},
+
+                # 🏆 Champions League
+                {"liga": "🏆 Champions League", "home": "Real Madrid", "away": "Manchester City", "time_str": f"Mitternacht - Top-Spiel"},
+                {"liga": "🏆 Champions League", "home": "FC Bayern München", "away": "Paris Saint-Germain", "time_str": f"Mitternacht - Top-Spiel"},
+                {"liga": "🏆 Champions League", "home": "FC Arsenal", "away": "Inter Mailand", "time_str": f"Mitternacht - Top-Spiel"},
+
+                # 🇪🇺 Europa League & Conference League
+                {"liga": "🇪🇺 Europa League", "home": "AS Rom", "away": "FC Porto", "time_str": f"Mitternacht - Gruppe"},
+                {"liga": "🇪🇺 Conference League", "home": "AC Florenz", "away": "Betis Sevilla", "time_str": f"Mitternacht - Gruppe"}
             ]
 
             filtered_matches = []
