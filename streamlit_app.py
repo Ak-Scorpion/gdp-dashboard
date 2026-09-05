@@ -9,7 +9,7 @@ from itertools import combinations
 import random
 
 # ============================================================
-# WETT-KI – STRIKTE SPIELTAGS-SYNCHRONISATION
+# WETT-KI – OPTIMIERTE & LOGISCH KORREKTE VERSION
 # ============================================================
 
 st.set_page_config(
@@ -113,8 +113,6 @@ def get_strict_matchday_fixtures(token, selected_league_names):
 
     for l_name in selected_league_names:
         code = LEAGUES[l_name]["football_data"]
-        
-        # 1. Aktuellen Spieltag der Liga direkt ermitteln
         comp_url = f"{FOOTBALL_DATA_URL}/competitions/{code}"
         comp_data, error = api_get_cached(comp_url, headers=headers)
         if error:
@@ -125,15 +123,12 @@ def get_strict_matchday_fixtures(token, selected_league_names):
         if not current_matchday:
             continue
 
-        # 2. Partien exakt für diesen Spieltag laden
         matches_url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
         matches_data, err = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
         if err or not matches_data:
             continue
 
         matches = matches_data.get("matches", [])
-        
-        # Falls alle Spiele dieses Spieltags vorbei sind, nimm automatisch den nächsten Spieltag
         future_matches = [m for m in matches if parse_utc(m.get("utcDate")) and parse_utc(m.get("utcDate")) > current_time]
         if not future_matches:
             current_matchday += 1
@@ -224,13 +219,14 @@ def calculate_advanced_markets(home_lambda, away_lambda):
 
 def calculate_model(home, away, stats):
     hs, aws = stats.get(home), stats.get(away)
-    home_gf = (hs["gf"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.4
-    home_ga = (hs["ga"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.2
-    away_gf = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
-    away_ga = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
+    home_gf = (hs["gf"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.6
+    home_ga = (hs["ga"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.0
+    away_gf = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.1
+    away_ga = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.5
 
-    home_lambda = max(0.4, (home_gf * 0.5 + away_ga * 0.5) * 1.03)
-    away_lambda = max(0.4, (away_gf * 0.5 + home_ga * 0.5))
+    # Realisturische Tore-Gewichtung (Heimvorteil + Offensivkraft)
+    home_lambda = max(0.5, home_gf * 0.55 + away_ga * 0.45)
+    away_lambda = max(0.4, away_gf * 0.55 + home_ga * 0.45)
     return calculate_advanced_markets(home_lambda, away_lambda)
 
 def get_fresh_odds(odds_key, sport_key):
@@ -267,36 +263,39 @@ def analyze_match(row, stats):
     odd_x = row.get("odd_x")
     odd_2 = row.get("odd_2")
     
+    # Realistische Fallback-Quoten basierend auf Modellwahrscheinlichkeiten mit Buchmacher-Marge
     if not odd_1 or not odd_x or not odd_2:
-        odd_1 = round(1.0 / max(p1, 0.05) * 0.93, 2)
-        odd_x = round(1.0 / max(px, 0.05) * 0.93, 2)
-        odd_2 = round(1.0 / max(p2, 0.05) * 0.93, 2)
+        odd_1 = round(1.0 / max(p1, 0.05) * 0.92, 2)
+        odd_x = round(1.0 / max(px, 0.05) * 0.92, 2)
+        odd_2 = round(1.0 / max(p2, 0.05) * 0.92, 2)
         row["bookmaker_1"] = "WETT-KI Modell-Quote"
 
     market = np.array([1/odd_1, 1/odd_x, 1/odd_2])
     market = market / market.sum()
 
     final = {
-        "1": 0.60 * p1 + 0.40 * market[0],
-        "X": 0.60 * px + 0.40 * market[1],
-        "2": 0.60 * p2 + 0.40 * market[2],
+        "1": 0.65 * p1 + 0.35 * market[0],
+        "X": 0.65 * px + 0.35 * market[1],
+        "2": 0.65 * p2 + 0.35 * market[2],
     }
     total = sum(final.values())
     final = {k: v / total for k, v in final.items()}
 
     prediction = max(final, key=final.get)
     confidence = final[prediction]
-    sorted_probs = sorted(final.values(), reverse=True)
-    gap = sorted_probs[0] - sorted_probs[1]
+    selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
 
-    if confidence >= 0.52 and gap >= 0.12:
+    # Strikte Logik: Keine Außenseiter bei LOW oder MID!
+    # LOW: Sehr sicherer Favorit (Quote <= 1.65, hohe Konfidenz)
+    # MID: Solider Favorit (Quote zwischen 1.60 und 2.25)
+    # HIGH: Alles andere (Unentschieden, hohe Quoten / Underdogs)
+    if prediction in ["1", "2"] and confidence >= 0.58 and selected_odd <= 1.65:
         risk = "LOW"
-    elif confidence >= 0.40 and gap >= 0.05:
+    elif prediction in ["1", "2"] and 1.60 <= selected_odd <= 2.25:
         risk = "MID"
     else:
         risk = "HIGH"
     
-    selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
     value = (confidence * selected_odd - 1) if selected_odd > 1 else 0.0
     kelly = max(0.0, (confidence * selected_odd - 1) / (selected_odd - 1)) * 0.25 if selected_odd > 1 else 0.0
 
