@@ -9,7 +9,7 @@ from itertools import combinations
 import random
 
 # ============================================================
-# WETT-KI – ALLE TOP-LIGEN MULTI-LIGA VERSION
+# WETT-KI – ROBUSTE MULTI-LIGA VERSION
 # ============================================================
 
 st.set_page_config(
@@ -105,72 +105,79 @@ def api_get_cached(url, headers=None, params=None):
     except Exception as e:
         return None, str(e)
 
-def get_fixtures_for_leagues(token, competition_codes):
+def get_fixtures_for_leagues(token, selected_league_names):
     headers = {"X-Auth-Token": token}
-    start_date = utc_now().date()
-    end_date = start_date + timedelta(days=12)
-    
-    url = f"{FOOTBALL_DATA_URL}/matches"
-    params = {
-        "dateFrom": start_date.isoformat(),
-        "dateTo": end_date.isoformat(),
-        "competitions": ",".join(competition_codes),
-        "limit": 300,
-    }
-    
-    data, error = api_get_cached(url, headers=headers, params=params)
-    if error:
-        return [], error
-
-    rows = []
+    all_rows = []
     current_time = utc_now()
-    
-    for match in data.get("matches", []):
-        utc_date = parse_utc(match.get("utcDate"))
-        if utc_date is None or utc_date <= current_time:
-            continue
+    start_date = current_time.date()
+    end_date = start_date + timedelta(days=14)
+    errors = []
+
+    for l_name in selected_league_names:
+        code = LEAGUES[l_name]["football_data"]
+        url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
         
-        status = str(match.get("status", "")).upper()
-        if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
+        # 1. Versuch über Datumsfenster
+        params = {"dateFrom": start_date.isoformat(), "dateTo": end_date.isoformat()}
+        data, error = api_get_cached(url, headers=headers, params=params)
+        
+        matches = []
+        if not error and data:
+            matches = data.get("matches", [])
+            
+        # 2. Fallback: Nächste anstehende Spiele laden, falls im Fenster nichts liegt
+        if not matches:
+            params_fb = {"status": "SCHEDULED", "limit": 15}
+            data_fb, err_fb = api_get_cached(url, headers=headers, params=params_fb)
+            if not err_fb and data_fb:
+                matches = data_fb.get("matches", [])
+
+        if error and not matches:
+            errors.append(f"{l_name}: {error}")
             continue
 
-        comp = match.get("competition", {})
-        home = match.get("homeTeam", {})
-        away = match.get("awayTeam", {})
-        home_name = home.get("name") or home.get("shortName")
-        away_name = away.get("name") or away.get("shortName")
+        for match in matches:
+            utc_date = parse_utc(match.get("utcDate"))
+            if utc_date is None or utc_date <= current_time:
+                continue
+            status = str(match.get("status", "")).upper()
+            if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
+                continue
 
-        if not home_name or not away_name:
-            continue
+            home = match.get("homeTeam", {})
+            away = match.get("awayTeam", {})
+            home_name = home.get("name") or home.get("shortName")
+            away_name = away.get("name") or away.get("shortName")
 
-        rows.append({
-            "match_id": match.get("id"),
-            "competition_code": comp.get("code"),
-            "league": comp.get("name"),
-            "matchday": match.get("matchday"),
-            "utcDate": utc_date,
-            "home": home_name,
-            "away": away_name,
-            "status": status,
-        })
-    return rows, None
+            if not home_name or not away_name:
+                continue
 
-def get_historical_matches(token, competition_codes, days_back=90):
+            all_rows.append({
+                "match_id": match.get("id"),
+                "competition_code": code,
+                "league": l_name,
+                "matchday": match.get("matchday"),
+                "utcDate": utc_date,
+                "home": home_name,
+                "away": away_name,
+                "status": status,
+            })
+    return all_rows, errors
+
+def get_historical_matches(token, selected_league_names, days_back=90):
     end_date = utc_now().date()
     start_date = end_date - timedelta(days=days_back)
-    url = f"{FOOTBALL_DATA_URL}/matches"
     headers = {"X-Auth-Token": token}
-    params = {
-        "dateFrom": start_date.isoformat(),
-        "dateTo": end_date.isoformat(),
-        "competitions": ",".join(competition_codes),
-        "status": "FINISHED",
-        "limit": 300,
-    }
-    data, error = api_get_cached(url, headers=headers, params=params)
-    if error:
-        return []
-    return data.get("matches", [])
+    all_historical = []
+    
+    for l_name in selected_league_names:
+        code = LEAGUES[l_name]["football_data"]
+        url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
+        params = {"dateFrom": start_date.isoformat(), "dateTo": end_date.isoformat(), "status": "FINISHED"}
+        data, error = api_get_cached(url, headers=headers, params=params)
+        if not error and data:
+            all_historical.extend(data.get("matches", []))
+    return all_historical
 
 def build_team_stats(historical_matches):
     stats = {}
@@ -311,9 +318,8 @@ budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, va
 
 if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
     with st.spinner("Lade alle Spiele der Top-Ligen und Quoten..."):
-        codes = [LEAGUES[l]["football_data"] for l in selected_leagues]
-        fixtures, err1 = get_fixtures_for_leagues(st.session_state.football_token, codes)
-        historical = get_historical_matches(st.session_state.football_token, codes)
+        fixtures, err1 = get_fixtures_for_leagues(st.session_state.football_token, selected_leagues)
+        historical = get_historical_matches(st.session_state.football_token, selected_leagues)
         stats = build_team_stats(historical)
 
         all_odds = {}
@@ -405,3 +411,4 @@ with tab2:
 with tab3:
     st.subheader("Aktuelle Buchmacherquoten & Fallback")
     st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "odd_1", "odd_x", "odd_2", "bookmaker_1"]], use_container_width=True)
+
