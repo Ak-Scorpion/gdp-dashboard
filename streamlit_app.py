@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from itertools import combinations
 
 # ============================================================
-# WETT-KI – ROBUSTE QUOTEN & KELLY VERSION
+# WETT-KI – VOLLSTÄNDIG KORRIGIERTE VERSION
 # ============================================================
 
 st.set_page_config(
@@ -73,6 +73,11 @@ def format_local_datetime(value):
     except Exception:
         return dt.strftime("%d.%m.%Y %H:%M")
 
+def get_week_dates():
+    now_local = datetime.now(ZoneInfo(LOCAL_TZ))
+    today = now_local.date()
+    return today, today + timedelta(days=10)
+
 def normalize_name(name):
     if not name:
         return ""
@@ -88,7 +93,7 @@ def names_match(a, b):
     if na == nb or na in nb or nb in na:
         return True
     set_a, set_b = set(na.split()), set(nb.split())
-    if set_a & set_b: # Mindestens ein Kernwort stimmt überein (z.B. "Dortmund")
+    if set_a & set_b:
         return True
     return False
 
@@ -102,60 +107,52 @@ def api_get_cached(url, headers=None, params=None):
     except Exception as e:
         return None, str(e)
 
-def get_current_matchday_fixtures(token, competition_codes):
+def get_current_fixtures(token, competition_codes, start_date, end_date):
+    url = f"{FOOTBALL_DATA_URL}/matches"
     headers = {"X-Auth-Token": token}
+    params = {
+        "dateFrom": start_date.isoformat(),
+        "dateTo": end_date.isoformat(),
+        "competitions": ",".join(competition_codes),
+        "limit": 500,
+    }
+    data, error = api_get_cached(url, headers=headers, params=params)
+    if error:
+        return [], error
+
+    matches = data.get("matches", [])
     rows = []
     current_time = utc_now()
-    errors = []
 
-    for code in competition_codes:
-        comp_url = f"{FOOTBALL_DATA_URL}/competitions/{code}"
-        comp_data, error = api_get_cached(comp_url, headers=headers)
-        if error:
-            errors.append(f"Liga {code}: {error}")
+    for match in matches:
+        utc_date = parse_utc(match.get("utcDate"))
+        if utc_date is None or utc_date <= current_time:
+            continue
+        status = str(match.get("status", "")).upper()
+        if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
             continue
 
-        current_matchday = comp_data.get("currentSeason", {}).get("currentMatchday")
-        if not current_matchday:
+        comp = match.get("competition", {})
+        home = match.get("homeTeam", {})
+        away = match.get("awayTeam", {})
+        home_name = home.get("name") or home.get("shortName")
+        away_name = away.get("name") or away.get("shortName")
+
+        if not home_name or not away_name:
             continue
 
-        comp_name = comp_data.get("name")
-        matches_url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
-        matches_data, error = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
-        if error:
-            errors.append(f"Spieltag {code}: {error}")
-            continue
+        rows.append({
+            "match_id": match.get("id"),
+            "competition_code": comp.get("code"),
+            "league": comp.get("name"),
+            "utcDate": utc_date,
+            "home": home_name,
+            "away": away_name,
+            "status": status,
+        })
+    return rows, None
 
-        for match in matches_data.get("matches", []):
-            utc_date = parse_utc(match.get("utcDate"))
-            if utc_date is None or utc_date <= current_time:
-                continue
-            
-            status = str(match.get("status", "")).upper()
-            if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
-                continue
-
-            home = match.get("homeTeam", {})
-            away = match.get("awayTeam", {})
-            home_name = home.get("name") or home.get("shortName")
-            away_name = away.get("name") or away.get("shortName")
-
-            if not home_name or not away_name:
-                continue
-
-            rows.append({
-                "match_id": match.get("id"),
-                "competition_code": code,
-                "league": comp_name,
-                "matchday": current_matchday,
-                "utcDate": utc_date,
-                "home": home_name,
-                "away": away_name,
-                "status": status,
-            })
-    return rows, errors
-
-def get_historical_matches(token, competition_codes, days_back=180):
+def get_historical_matches(token, competition_codes, days_back=90):
     end_date = utc_now().date()
     start_date = end_date - timedelta(days=days_back)
     url = f"{FOOTBALL_DATA_URL}/matches"
@@ -188,7 +185,7 @@ def build_team_stats(historical_matches):
 
         for team in [home_name, away_name]:
             if team not in stats:
-                stats[team] = {"played": 0, "wins": 0, "draws": 0, "losses": 0, "gf": 0, "ga": 0, "home_played": 0, "home_gf": 0, "home_ga": 0}
+                stats[team] = {"played": 0, "gf": 0, "ga": 0, "home_played": 0, "home_gf": 0, "home_ga": 0}
 
         hs, aws = stats[home_name], stats[away_name]
         hs["played"] += 1; hs["gf"] += hg; hs["ga"] += ag; hs["home_played"] += 1; hs["home_gf"] += hg; hs["home_ga"] += ag
@@ -197,8 +194,8 @@ def build_team_stats(historical_matches):
 
 def calculate_advanced_markets(home_lambda, away_lambda):
     p1, px, p2 = 0.0, 0.0, 0.0
-    for h in range(0, 9):
-        for a in range(0, 9):
+    for h in range(0, 8):
+        for a in range(0, 8):
             p_h = math.exp(-home_lambda) * (home_lambda ** h) / math.factorial(h)
             p_a = math.exp(-away_lambda) * (away_lambda ** a) / math.factorial(a)
             p = p_h * p_a
@@ -212,13 +209,14 @@ def calculate_advanced_markets(home_lambda, away_lambda):
 
 def calculate_model(home, away, stats):
     hs, aws = stats.get(home), stats.get(away)
-    home_attack = (hs["home_gf"] / max(hs["home_played"], 1)) if hs else 1.45
-    home_defence = (hs["home_ga"] / max(hs["home_played"], 1)) if hs else 1.20
-    away_attack = (aws["gf"] / max(aws["played"], 1)) if aws else 1.15
-    away_defence = (aws["ga"] / max(aws["played"], 1)) if aws else 1.35
+    home_attack = (hs["home_gf"] / max(hs["home_played"], 1)) if hs and hs["home_played"] > 0 else 1.3
+    home_defence = (hs["home_ga"] / max(hs["home_played"], 1)) if hs and hs["home_played"] > 0 else 1.2
+    away_attack = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.2
+    away_defence = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
 
-    home_lambda = min(max((0.55 * home_attack + 0.45 * away_defence) * 1.08, 0.25), 3.50)
-    away_lambda = min(max((0.55 * away_attack + 0.45 * home_defence), 0.20), 3.20)
+    # Ausbalancierte Erwartungswerte ohne übertriebene Heimdominanz
+    home_lambda = min(max(home_attack * 0.5 + away_defence * 0.5 * 1.04, 0.4), 3.0)
+    away_lambda = min(max(away_attack * 0.5 + home_defence * 0.5, 0.4), 3.0)
     return calculate_advanced_markets(home_lambda, away_lambda)
 
 def get_fresh_odds(odds_key, sport_key):
@@ -251,7 +249,6 @@ def analyze_match(row, stats):
     model = calculate_model(row["home"], row["away"], stats)
     p1, px, p2 = model["1"], model["X"], model["2"]
     
-    # Fallback-Quoten generieren, falls The Odds API keine liefert
     odd_1 = row.get("odd_1")
     odd_x = row.get("odd_x")
     odd_2 = row.get("odd_2")
@@ -266,9 +263,9 @@ def analyze_match(row, stats):
     market = market / market.sum()
 
     final = {
-        "1": 0.70 * p1 + 0.30 * market[0],
-        "X": 0.70 * px + 0.30 * market[1],
-        "2": 0.70 * p2 + 0.30 * market[2],
+        "1": 0.65 * p1 + 0.35 * market[0],
+        "X": 0.65 * px + 0.35 * market[1],
+        "2": 0.65 * p2 + 0.35 * market[2],
     }
     total = sum(final.values())
     final = {k: v / total for k, v in final.items()}
@@ -277,7 +274,7 @@ def analyze_match(row, stats):
     confidence = final[prediction]
     gap = confidence - sorted(final.values(), reverse=True)[1]
 
-    risk = "LOW" if confidence >= 0.64 and gap >= 0.20 else ("MID" if confidence >= 0.54 and gap >= 0.10 else "HIGH")
+    risk = "LOW" if confidence >= 0.58 and gap >= 0.15 else ("MID" if confidence >= 0.45 and gap >= 0.08 else "HIGH")
     
     selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
     value = (confidence * selected_odd - 1) if selected_odd > 1 else 0.0
@@ -294,20 +291,22 @@ def analyze_match(row, stats):
 # ============================================================
 
 st.title("⚽ WETT-KI Live")
-st.caption("Aktueller Spieltag der Top-Ligen mit Echtzeit-Quoten & Kelly-Formel")
+st.caption("Aktuelle Spiele aller Top-Ligen mit Echtzeit-Quoten & Kelly-Formel")
 
 st.sidebar.header("⚙️ Konfiguration")
 football_token = st.sidebar.text_input("football-data.org Token", value=st.session_state.football_token, type="password")
 odds_key = st.sidebar.text_input("The Odds API Key", value=st.session_state.odds_key, type="password")
 st.session_state.football_token, st.session_state.odds_key = football_token.strip(), odds_key.strip()
 
-selected_leagues = st.sidebar.multiselect("Wettbewerbe", list(LEAGUES.keys()), default=list(LEAGUES.keys())[:4])
+selected_leagues = st.sidebar.multiselect("Wettbewerbe", list(LEAGUES.keys()), default=list(LEAGUES.keys())[:5])
+selected_risks = st.sidebar.multiselect("Risiko-Filter", ["LOW", "MID", "HIGH"], default=["LOW", "MID", "HIGH"])
 budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, value=100.0, step=10.0)
 
-if st.sidebar.button("🔄 AKTUELLEN SPIELTAG LADEN", use_container_width=True):
-    with st.spinner("Lade aktuellen Spieltag und Quoten..."):
+if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
+    with st.spinner("Lade alle Spiele der Top-Ligen und Quoten..."):
         codes = [LEAGUES[l]["football_data"] for l in selected_leagues]
-        fixtures, err1 = get_current_matchday_fixtures(st.session_state.football_token, codes)
+        start_d, end_d = get_week_dates()
+        fixtures, err1 = get_current_fixtures(st.session_state.football_token, codes, start_d, end_d)
         historical, _ = get_historical_matches(st.session_state.football_token, codes)
         stats = build_team_stats(historical)
 
@@ -341,26 +340,31 @@ if st.sidebar.button("🔄 AKTUELLEN SPIELTAG LADEN", use_container_width=True):
 
 df = st.session_state.fixtures.copy()
 
+if not df.empty and selected_leagues:
+    df = df[df["league"].isin(selected_leagues)]
+if not df.empty and selected_risks:
+    df = df[df["risk"].isin(selected_risks)]
+
 if df.empty:
-    st.info("Klicke in der Sidebar auf **'Aktuellen Spieltag laden'**, um die offenen Partien abzurufen.")
+    st.info("Klicke in der Sidebar auf **'Spiele & Quoten laden'**, um die Partien anzuzeigen.")
     st.stop()
 
 tab1, tab2, tab3 = st.tabs(["🔥 Top Value & Kelly", "🤖 KI-Analyse", "📊 Live-Quoten"])
 
 with tab1:
     st.subheader("🎯 Empfohlene Value Bets mit Kelly-Einsatz")
-    for _, row in df.sort_values("value", ascending=False).head(5).iterrows():
+    for _, row in df.sort_values("value", ascending=False).head(10).iterrows():
         kelly_stake = row["kelly"] * budget
         selected_quote = row['odd_1'] if row['prediction'] == '1' else (row['odd_x'] if row['prediction'] == 'X' else row['odd_2'])
-        st.markdown(f"**{row['league']} (Spieltag {row['matchday']})** | {row['home']} vs {row['away']} ({row['local_datetime']})")
-        st.write(f"Tipp: **{row['prediction']}** | Quote: **{selected_quote:.2f}** ({row.get('bookmaker_1', 'Buchmacher')}) | Kelly-Empfehlung: **{kelly_stake:.2f} €** ({row['kelly']*100:.1f}% der Bankroll)")
+        st.markdown(f"**{row['league']}** | {row['home']} vs {row['away']} ({row['local_datetime']})")
+        st.write(f"Tipp: **{row['prediction']}** | Quote: **{selected_quote:.2f}** ({row.get('bookmaker_1', 'Modell')}) | Risiko: **{row['risk']}** | Kelly: **{kelly_stake:.2f} €**")
         st.divider()
 
 with tab2:
-    st.subheader("Vollständige Spielmatrix (Aktueller Spieltag)")
-    st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "prediction", "confidence", "risk"]], use_container_width=True)
+    st.subheader("Vollständige Spielmatrix")
+    st.dataframe(df[["local_datetime", "league", "home", "away", "prediction", "confidence", "risk"]], use_container_width=True)
 
 with tab3:
     st.subheader("Aktuelle Buchmacherquoten & Fallback")
-    st.dataframe(df[["local_datetime", "league", "matchday", "home", "away", "odd_1", "odd_x", "odd_2", "bookmaker_1"]], use_container_width=True)
+    st.dataframe(df[["local_datetime", "league", "home", "away", "odd_1", "odd_x", "odd_2", "bookmaker_1"]], use_container_width=True)
 
