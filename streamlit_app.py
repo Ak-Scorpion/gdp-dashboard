@@ -2682,4 +2682,4 @@ st.caption(
     "⚠️ WETT-KI ist ein statistisches Analysewerkzeug "
     "und keine Garantie für Gewinne. Wetten können "
     "zu Verlusten führen."
-                    )
+    )
