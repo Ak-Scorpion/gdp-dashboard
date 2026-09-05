@@ -9,7 +9,7 @@ from itertools import combinations
 import random
 
 # ============================================================
-# WETT-KI – ROBUSTE MULTI-LIGA VERSION
+# WETT-KI – STRIKTE SPIELTAGS-SYNCHRONISATION
 # ============================================================
 
 st.set_page_config(
@@ -105,41 +105,47 @@ def api_get_cached(url, headers=None, params=None):
     except Exception as e:
         return None, str(e)
 
-def get_fixtures_for_leagues(token, selected_league_names):
+def get_strict_matchday_fixtures(token, selected_league_names):
     headers = {"X-Auth-Token": token}
     all_rows = []
     current_time = utc_now()
-    start_date = current_time.date()
-    end_date = start_date + timedelta(days=14)
     errors = []
 
     for l_name in selected_league_names:
         code = LEAGUES[l_name]["football_data"]
-        url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
         
-        # 1. Versuch über Datumsfenster
-        params = {"dateFrom": start_date.isoformat(), "dateTo": end_date.isoformat()}
-        data, error = api_get_cached(url, headers=headers, params=params)
-        
-        matches = []
-        if not error and data:
-            matches = data.get("matches", [])
-            
-        # 2. Fallback: Nächste anstehende Spiele laden, falls im Fenster nichts liegt
-        if not matches:
-            params_fb = {"status": "SCHEDULED", "limit": 15}
-            data_fb, err_fb = api_get_cached(url, headers=headers, params=params_fb)
-            if not err_fb and data_fb:
-                matches = data_fb.get("matches", [])
-
-        if error and not matches:
+        # 1. Aktuellen Spieltag der Liga direkt ermitteln
+        comp_url = f"{FOOTBALL_DATA_URL}/competitions/{code}"
+        comp_data, error = api_get_cached(comp_url, headers=headers)
+        if error:
             errors.append(f"{l_name}: {error}")
             continue
+
+        current_matchday = comp_data.get("currentSeason", {}).get("currentMatchday")
+        if not current_matchday:
+            continue
+
+        # 2. Partien exakt für diesen Spieltag laden
+        matches_url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
+        matches_data, err = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
+        if err or not matches_data:
+            continue
+
+        matches = matches_data.get("matches", [])
+        
+        # Falls alle Spiele dieses Spieltags vorbei sind, nimm automatisch den nächsten Spieltag
+        future_matches = [m for m in matches if parse_utc(m.get("utcDate")) and parse_utc(m.get("utcDate")) > current_time]
+        if not future_matches:
+            current_matchday += 1
+            matches_data_next, err_next = api_get_cached(matches_url, headers=headers, params={"matchday": current_matchday})
+            if not err_next and matches_data_next:
+                matches = matches_data_next.get("matches", [])
 
         for match in matches:
             utc_date = parse_utc(match.get("utcDate"))
             if utc_date is None or utc_date <= current_time:
                 continue
+            
             status = str(match.get("status", "")).upper()
             if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
                 continue
@@ -156,7 +162,7 @@ def get_fixtures_for_leagues(token, selected_league_names):
                 "match_id": match.get("id"),
                 "competition_code": code,
                 "league": l_name,
-                "matchday": match.get("matchday"),
+                "matchday": current_matchday,
                 "utcDate": utc_date,
                 "home": home_name,
                 "away": away_name,
@@ -305,7 +311,7 @@ def analyze_match(row, stats):
 # ============================================================
 
 st.title("⚽ WETT-KI Live")
-st.caption("Aktuelle Spiele aller Top-Ligen mit Echtzeit-Quoten & Kelly-Formel")
+st.caption("Aktueller Spieltag der Top-Ligen mit Echtzeit-Quoten & Kelly-Formel")
 
 st.sidebar.header("⚙️ Konfiguration")
 football_token = st.sidebar.text_input("football-data.org Token", value=st.session_state.football_token, type="password")
@@ -317,8 +323,8 @@ selected_risks = st.sidebar.multiselect("Risiko-Filter", ["LOW", "MID", "HIGH"],
 budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, value=100.0, step=10.0)
 
 if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
-    with st.spinner("Lade alle Spiele der Top-Ligen und Quoten..."):
-        fixtures, err1 = get_fixtures_for_leagues(st.session_state.football_token, selected_leagues)
+    with st.spinner("Lade aktuellen Spieltag aller Top-Ligen und Quoten..."):
+        fixtures, err1 = get_strict_matchday_fixtures(st.session_state.football_token, selected_leagues)
         historical = get_historical_matches(st.session_state.football_token, selected_leagues)
         stats = build_team_stats(historical)
 
