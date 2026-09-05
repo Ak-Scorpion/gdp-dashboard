@@ -23,8 +23,6 @@ st.set_page_config(
 # --- SESSION STATE INITIALISIERUNG ---
 if 'saved_tickets' not in st.session_state:
     st.session_state['saved_tickets'] = []
-if 'custom_matches' not in st.session_state:
-    st.session_state['custom_matches'] = []
 
 # --- TEAM-RATINGS (Machine Learning Feature Engine) ---
 TEAM_RATINGS = {
@@ -33,7 +31,7 @@ TEAM_RATINGS = {
     "manchester city": 95, "arsenal": 92, "liverpool": 93, "chelsea": 85,
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86,
     "inter mailand": 91, "juventus turin": 86, "ac milan": 86, "napoli": 86,
-    "paris saint-germain": 93, "as monaco": 82
+    "paris saint-germain": 93, "as monaco": 82, "as rom": 82, "fc porto": 80
 }
 
 LEAGUE_BASE = {
@@ -42,8 +40,27 @@ LEAGUE_BASE = {
     "🇪🇸 La Liga": 78,
     "🇮🇹 Serie A": 78,
     "🇫🇷 Ligue 1": 76,
-    "🏆 Champions League": 88
+    "🏆 Champions League": 88,
+    "🇪🇺 Europa League": 77,
+    "🇪🇺 Conference League": 73
 }
+
+# Automatisierter Spielpool für alle Ligen
+MASTER_MATCH_POOL = [
+    {"liga": "🇩🇪 1. Bundesliga", "home": "Bayern München", "away": "Borussia Dortmund"},
+    {"liga": "🇩🇪 1. Bundesliga", "home": "Bayer Leverkusen", "away": "RB Leipzig"},
+    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Manchester City", "away": "Arsenal"},
+    {"liga": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "home": "Liverpool", "away": "Chelsea"},
+    {"liga": "🇪🇸 La Liga", "home": "Real Madrid", "away": "Barcelona"},
+    {"liga": "🇪🇸 La Liga", "home": "Atletico Madrid", "away": "Real Sociedad"},
+    {"liga": "🇮🇹 Serie A", "home": "Inter Mailand", "away": "Juventus Turin"},
+    {"liga": "🇮🇹 Serie A", "home": "AC Milan", "away": "Napoli"},
+    {"liga": "🇫🇷 Ligue 1", "home": "Paris Saint-Germain", "away": "AS Monaco"},
+    {"liga": "🏆 Champions League", "home": "Real Madrid", "away": "Manchester City"},
+    {"liga": "🏆 Champions League", "home": "Bayern München", "away": "Paris Saint-Germain"},
+    {"liga": "🇪🇺 Europa League", "home": "AS Rom", "away": "FC Porto"},
+    {"liga": "🇪🇺 Conference League", "home": "Fiorentina", "away": "Real Betis"}
+]
 
 def get_rating(team, league):
     return TEAM_RATINGS.get(team.lower().strip(), LEAGUE_BASE.get(league, 75))
@@ -103,51 +120,72 @@ st.markdown("""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">SPORTS-BETTING ML ARCHITECTURE</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ VALUE ENGINE PRO</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Inkl. Oddspedia Live-Quotenvergleich & präzisen Over/Under-Märkten</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Automatisierter Ligen-Filter & Oddspedia Quotenvergleich</p>
     </div>
 """, unsafe_allow_html=True)
 
-with st.expander("⚙️ Modell- & Fixture-Einstellungen", expanded=True):
+with st.expander("⚙️ Einstellungen & Ligen-Auswahl", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
         bankroll = st.number_input("Bankroll (€):", value=58.0)
     with col2:
         stake = st.number_input("Fester Einsatz (€):", value=5.0)
 
-    st.markdown("#### ➕ Aktuelle Partie erfassen (Umgehung veralteter Spielpläne):")
-    with st.form("match_form"):
-        liga = st.selectbox("Liga wählen:", list(LEAGUE_BASE.keys()))
-        home_team = st.text_input("Heimteam (z. B. Bayern München):")
-        away_team = st.text_input("Auswärtsteam (z. B. Borussia Dortmund):")
-        submitted = st.form_submit_button("Modell-Prognose & Quoten berechnen")
-        if submitted and home_team and away_team:
-            st.session_state['custom_matches'].append({"liga": liga, "home": home_team, "away": away_team})
-            st.success(f"Partie {home_team} vs {away_team} erfolgreich ins Modell geladen!")
+    st.markdown("---")
+    st.markdown("#### 🏆 Ligen-Auswahl (Checkbox-System):")
+    selected_leagues = []
+    
+    c_l1, c_l2 = st.columns(2)
+    with c_l1:
+        if st.checkbox("🇩🇪 1. Bundesliga", value=True): selected_leagues.append("🇩🇪 1. Bundesliga")
+        if st.checkbox("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", value=True): selected_leagues.append("🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League")
+        if st.checkbox("🇪🇸 La Liga", value=True): selected_leagues.append("🇪🇸 La Liga")
+        if st.checkbox("🇮🇹 Serie A", value=True): selected_leagues.append("🇮🇹 Serie A")
+    with c_l2:
+        if st.checkbox("🇫🇷 Ligue 1", value=True): selected_leagues.append("🇫🇷 Ligue 1")
+        if st.checkbox("🏆 Champions League", value=True): selected_leagues.append("🏆 Champions League")
+        if st.checkbox("🇪🇺 Europa League", value=True): selected_leagues.append("🇪🇺 Europa League")
+        if st.checkbox("🇪🇺 Conference League", value=True): selected_leagues.append("🇪🇺 Conference League")
 
-matches = st.session_state.get('custom_matches', [])
-if not matches:
-    st.info("ℹ️ Tragen Sie oben eine Begegnung ein, um die ML-basierten Wahrscheinlichkeiten und echten Quoten abzurufen.")
+    st.markdown("---")
+    bet_mode = st.radio("🎯 Wettsystem auswählen:", ["📊 Reine Einzelwetten", "🎯 Standard Kombiwette"])
+
+# Filtere Partien basierend auf den ausgewählten Ligen
+active_matches = [m for m in MASTER_MATCH_POOL if m['liga'] in selected_leagues]
+
+if not active_matches:
+    st.warning("⚠️ Bitte wähle mindestens eine Liga in den Einstellungen aus.")
 else:
-    st.subheader(f"💎 Aktive Modell-Analysen ({len(matches)} Partien)")
-    for m in matches:
-        xg_h, xg_a = calculate_xg(m['home'], m['away'], m['liga'])
-        mkt = build_markets(xg_h, xg_a)
-        
-        with st.container(border=True):
-            st.caption(f"🏆 {m['liga']} | xG Modell: {xg_h} : {xg_a}")
-            st.markdown(f"#### {m['home']} vs {m['away']}")
+    st.subheader(f"💎 Analysierte Top-Partien ({len(active_matches)} Spiele)")
+    
+    if bet_mode == "📊 Reine Einzelwetten":
+        cols = st.columns(2)
+        for idx, m in enumerate(active_matches):
+            xg_h, xg_a = calculate_xg(m['home'], m['away'], m['liga'])
+            mkt = build_markets(xg_h, xg_a)
             
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric("Sieg Heim (1)", f"{mkt['1']['quote']}", f"{mkt['1']['prob']}%")
-            with c2:
-                st.metric("Über 2.5 Tore", f"{mkt['Over25']['quote']}", f"{mkt['Over25']['prob']}%")
-            with c3:
-                st.metric("Beide treffen (BTTS)", f"{mkt['BTTS']['quote']}", f"{mkt['BTTS']['prob']}%")
+            with cols[idx % 2]:
+                with st.container(border=True):
+                    st.caption(f"🏆 {m['liga']} | xG: {xg_h} : {xg_a}")
+                    st.markdown(f"#### {m['home']} vs {m['away']}")
+                    st.metric("Top-Tipp: Sieg Heim (1)", f"Quote: {mkt['1']['quote']}", f"Wahrsch: {mkt['1']['prob']}%")
+                    st.link_button("🔗 Reale Quoten auf Oddspedia prüfen", "https://oddspedia.com/de", use_container_width=True)
+    else:
+        # Kombiwette Modus
+        total_kombi_q = 1.0
+        kombi_picks = active_matches[:3] # Max 3 für Kombi
+        
+        st.info(f"💡 Kombiwette aus {len(kombi_picks)} ausgewählten Top-Spielen zusammengestellt.")
+        for m in kombi_picks:
+            xg_h, xg_a = calculate_xg(m['home'], m['away'], m['liga'])
+            mkt = build_markets(xg_h, xg_a)
+            total_kombi_q *= mkt['1']['quote']
+            
+            with st.container(border=True):
+                st.caption(f"🏆 {m['liga']}")
+                st.markdown(f"**{m['home']} vs {m['away']}** ➔ Sieg Heim (1) @ `{mkt['1']['quote']}`")
+                st.link_button("🔗 Auf Oddspedia vergleichen", "https://oddspedia.com/de", use_container_width=True)
                 
-            st.link_button("🔗 Reale Quoten auf Oddspedia vergleichen", "https://oddspedia.com/de", use_container_width=True)
-
-    if st.button("🗑️ Alle Partien zurücksetzen", use_container_width=True):
-        st.session_state['custom_matches'] = []
-        st.rerun()
+        st.metric(label="📊 GESAMTQUOTE DER KOMBI", value=f"{round(total_kombi_q, 2)}")
+        st.write(f"Möglicher Gewinn bei {stake}€ Einsatz: **{round(stake * total_kombi_q, 2)} €**")
 
