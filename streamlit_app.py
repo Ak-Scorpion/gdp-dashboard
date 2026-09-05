@@ -1,6 +1,6 @@
 import streamlit as st
+import requests
 import math
-import pandas as pd
 from datetime import datetime, timezone, timedelta
 
 # Deutsche Zeitzone
@@ -10,166 +10,154 @@ try:
 except ImportError:
     tz_de = timezone(timedelta(hours=2))
 
-# --- SEITEN-KONFIGURATION ---
-st.set_page_config(
-    page_title="Elite Value Engine Pro",
-    page_icon="⚽",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Elite Value Engine", page_icon="⚽", layout="wide")
 
-# --- SESSION STATE ---
-if 'custom_matches' not in st.session_state:
-    st.session_state['custom_matches'] = []
+# --- API KEYS (AUTO-ROTATION) ---
+API_KEYS = [
+    "f0dc02ac1e10f8e6c0e607698964b5a6", "1aa566d1bdb18c77b5c1210904adf5d5",
+    "25d237353cf0c5920d358d1e79f9450c", "0339fb12fa7a92411c4fe5ca32d3755c",
+    "5d317d36dab0f21697792fe154902716", "e36dbfffe1a22ab682e2759aea044180",
+    "e66bcb054c6ace9de606da63612c8f4c", "796a27287d73f08d0257cc838ebb6cd9",
+    "a5e0323a0a14698cdeec004e3b9b18c"
+]
 
-# --- TEAM-RATINGS & LIGEN ---
+if 'api_key_idx' not in st.session_state:
+    st.session_state['api_key_idx'] = 0
+
+# --- KI TEAM-RATINGS (Erweitert für englische API-Namen) ---
 TEAM_RATINGS = {
-    "bayern münchen": 96, "borussia dortmund": 87, "bayer leverkusen": 91,
-    "rb leipzig": 86, "vfb stuttgart": 83, "eintracht frankfurt": 82,
+    "bayern munich": 96, "borussia dortmund": 87, "bayer leverkusen": 91,
+    "rb leipzig": 86, "stuttgart": 83, "eintracht frankfurt": 82,
     "manchester city": 95, "arsenal": 92, "liverpool": 93, "chelsea": 85,
     "real madrid": 96, "barcelona": 93, "atletico madrid": 86,
-    "inter mailand": 91, "juventus": 86, "ac milan": 86, "napoli": 86,
-    "paris saint-germain": 93, "as monaco": 82, "as rom": 82, "fc porto": 80
+    "inter": 91, "juventus": 86, "ac milan": 86, "napoli": 86,
+    "paris saint germain": 93, "monaco": 82
 }
+LEAGUE_BASE = 78
 
-LEAGUE_BASE = {
-    "🇩🇪 1. Bundesliga": 78,
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League": 82,
-    "🇪🇸 La Liga": 78,
-    "🇮🇹 Serie A": 78,
-    "🇫🇷 Ligue 1": 76,
-    "🏆 Champions League": 88,
-    "🇪🇺 Europa League": 77,
-    "🇪🇺 Conference League": 73
-}
+def get_rating(team_name):
+    clean_name = team_name.lower().replace("-", " ")
+    for key, rating in TEAM_RATINGS.items():
+        if key in clean_name:
+            return rating
+    return LEAGUE_BASE
 
-def get_rating(team, league):
-    return TEAM_RATINGS.get(team.lower().strip(), LEAGUE_BASE.get(league, 75))
-
-def calculate_xg(home, away, league):
-    r_h = get_rating(home, league) + 4
-    r_a = get_rating(away, league)
-    fh = (r_h / 75.0) ** 2.5
-    fa = (r_a / 75.0) ** 2.5
-    xg_h = round(max(0.2, min(5.0, 1.45 * (fh / max(0.3, fa)))), 2)
-    xg_a = round(max(0.2, min(4.0, 1.05 * (fa / max(0.3, fh)))), 2)
-    return xg_h, xg_a
-
-def poisson(lmbda, k):
-    return (math.pow(lmbda, k) * math.exp(-lmbda)) / math.factorial(k)
-
-def build_markets(xg_h, xg_a):
-    matrix = [[0.0]*7 for _ in range(7)]
-    for h in range(7):
-        for a in range(7):
-            matrix[h][a] = poisson(xg_h, h) * poisson(xg_a, a)
-    total = sum(sum(r) for r in matrix)
-    if total > 0:
-        matrix = [[val / total for val in row] for row in matrix]
+# Poisson Berechnung
+def calc_probs(home, away):
+    r_h = get_rating(home) + 4 # Heimvorteil
+    r_a = get_rating(away)
     
-    p_home = sum(matrix[h][a] for h in range(7) for a in range(7) if h > a)
-    p_draw = sum(matrix[h][a] for h in range(7) for a in range(7) if h == a)
-    p_away = sum(matrix[h][a] for h in range(7) for a in range(7) if h < a)
-    p_over25 = sum(matrix[h][a] for h in range(7) for a in range(7) if (h + a) > 2.5)
-    p_btts = sum(matrix[h][a] for h in range(1, 7) for a in range(1, 7))
+    xg_h = max(0.5, 1.45 * ((r_h / 75.0) ** 2.5 / (r_a / 75.0) ** 2.5))
+    xg_a = max(0.5, 1.05 * ((r_a / 75.0) ** 2.5 / (r_h / 75.0) ** 2.5))
+    
+    matrix = [[(math.pow(xg_h, h) * math.exp(-xg_h) / math.factorial(h)) * 
+               (math.pow(xg_a, a) * math.exp(-xg_a) / math.factorial(a)) 
+               for a in range(6)] for h in range(6)]
+    
+    p_1 = sum(matrix[h][a] for h in range(6) for a in range(6) if h > a)
+    p_x = sum(matrix[h][a] for h in range(6) for a in range(6) if h == a)
+    p_2 = sum(matrix[h][a] for h in range(6) for a in range(6) if h < a)
+    p_over = sum(matrix[h][a] for h in range(6) for a in range(6) if (h + a) > 2.5)
+    
+    return {"1": p_1, "X": p_x, "2": p_2, "Over2.5": p_over}
 
-    margin = 1.045
-    return {
-        "1": {"prob": round(p_home*100, 1), "quote": round((1.0/max(0.001, p_home))/margin, 2)},
-        "X": {"prob": round(p_draw*100, 1), "quote": round((1.0/max(0.001, p_draw))/margin, 2)},
-        "2": {"prob": round(p_away*100, 1), "quote": round((1.0/max(0.001, p_away))/margin, 2)},
-        "Over25": {"prob": round(p_over25*100, 1), "quote": round((1.0/max(0.001, p_over25))/margin, 2)},
-        "BTTS": {"prob": round(p_btts*100, 1), "quote": round((1.0/max(0.001, p_btts))/margin, 2)}
-    }
-
-# --- UI DESIGN ---
+# --- UI STYLING ---
 st.markdown("""
     <style>
-    .stApp { background-color: #030712; font-family: 'Inter', sans-serif; color: #f3f4f6; }
-    header[data-testid="stHeader"] { display: none !important; }
-    .elite-header {
-        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-        border: 1px solid #312e81; border-radius: 16px; padding: 24px; margin-bottom: 24px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-    }
+    .stApp { background-color: #030712; color: #f3f4f6; }
+    .elite-header { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border: 1px solid #312e81; border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+    .ev-good { color: #10b981; font-weight: bold; }
+    .ev-bad { color: #ef4444; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
     <div class="elite-header">
-        <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px;">ELITE VALUE ENGINE PRO</span>
-        <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ Wett-Prognosen & Quoten</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Multi-Ligen Filter, ML-Modell & Oddspedia Quotenvergleich</p>
+        <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem;">SCHRITT 3: VALUE ENGINE</span>
+        <h1 style="color: #ffffff; font-size: 2.2rem; margin: 6px 0;">⚽ KI vs. Tipico</h1>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Sucht mathematische Fehler in echten Tipico-Quoten (Expected Value)</p>
     </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR / EINSTELLUNGEN ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.subheader("⚙️ Konfiguration")
-    bankroll = st.number_input("Bankroll (€):", value=58.0)
-    stake = st.number_input("Fester Einsatz (€):", value=5.0)
+    sport_key = st.selectbox("Wähle Liga:", [
+        ("soccer_germany_bundesliga", "🇩🇪 1. Bundesliga"),
+        ("soccer_epl", "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League"),
+        ("soccer_spain_la_liga", "🇪🇸 La Liga"),
+        ("soccer_italy_serie_a", "🇮🇹 Serie A"),
+        ("soccer_uefa_champs_league", "🏆 Champions League")
+    ], format_func=lambda x: x[1])[0]
+
+# --- API LOGIK (Jetzt mit Toren/Totals) ---
+@st.cache_data(ttl=120, show_spinner=False)
+def call_api(api_key, sport_key):
+    url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
+    params = {
+        "apiKey": api_key, "regions": "eu", "bookmakers": "tipico", 
+        "markets": "h2h,totals", "oddsFormat": "decimal"
+    }
+    resp = requests.get(url, params=params)
+    return resp.status_code, resp.text, resp.json() if resp.status_code == 200 else None
+
+def get_live_odds(sport_key):
+    while st.session_state['api_key_idx'] < len(API_KEYS):
+        status, text, data = call_api(API_KEYS[st.session_state['api_key_idx']], sport_key)
+        if status == 200: return data
+        elif status in [401, 429]: 
+            st.session_state['api_key_idx'] += 1
+            st.cache_data.clear()
+        else: return {"error": f"API Fehler: {text}"}
+    return {"error": "Alle Keys verbraucht."}
+
+# --- HAUPTBEREICH ---
+with st.spinner("Scanne Tipico nach Value Bets..."):
+    odds_data = get_live_odds(sport_key)
     
-    st.markdown("---")
-    st.markdown("#### 🏆 Ligen-Filter")
-    selected_leagues = []
-    for league in LEAGUE_BASE.keys():
-        if st.checkbox(league, value=True, key=f"chk_{league}"):
-            selected_leagues.append(league)
-            
-    st.markdown("---")
-    bet_mode = st.radio("🎯 Wettsystem:", ["📊 Reine Einzelwetten", "🎯 Standard Kombiwette"])
-
-# --- HAUPTBEREICH: SPIEL-EINGABE ---
-with st.expander("➕ Partie hinzufügen (Flexibel & Aktuell)", expanded=True):
-    with st.form("match_add_form"):
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            f_liga = st.selectbox("Liga:", list(LEAGUE_BASE.keys()))
-        with col_f2:
-            f_home = st.text_input("Heimteam:")
-        with col_f3:
-            f_away = st.text_input("Auswärtsteam:")
-            
-        submitted = st.form_submit_button("Analysieren & Hinzufügen", use_container_width=True)
-        if submitted and f_home and f_away:
-            st.session_state['custom_matches'].append({"liga": f_liga, "home": f_home, "away": f_away})
-            st.success(f"{f_home} vs {f_away} erfolgreich hinzugefügt!")
-
-# --- ANALYSE & ANZEIGE ---
-matches = [m for m in st.session_state['custom_matches'] if m['liga'] in selected_leagues]
-
-if not matches:
-    st.info("ℹ️ Füge oben eine Partie hinzu und wähle die entsprechenden Ligen in der Sidebar aus.")
-else:
-    if bet_mode == "📊 Reine Einzelwetten":
-        cols = st.columns(2)
-        for idx, m in enumerate(matches):
-            xg_h, xg_a = calculate_xg(m['home'], m['away'], m['liga'])
-            mkt = build_markets(xg_h, xg_a)
-            
-            with cols[idx % 2]:
-                with st.container(border=True):
-                    st.caption(f"🏆 {m['liga']} | xG: {xg_h} : {xg_a}")
-                    st.markdown(f"#### {m['home']} vs {m['away']}")
-                    st.metric("Sieg Heim (1)", f"Quote: {mkt['1']['quote']}", f"Wahrsch: {mkt['1']['prob']}%")
-                    st.markdown(f"Über 2.5: `{mkt['Over25']['quote']}` | BTTS: `{mkt['BTTS']['quote']}`")
-                    st.link_button("🔗 Auf Oddspedia vergleichen", "https://oddspedia.com/de", use_container_width=True)
+    if isinstance(odds_data, dict) and "error" in odds_data:
+        st.error(odds_data["error"])
+    elif not odds_data:
+        st.info("Tipico hat gerade keine Quoten für diese Liga online.")
     else:
-        total_q = 1.0
-        st.info(f"💡 Kombiwette aus {len(matches)} ausgewählten Partien:")
-        for m in matches:
-            xg_h, xg_a = calculate_xg(m['home'], m['away'], m['liga'])
-            mkt = build_markets(xg_h, xg_a)
-            total_q *= mkt['1']['quote']
+        st.success(f"✅ {len(odds_data)} Spiele analysiert. Die KI vergleicht jetzt...")
+        
+        for match in odds_data:
+            h_team, a_team = match['home_team'], match['away_team']
+            start = datetime.fromisoformat(match['commence_time'].replace('Z', '+00:00')).astimezone(tz_de).strftime("%d.%m. %H:%M")
             
-            with st.container(border=True):
-                st.caption(f"🏆 {m['liga']}")
-                st.markdown(f"**{m['home']} vs {m['away']}** ➔ Sieg Heim (1) @ `{mkt['1']['quote']}`")
-                st.link_button("🔗 Auf Oddspedia vergleichen", "https://oddspedia.com/de", use_container_width=True)
+            # Berechne unsere KI-Wahrscheinlichkeiten
+            ki_probs = calc_probs(h_team, a_team)
+            
+            if match['bookmakers']:
+                markets = match['bookmakers'][0]['markets']
                 
-        st.metric("📊 GESAMTQUOTE", value=f"{round(total_q, 2)}")
-        st.write(f"Möglicher Gewinn ({stake} € Einsatz): **{round(stake * total_q, 2)} €**")
+                # Quoten sicher aus der API holen
+                q_1, q_x, q_2, q_over25 = 0.0, 0.0, 0.0, 0.0
+                for m in markets:
+                    if m['key'] == 'h2h':
+                        q_1 = next((i['price'] for i in m['outcomes'] if i['name'] == h_team), 0)
+                        q_x = next((i['price'] for i in m['outcomes'] if i['name'] == 'Draw'), 0)
+                        q_2 = next((i['price'] for i in m['outcomes'] if i['name'] == a_team), 0)
+                    elif m['key'] == 'totals':
+                        q_over25 = next((i['price'] for i in m['outcomes'] if i['name'] == 'Over' and i['point'] == 2.5), 0)
 
-if st.button("🗑️ Alle Partien zurücksetzen", use_container_width=True):
-    st.session_state['custom_matches'] = []
-    st.rerun()
+                with st.container(border=True):
+                    st.markdown(f"#### 🏟️ {h_team} vs {a_team} <span style='font-size:0.8rem; color:gray;'>({start})</span>", unsafe_allow_html=True)
+                    
+                    c1, c2, c3, c4 = st.columns(4)
+                    
+                    # Helfer-Funktion für EV (Expected Value)
+                    def render_market(col, label, ki_prob, tipico_q):
+                        if tipico_q == 0:
+                            col.metric(label, "N/A")
+                            return
+                        ev = (ki_prob * tipico_q) - 1.0
+                        ev_color = "ev-good" if ev > 0 else "ev-bad"
+                        sign = "+" if ev > 0 else ""
+                        col.markdown(f"**{label}**<br>Tipico: `{tipico_q}`<br>KI: `{ki_prob*100:.1f}%`<br><span class='{ev_color}'>EV: {sign}{ev*100:.1f}%</span>", unsafe_allow_html=True)
+
+                    render_market(c1, "Sieg Heim (1)", ki_probs["1"], q_1)
+                    render_market(c2, "Draw (X)", ki_probs["X"], q_x)
+                    render_market(c3, "Sieg Ausw (2)", ki_probs["2"], q_2)
+                    render_market(c4, "Über 2.5 Tore", ki_probs["Over2.5"], q_over25)
+
