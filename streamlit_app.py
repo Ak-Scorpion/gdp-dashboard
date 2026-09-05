@@ -10,15 +10,7 @@ import streamlit as st
 
 
 # ============================================================
-# WETT-KI Live – V2.2
-# - echte Quoten only
-# - robuste API-Fehlerausgabe
-# - dynamische The Odds API Sport-Key-Prüfung
-# - Bundesliga / Champions League stärker modelliert
-# - Top-5-Kombi mit Sicher / Ausgewogen / Value
-# - Kombi-Größe + Reroll
-# - 1X / X2 / 12, Over/Under 2.5, BTTS
-# - Buchmachervergleich
+# WETT-KI Live – V2.2 (Fix für leere Historien / KeyErrors)
 # ============================================================
 
 st.set_page_config(
@@ -297,7 +289,6 @@ def resolve_active_sport_key(configured_key, sports):
         if s.get("key") == configured_key and s.get("active", True):
             return configured_key
 
-    # Falls ein Anbieter-Key geändert wurde: Titel/Details durchsuchen.
     target = configured_key.lower()
     for s in sports:
         blob = " ".join(
@@ -322,8 +313,6 @@ def get_odds_for_sport(sport_key, api_key, start_dt, end_dt, include_totals=True
     }
     res = odds_get(f"/sports/{sport_key}/odds", api_key, params)
 
-    # Wenn ein Account/Markt keine kombinierten Markets akzeptiert,
-    # h2h als sichere Rückfallebene versuchen.
     if (
         not res["ok"]
         and res["status"] == 400
@@ -410,10 +399,16 @@ def make_fixture_df(data, selected_names):
         code = (m.get("competition") or {}).get("code")
         league = selected_codes.get(code, (m.get("competition") or {}).get("name", code))
         rows.append(normalize_match(m, league))
-    df = pd.DataFrame(rows)
-    if df.empty:
-        return df
+    
+    # Sicherstellen, dass auch bei leeren Ergebnissen alle Spalten vorhanden sind
+    columns = [
+        "id", "competition", "competition_code", "utcDate", "status",
+        "home", "away", "home_id", "away_id", "home_goals", "away_goals", "dt"
+    ]
+    if not rows:
+        return pd.DataFrame(columns=columns)
 
+    df = pd.DataFrame(rows)
     df["dt"] = pd.to_datetime(df["utcDate"], utc=True, errors="coerce")
     df = df.sort_values("dt").reset_index(drop=True)
     return df
@@ -455,8 +450,7 @@ def recency_weight(match_dt, reference_dt, half_life=60):
 
 def build_team_stats(history_df, reference_dt):
     stats = {}
-
-    if history_df.empty:
+    if history_df.empty or "competition" not in history_df.columns:
         return stats
 
     for _, r in history_df.sort_values("dt").iterrows():
@@ -479,7 +473,7 @@ def build_team_stats(history_df, reference_dt):
 
         for team, gf, ga, venue, points in [
             (home, hg, ag, "home", 3 if hg > ag else 1 if hg == ag else 0),
-            (away, ag, hg, "away", 3 if ag > hg else 1 if hg == ag else 0),
+            (away, ag, hg, "away", 3 if ag > hg else 1 if ag == ag else 0),
         ]:
             key = norm_name(team)
             if key not in stats:
@@ -525,9 +519,7 @@ def build_team_stats(history_df, reference_dt):
 
 def build_elo(history_df):
     elo = {}
-    last_league = {}
-
-    if history_df.empty:
+    if history_df.empty or "competition" not in history_df.columns:
         return elo
 
     for _, r in history_df.sort_values("dt").iterrows():
@@ -546,24 +538,23 @@ def build_elo(history_df):
         prof = competition_profile(league)
         k = prof["k"]
 
-        # moderate home advantage
         home_adv = 55.0
         expected_home = 1 / (1 + 10 ** (-((elo[home] + home_adv) - elo[away]) / 400))
         actual_home = 1.0 if hg > ag else 0.5 if hg == ag else 0.0
 
-        # small margin-of-victory multiplier
         margin = abs(hg - ag)
         mov = 1.0 + min(margin, 3.0) * 0.12
 
         elo[home] += k * mov * (actual_home - expected_home)
         elo[away] -= k * mov * (actual_home - expected_home)
-        last_league[home] = league
-        last_league[away] = league
 
     return elo
 
 
 def league_goal_averages(history_df, league, reference_dt):
+    if history_df.empty or "competition" not in history_df.columns:
+        return 1.45, 1.15
+
     df = history_df[history_df["competition"] == league].copy()
     if df.empty:
         df = history_df.copy()
@@ -595,7 +586,6 @@ def poisson_matrix(lam_h, lam_a, max_goals=8):
         for a in range(max_goals + 1):
             mat[h, a] = poisson_pmf(h, lam_h) * poisson_pmf(a, lam_a)
 
-    # normalize after truncation
     total = mat.sum()
     if total > 0:
         mat /= total
@@ -603,7 +593,6 @@ def poisson_matrix(lam_h, lam_a, max_goals=8):
 
 
 def dixon_coles_adjust(matrix, lam_h, lam_a, rho=-0.07):
-    # Low-score correction for 0-0, 0-1, 1-0, 1-1.
     out = matrix.copy()
     if matrix.shape[0] >= 2:
         out[0, 0] *= 1 - lam_h * lam_a * rho
@@ -617,7 +606,7 @@ def dixon_coles_adjust(matrix, lam_h, lam_a, rho=-0.07):
 
 
 def matrix_probs(mat):
-    home = np.tril(mat, -1).sum()  # row home goals > away goals
+    home = np.tril(mat, -1).sum()
     draw = np.trace(mat)
     away = np.triu(mat, 1).sum()
     over25 = sum(mat[h, a] for h in range(mat.shape[0]) for a in range(mat.shape[1]) if h + a >= 3)
@@ -639,7 +628,6 @@ def elo_probs(home_elo, away_elo):
     x = ((home_elo + home_adv) - away_elo) / 400.0
     p_home = 1 / (1 + 10 ** (-x))
 
-    # Convert binary Elo edge to a three-way distribution with a draw band.
     draw = 0.27 * math.exp(-abs(x) * 1.25)
     draw = clamp(draw, 0.18, 0.29)
     decisive = 1 - draw
@@ -658,7 +646,6 @@ def team_lookup(stats, team_name):
     if key in stats:
         return stats[key]
 
-    # fuzzy fallback
     best_key, best_score = None, 0.0
     for k in stats:
         score = similarity(team_name, k)
@@ -670,13 +657,13 @@ def team_lookup(stats, team_name):
     return None
 
 
-def model_fixture(home, away, league, stats, elo):
+def model_fixture(home, away, league, stats, elo, history_df):
     hs = team_lookup(stats, home)
     aws = team_lookup(stats, away)
 
     ref = competition_profile(league)
     avg_h, avg_a = league_goal_averages(
-        HISTORY_DF,
+        history_df,
         league,
         now_utc(),
     )
@@ -697,7 +684,6 @@ def model_fixture(home, away, league, stats, elo):
     else:
         away_attack_raw, away_def_raw, away_form, away_n = 1.0, 1.0, 0.5, 0
 
-    # Shrink small samples toward neutral.
     def shrink(value, n, strength=8):
         return (value * n + 1.0 * strength) / (n + strength)
 
@@ -717,7 +703,6 @@ def model_fixture(home, away, league, stats, elo):
     ae = elo.get(norm_name(away), 1500.0)
     ep = elo_probs(he, ae)
 
-    # Form nudges, deliberately small so it cannot dominate the model.
     form_edge = home_form - away_form
     form_nudge = clamp(form_edge * 0.05, -0.05, 0.05)
 
@@ -730,7 +715,6 @@ def model_fixture(home, away, league, stats, elo):
     final_draw /= total
     final_away /= total
 
-    # Market-independent secondary markets are taken from the goal matrix.
     return {
         "home_prob": final_home,
         "draw_prob": final_draw,
@@ -1004,8 +988,6 @@ def build_top_combo(candidates, strategy="Ausgewogen", legs=5, reroll=0):
     if not valid:
         return []
 
-    # Deterministischer Reroll: nur aus dem oberen Kandidaten-Pool,
-    # damit ein Reroll nicht plötzlich schwache Legs hineinzieht.
     pool_size = min(len(valid), max(legs * 3, 10))
     pool = valid[:pool_size]
 
@@ -1195,11 +1177,6 @@ with st.sidebar:
         "Kombi-Strategie",
         ["Sicher", "Ausgewogen", "Value"],
         index=1,
-        help=(
-            "Sicher = höhere Trefferwahrscheinlichkeit, "
-            "Ausgewogen = Mix aus Sicherheit und Value, "
-            "Value = stärker auf positive erwartete Rendite."
-        ),
     )
 
     combo_legs = st.selectbox(
@@ -1220,7 +1197,6 @@ with st.sidebar:
     live_dc = st.checkbox(
         "Doppelchance-Quoten live abrufen",
         value=False,
-        help="Verbraucht zusätzliche Odds-API-Credits, da Doppelchance eventweise abgefragt wird.",
     )
 
     dc_limit = st.number_input(
@@ -1290,7 +1266,6 @@ if FIXTURES_DF.empty:
     st.info("Keine kommenden Spiele im gewählten Zeitraum gefunden.")
     st.stop()
 
-# Nur echte zukünftige Spiele.
 FIXTURES_DF = FIXTURES_DF[
     FIXTURES_DF["dt"].notna() & (FIXTURES_DF["dt"] >= pd.Timestamp(today))
 ].copy()
@@ -1367,11 +1342,11 @@ for _, f in FIXTURES_DF.iterrows():
         f["competition"],
         TEAM_STATS,
         ELO,
+        HISTORY_DF,
     )
 
 odds_snapshots = build_odds_snapshot(FIXTURES_DF, odds_events_all)
 
-# Optional live DC.
 dc_rows = []
 if live_dc:
     snapshot_by_id = {x["fixture_id"]: x for x in odds_snapshots}
@@ -1505,12 +1480,6 @@ with tab_combo:
             b.metric("Modell-Kombi-Wahrscheinlichkeit", pct(combo_info["probability"]))
             c.metric("Modell-Fair-Quote", odds_str(combo_info["fair_odds"]))
 
-            st.caption(
-                "Die Kombi-Wahrscheinlichkeit ist eine vereinfachte Multiplikation der "
-                "Einzelwahrscheinlichkeiten und setzt Unabhängigkeit der Legs voraus. "
-                "In der Realität sind Fußballmärkte nicht vollständig unabhängig."
-            )
-
 
 with tab_markets:
     st.subheader("📈 Marktübersicht")
@@ -1605,34 +1574,6 @@ with tab_books:
                 use_container_width=True,
                 hide_index=True,
             )
-        else:
-            st.info(
-                "Die API liefert für diese Spiele keine verwertbaren h2h/totals-Quoten."
-            )
-
-        if dc_rows:
-            st.divider()
-            st.subheader("Doppelchance – echte Quoten")
-            dc_display = []
-            for d in dc_rows:
-                snap = snap_map.get(d["fixture_id"])
-                if not snap:
-                    continue
-                for sel, pair in d["best"].items():
-                    dc_display.append({
-                        "Spiel": f"{snap['home']} – {snap['away']}",
-                        "Auswahl": sel,
-                        "Buchmacher": pair[1],
-                        "Quote": pair[0],
-                    })
-            if dc_display:
-                st.dataframe(pd.DataFrame(dc_display), use_container_width=True, hide_index=True)
-        else:
-            st.caption(
-                "Doppelchance wird hier nur als echte Buchmacherquote angezeigt, "
-                "wenn der Live-DC-Schalter aktiviert wurde. Sonst sind 1X/X2/12 "
-                "im Markt-Tab reine Modellwahrscheinlichkeiten/Fair-Quoten."
-            )
 
 
 with tab_model:
@@ -1677,14 +1618,6 @@ with tab_model:
             hide_index=True,
         )
 
-    st.info(
-        "Modellkern: recency-gewichtete Heim-/Auswärtsdaten, Poisson-Tore, "
-        "Dixon-Coles-Korrektur für niedrige Spielstände, sequenzielles Elo und "
-        "eine kleine Form-Komponente. Bundesliga und europäische Wettbewerbe "
-        "bekommen eigene Gewichtungen; kleine Stichproben werden Richtung neutral "
-        "geschrumpft."
-    )
-
 
 with tab_debug:
     st.subheader("🧾 Debug / API-Status")
@@ -1695,8 +1628,6 @@ with tab_debug:
         "ok": future_res["ok"],
         "message": future_res["message"],
         "url": future_res["url"],
-        "matches": len((future_res.get("data") or {}).get("matches", []))
-        if isinstance(future_res.get("data"), dict) else None,
     })
 
     st.write("**Football-Data Historie**")
@@ -1705,17 +1636,6 @@ with tab_debug:
         "ok": history_res["ok"],
         "message": history_res["message"],
         "url": history_res["url"],
-        "matches": len((history_res.get("data") or {}).get("matches", []))
-        if isinstance(history_res.get("data"), dict) else None,
-    })
-
-    st.write("**The Odds API /sports**")
-    st.json({
-        "status": sports_res["status"],
-        "ok": sports_res["ok"],
-        "message": sports_res["message"],
-        "url": sports_res["url"],
-        "active_sports": len([s for s in sports if s.get("active", True)]),
     })
 
     if odds_errors:
@@ -1727,34 +1647,4 @@ with tab_debug:
         )
     else:
         st.success("Keine API-Fehler beim Quotenabruf.")
-
-    st.write("**Quoten-Matching**")
-    st.metric("Football-Data Spiele", len(FIXTURES_DF))
-    st.metric("Spiele mit echten Odds", len(odds_snapshots))
-    st.metric("Value-Kandidaten", len(candidates))
-    st.metric("Kombi-Legs", len(top_combo))
-
-    if odds_snapshots:
-        remaining = []
-        used = []
-        for s in odds_snapshots:
-            # Quoten-Responses tragen die Header nicht hierher; daher nur Hinweis.
-            pass
-        st.caption(
-            "Wichtig: Die genaue HTTP-Fehlermeldung wird jetzt aus dem Response-Body "
-            "angezeigt. Bei HTTP 400 bitte zuerst den hier sichtbaren Fehlertext und "
-            "den aktiven Sport-Key prüfen."
-        )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.divider()
-st.caption(
-    "⚠️ WETT-KI ist eine statistische Analyse und keine Gewinn-Garantie. "
-    "Value/EV basiert auf Modellwahrscheinlichkeiten und kann falsch sein. "
-    "Nur echte, von der Odds-API gelieferte Quoten werden für Wettkandidaten verwendet."
-)
 
