@@ -289,12 +289,12 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Dixon-Coles Modell • Intelligenter Form-Filter • Alle Wettsysteme für den Weg zu 100€+</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Dixon-Coles Modell • Präzise Quoten-Filter (Safe / Balanced / High-Risk) • Bankroll Ziel: 58€ ➔ 100€</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
             <span>🔄 <b>Auto-Refresh:</b> Alle 20 Min</span>
             <span>⚡ <b>Update:</b> {last_update_str}</span>
-            <span style="color: #34d399; font-weight: 700;">🎯 Ziel: 58€ ➔ 100€+ (Safe-Modus aktiv)</span>
+            <span style="color: #34d399; font-weight: 700;">🎯 Startkapital: 58.00 € (Ziel: 100€+)</span>
         </div>
     </div>
 """, unsafe_allow_html=True)
@@ -305,7 +305,7 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
     with col_bank1:
         total_bankroll = st.number_input("💰 Gesamt-Bankroll (€):", min_value=1.0, max_value=50000.0, value=58.0, step=1.0)
     with col_bank2:
-        fixed_stake_mode = st.checkbox("Fester 5€ Einsatz (Gewünschte Strategie)", value=True)
+        fixed_stake_mode = st.checkbox("Fester 5€ Einsatz pro Wette", value=True)
         if not fixed_stake_mode:
             max_kelly_pct = st.slider("Max. Kelly-Limit (%):", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
 
@@ -380,13 +380,13 @@ with st.expander("⚙️ Einstellungen, Bankroll (Start: 58€) & Wettsysteme", 
 
     st.markdown("---")
     risiko_profil = st.selectbox(
-        "🧠 Filter-Präzision (KI-Filter):",
+        "🧠 KI-Risiko- & Quoten-Modus:",
         [
-            "🟢 Safe Mode (Hohe Trefferquote & Top-Form Filter)",
-            "⚖️ Balanced Value (+EV Fokus)",
-            "🔥 High Risk / High Reward"
+            "🟢 Safe Mode (Hohe Sicherheit, Quoten bis 1.50)",
+            "⚖️ Mittleres Risiko (Optimierte Quoten von 1.50 bis 2.10)",
+            "🔥 Hohes Risiko / High Reward (Quoten ab 2.10+)"
         ],
-        index=0
+        index=1
     )
 
     generate_click = st.button("🚀 Elite-Spiele laden & analysieren", type="primary", use_container_width=True)
@@ -488,18 +488,28 @@ def get_best_pick(match, profile, checked_bookmakers):
     
     candidates = [
         {"tipp": f"Sieg {home} (1)", "prob": mkts['1X2']['1']['prob'], "base_q": mkts['1X2']['1']['base_quote'], "markt": "1X2 Siegwette", "key": "1x2_1"},
+        {"tipp": f"Sieg {away} (2)", "prob": mkts['1X2']['2']['prob'], "base_q": mkts['1X2']['2']['base_quote'], "markt": "1X2 Siegwette", "key": "1x2_2"},
         {"tipp": f"Doppelte Chance 1X ({home} / X)", "prob": mkts['DC']['1X']['prob'], "base_q": mkts['DC']['1X']['base_quote'], "markt": "Doppelte Chance", "key": "dc_1x"},
         {"tipp": f"Doppelte Chance X2 (X / {away})", "prob": mkts['DC']['X2']['prob'], "base_q": mkts['DC']['X2']['base_quote'], "markt": "Doppelte Chance", "key": "dc_x2"},
         {"tipp": f"Sieg {home} (Draw No Bet)", "prob": mkts['DNB']['1 DNB']['prob'], "base_q": mkts['DNB']['1 DNB']['base_quote'], "markt": "DNB", "key": "dnb_1"},
         {"tipp": "Über 1.5 Tore", "prob": mkts['Tore']['Über 1.5']['prob'], "base_q": mkts['Tore']['Über 1.5']['base_quote'], "markt": "Tor-Markt", "key": "o15"},
-        {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt", "key": "o25"}
+        {"tipp": "Über 2.5 Tore", "prob": mkts['Tore']['Über 2.5']['prob'], "base_q": mkts['Tore']['Über 2.5']['base_quote'], "markt": "Tor-Markt", "key": "o25"},
+        {"tipp": "Beide Teams treffen - Ja", "prob": mkts['BTTS']['Ja']['prob'], "base_q": mkts['BTTS']['Ja']['base_quote'], "markt": "Beide treffen", "key": "btts_ja"}
     ]
 
-    if "Safe Mode" in profile:
-        valid = [c for c in candidates if c['prob'] >= 58.0]
-        if not valid: valid = candidates
-    else:
-        valid = candidates
+    # Präzises Filtern nach Quoten-Wünschen des Nutzers
+    if "Mittleres Risiko" in profile:
+        valid = [c for c in candidates if 1.50 <= c['base_q'] <= 2.10]
+        if not valid: 
+            valid = sorted(candidates, key=lambda x: abs(x['base_q'] - 1.80))[:4]
+    elif "Hohes Risiko" in profile:
+        valid = [c for c in candidates if c['base_q'] > 2.10]
+        if not valid: 
+            valid = sorted(candidates, key=lambda x: x['base_q'], reverse=True)[:3]
+    else: # Safe Mode
+        valid = [c for c in candidates if c['base_q'] < 1.50]
+        if not valid: 
+            valid = sorted(candidates, key=lambda x: x['base_q'])[:3]
 
     selected = valid[match_seed % len(valid)]
     best_bm, best_quote, _ = get_best_bookmaker_odds(selected['base_q'], home, away, selected['key'], checked_bookmakers)
@@ -526,7 +536,7 @@ if not matches:
 else:
     col_t_title, col_t_btn = st.columns([2.5, 1.5])
     with col_t_title:
-        st.subheader(f"💎 Elite-Analysen & Top-Tipps ({len(matches)} Partien)")
+        st.subheader(f"💎 Elite-Analysen & Quoten-Filter ({len(matches)} Partien)")
     with col_t_btn:
         if st.button("🎲 Neue Analysen mischen", type="primary", use_container_width=True, key="btn_shuffle"):
             st.session_state['reroll_key'] += 1
