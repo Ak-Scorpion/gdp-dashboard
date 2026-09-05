@@ -33,7 +33,7 @@ if 'reroll_key' not in st.session_state:
     st.session_state['reroll_key'] = 0
 
 TEAM_RATINGS = {
-    "bayern": 95, "dortmund": 87, "leverkusen": 90, "leipzig": 86, 
+    "bayern": 96, "dortmund": 87, "leverkusen": 91, "leipzig": 86, 
     "stuttgart": 83, "frankfurt": 82, "wolfsburg": 76, "gladbach": 75,
     "freiburg": 78, "union berlin": 75, "mainz": 74, "augsburg": 73,
     "werder bremen": 75, "hoffenheim": 76, "heidenheim": 73, "st. pauli": 70,
@@ -65,8 +65,8 @@ def calculate_dynamic_xg(home_team, away_team):
     r_away = get_team_rating(away_team)
     ratio_home = r_home / float(r_away)
     ratio_away = r_away / float(r_home)
-    xg_home = round(max(0.4, min(3.8, 1.45 * (ratio_home ** 1.8))), 2)
-    xg_away = round(max(0.4, min(3.8, 1.25 * (ratio_away ** 1.8))), 2)
+    xg_home = round(max(0.4, min(4.2, 1.55 * (ratio_home ** 1.9))), 2)
+    xg_away = round(max(0.4, min(3.8, 1.20 * (ratio_away ** 1.8))), 2)
     return xg_home, xg_away
 
 def get_team_form(team_name):
@@ -228,29 +228,24 @@ def calculate_poisson_markets(home_xg, away_xg):
         }
     }
 
-def get_bookmaker_quote(p_val, bookmaker_name):
-    # Realistische Buchmacher-Margen (Bet365 / Betano ca. 3-4%, Tipico / Neo.bet ca. 5-6%)
+def get_exact_bookmaker_quote(p_val, bookmaker_name):
+    # Exakte mathematische Buchmacher-Margen (Neo.bet und Tipico haben typischerweise 5-6% Marge, Bet365 ca. 3.5%)
     margins = {
         "Bet365": 1.035,
-        "Betano": 1.04,
-        "Neo.bet": 1.05,
-        "bwin": 1.055,
-        "Tipico": 1.06,
-        "DAZN Bet": 1.05,
-        "Oddset": 1.065,
-        "Bet-at-home": 1.06
+        "Betano": 1.040,
+        "Neo.bet": 1.052,
+        "bwin": 1.050,
+        "Tipico": 1.055,
+        "DAZN Bet": 1.045,
+        "Oddset": 1.060,
+        "Bet-at-home": 1.055
     }
     margin = margins.get(bookmaker_name, 1.05)
-    if p_val <= 0.01: 
+    if p_val <= 0.001: 
         return 50.00
-    fair_odds = 1.0 / p_val
-    bookie_odds = fair_odds / margin  # Buchmacher-Quote enthält die Marge (Fair odds / margin ist falsch herum? Nein, Quoten sind 1/p * margin)
-    # Korrekte Formel: True probability p, bookmaker odds = (1 / p) * (1 - margin) -> Marge erhöht den Vorteil des Hauses, d.h. Quoten werden GESENKT.
-    # Korrektur: bookmaker_quote = round((1.0 / p_val) / margin, 2) -> Nein! Eine Quote von 2.00 hat 50%. Mit 5% Marge bietet der Buchmacher z.B. 1.90 an.
-    # Also: bookmaker_quote = round((1.0 / p_val) * (2.0 - margin) oder (1.0 / (p_val * margin)) ?)
-    # Standard: Implied Probability = 1 / Quote. House margin adds to implied probabilities sum > 1.0. 
-    # Bookmaker Quote = (1.0 / p_val) * (1.0 / margin_factor) -> Wobei margin_factor z.B. 1.05 ist.
-    quote = round((1.0 / p_val) / 1.05, 2) # Feste realistische Markt-Marge von ca. 5%
+    
+    # Exakte Formel: Buchmacher-Quote = (1 / Wahrscheinlichkeit) / Margenfaktor
+    quote = round((1.0 / p_val) / margin, 2)
     return max(1.05, min(quote, 50.00))
 
 def get_best_bookmaker_odds(p_val, checked_bookmakers):
@@ -259,11 +254,7 @@ def get_best_bookmaker_odds(p_val, checked_bookmakers):
     
     bm_odds = {}
     for bm in checked_bookmakers:
-        # Jeder Buchmacher hat eine leicht abweichende realistische Marge (z.B. Bet365 etwas bessere Quoten als Tipico)
-        bm_margins = {"Bet365": 1.03, "Betano": 1.035, "Neo.bet": 1.045, "bwin": 1.05, "Tipico": 1.055, "DAZN Bet": 1.045, "Oddset": 1.06, "Bet-at-home": 1.055}
-        m_factor = bm_margins.get(bm, 1.05)
-        quote = round((1.0 / p_val) / m_factor, 2)
-        bm_odds[bm] = max(1.05, min(quote, 50.00))
+        bm_odds[bm] = get_exact_bookmaker_quote(p_val, bm)
         
     best_bm = max(bm_odds, key=bm_odds.get)
     best_quote = bm_odds[best_bm]
@@ -312,10 +303,10 @@ st.markdown(f"""
     <div class="elite-header">
         <span style="color: #38bdf8; font-weight: 700; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase;">📱 App von Pascal Gellers</span>
         <h1 style="color: #ffffff; font-size: 2.2rem; font-weight: 800; margin: 6px 0;">⚽ ELITE PRO VALUE ENGINE</h1>
-        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Exakte Dixon-Coles Quoten-Berechnung • 100% präzise Tor-Märkte & Ligen • Ziel: 58€ ➔ 100€</p>
+        <p style="color: #94a3b8; font-size: 0.95rem; margin: 0;">Präzise Neo.bet & Tipico Quoten-Modellierung • Ziel: 58€ ➔ 100€</p>
         <hr style="border: 0; border-top: 1px solid #312e81; margin: 16px 0;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #cbd5e1;">
-            <span>🔄 <b>Quoten-Engine:</b> Live-Berechnet</span>
+            <span>🔄 <b>Quoten-Engine:</b> Mathematisch fixiert</span>
             <span>⚡ <b>Update:</b> {last_update_str}</span>
             <span style="color: #34d399; font-weight: 700;">🎯 Startkapital: 58.00 € (Ziel: 100€+)</span>
         </div>
@@ -509,7 +500,6 @@ def get_best_pick(match, profile, checked_bookmakers):
     seed_raw = f"{home}_{away}_{profile}_{reroll}"
     match_seed = int(hashlib.md5(seed_raw.encode()).hexdigest(), 16)
     
-    # Baue Kandidaten und berechne präzise Buchmacher-Quoten auf Basis der wahren Poisson-Wahrscheinlichkeiten
     raw_candidates = [
         {"tipp": f"Sieg {home} (1)", "p_val": mkts['1X2']['1']['p_val'], "prob": mkts['1X2']['1']['prob'], "markt": "1X2 Siegwette"},
         {"tipp": f"Sieg {away} (2)", "p_val": mkts['1X2']['2']['p_val'], "prob": mkts['1X2']['2']['prob'], "markt": "1X2 Siegwette"},
