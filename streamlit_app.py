@@ -9,7 +9,7 @@ from itertools import combinations
 import random
 
 # ============================================================
-# WETT-KI – OPTIMIERTE & LOGISCH KORREKTE VERSION
+# WETT-KI – STABILE SIDEBAR-KOMBI VERSION
 # ============================================================
 
 st.set_page_config(
@@ -219,12 +219,11 @@ def calculate_advanced_markets(home_lambda, away_lambda):
 
 def calculate_model(home, away, stats):
     hs, aws = stats.get(home), stats.get(away)
-    home_gf = (hs["gf"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.6
-    home_ga = (hs["ga"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.0
-    away_gf = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.1
-    away_ga = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.5
+    home_gf = (hs["gf"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.5
+    home_ga = (hs["ga"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.1
+    away_gf = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.2
+    away_ga = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.4
 
-    # Realisturische Tore-Gewichtung (Heimvorteil + Offensivkraft)
     home_lambda = max(0.5, home_gf * 0.55 + away_ga * 0.45)
     away_lambda = max(0.4, away_gf * 0.55 + home_ga * 0.45)
     return calculate_advanced_markets(home_lambda, away_lambda)
@@ -263,7 +262,6 @@ def analyze_match(row, stats):
     odd_x = row.get("odd_x")
     odd_2 = row.get("odd_2")
     
-    # Realistische Fallback-Quoten basierend auf Modellwahrscheinlichkeiten mit Buchmacher-Marge
     if not odd_1 or not odd_x or not odd_2:
         odd_1 = round(1.0 / max(p1, 0.05) * 0.92, 2)
         odd_x = round(1.0 / max(px, 0.05) * 0.92, 2)
@@ -285,13 +283,9 @@ def analyze_match(row, stats):
     confidence = final[prediction]
     selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
 
-    # Strikte Logik: Keine Außenseiter bei LOW oder MID!
-    # LOW: Sehr sicherer Favorit (Quote <= 1.65, hohe Konfidenz)
-    # MID: Solider Favorit (Quote zwischen 1.60 und 2.25)
-    # HIGH: Alles andere (Unentschieden, hohe Quoten / Underdogs)
-    if prediction in ["1", "2"] and confidence >= 0.58 and selected_odd <= 1.65:
+    if prediction in ["1", "2"] and confidence >= 0.50 and selected_odd <= 1.70:
         risk = "LOW"
-    elif prediction in ["1", "2"] and 1.60 <= selected_odd <= 2.25:
+    elif prediction in ["1", "2"] and 1.65 <= selected_odd <= 2.35:
         risk = "MID"
     else:
         risk = "HIGH"
@@ -357,13 +351,8 @@ if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
 
 df = st.session_state.fixtures.copy()
 
-if not df.empty and selected_leagues:
-    df = df[df["league"].isin(selected_leagues)]
-if not df.empty and selected_risks:
-    df = df[df["risk"].isin(selected_risks)]
-
 # ============================================================
-# SIDEBAR KOMBI-GENERATOR
+# SIDEBAR KOMBI-GENERATOR (Nutzt alle geladenen Spiele unabhängig vom Risiko-Filter)
 # ============================================================
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎟️ Kombi-Schein Generator")
@@ -385,7 +374,7 @@ if not df.empty:
             sel_odd = row['odd_1'] if row['prediction'] == '1' else (row['odd_x'] if row['prediction'] == 'X' else row['odd_2'])
             total_kombi_odd *= sel_odd
             combined_conf *= row['confidence']
-            st.sidebar.text(f"• {row['home'][:12]}.. vs {row['away'][:12]}.. → {row['prediction']} ({sel_odd:.2f})")
+            st.sidebar.text(f"• {row['home'][:10]}.. vs {row['away'][:10]}.. → {row['prediction']} ({sel_odd:.2f})")
         
         st.sidebar.markdown(f"**Gesamtquote:** {total_kombi_odd:.2f}")
         st.sidebar.markdown(f"**Modell-Wahrsch.:** {combined_conf * 100:.1f}%")
@@ -393,6 +382,12 @@ if not df.empty:
         st.sidebar.markdown(f"**Einsatz:** {kombi_stake:.2f} € (Gewinn: {kombi_stake * total_kombi_odd:.2f} €)")
     else:
         st.sidebar.info(f"Zu wenig Spiele für {num_legs} Legs (aktuell: {len(df)}).")
+
+# Filter für Hauptanzeige anwenden
+if not df.empty and selected_leagues:
+    df = df[df["league"].isin(selected_leagues)]
+if not df.empty and selected_risks:
+    df = df[df["risk"].isin(selected_risks)]
 
 if df.empty:
     st.info("Klicke in der Sidebar auf **'Spiele & Quoten laden'**, um die Partien anzuzeigen.")
