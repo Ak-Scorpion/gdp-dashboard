@@ -1,153 +1,67 @@
-import io
-import re
-import unicodedata
-from dataclasses import dataclass
-from difflib import SequenceMatcher
-
-import cv2
-import numpy as np
-import pandas as pd
-import pytesseract
-import streamlit as st
-from PIL import Image
-from scipy.optimize import minimize
-from scipy.stats import poisson
-
-
 # ============================================================
-# WETT-KI 1X2 - SINGLE FILE VERSION
-# ============================================================
+# WETT-KI - FOOTBALL 1/X/2 PREDICTOR
+# Version 2
 #
 # Funktionen:
-# - Historische CSV-Daten laden
-# - Poisson-Fußballmodell
-# - 1 / X / 2 Wahrscheinlichkeiten
-# - Automatische Tippauswahl
-# - Faire Quote
-# - Screenshot hochladen
-# - OCR-Erkennung von Spielen
-# - Teamnamen-Matching
-# - Backtesting
+# - 1/X/2 Prognose
+# - Poisson-Modell
+# - Zeitgewichtung
+# - Team-Matching
+# - Screenshot/OCR
+# - Over/Under
+# - BTTS
+# - Faire Quoten
+# - Value-Berechnung
+# - Rolling Backtest
+# - CSV Export
 #
-# WICHTIG:
-# Diese Software garantiert keine Gewinne.
-# Sie ist ein Analyse- und Backtesting-Tool.
+# Benötigt:
+# streamlit
+# pandas
+# numpy
+# pillow
+# pytesseract (optional)
 # ============================================================
 
+import os
+import re
+import math
+import difflib
 
-st.set_page_config(
-    page_title="Wett-KI 1X2",
-    page_icon="⚽",
-    layout="wide",
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+from PIL import (
+    Image,
+    ImageOps,
+    ImageEnhance,
+    ImageFilter,
 )
+
+
+# ============================================================
+# OPTIONALES OCR
+# ============================================================
+
+try:
+    import pytesseract
+
+    OCR_AVAILABLE = True
+
+except Exception:
+
+    pytesseract = None
+    OCR_AVAILABLE = False
 
 
 # ============================================================
 # KONFIGURATION
 # ============================================================
 
-MAX_GOALS_DEFAULT = 10
-REGULARIZATION_DEFAULT = 0.08
-DECAY_DAYS_DEFAULT = 900
+APP_TITLE = "⚽ Wett-KI – Fußball Predictor"
 
-
-# ============================================================
-# HILFSFUNKTIONEN
-# ============================================================
-
-def normalize_team_name(name):
-    """
-    Vereinheitlicht Teamnamen für das Matching.
-    """
-
-    name = str(name)
-
-    name = unicodedata.normalize(
-        "NFKD",
-        name,
-    )
-
-    name = (
-        name
-        .encode(
-            "ascii",
-            "ignore",
-        )
-        .decode()
-    )
-
-    name = name.lower()
-
-    name = re.sub(
-        r"[^a-z0-9 ]",
-        " ",
-        name,
-    )
-
-    name = re.sub(
-        r"\s+",
-        " ",
-        name,
-    )
-
-    return name.strip()
-
-
-def similarity(a, b):
-    """
-    Ähnlichkeit zweier Teamnamen.
-    """
-
-    return SequenceMatcher(
-        None,
-        normalize_team_name(a),
-        normalize_team_name(b),
-    ).ratio()
-
-
-def find_best_team(
-    query,
-    known_teams,
-    threshold=0.65,
-):
-    """
-    Findet den ähnlichsten bekannten Teamnamen.
-    """
-
-    if not known_teams:
-        return None, 0.0
-
-    scores = []
-
-    for team in known_teams:
-
-        score = similarity(
-            query,
-            team,
-        )
-
-        scores.append(
-            (
-                score,
-                team,
-            )
-        )
-
-    scores.sort(
-        reverse=True
-    )
-
-    best_score, best_team = scores[0]
-
-    if best_score < threshold:
-        return None, best_score
-
-    return best_team, best_score
-
-
-# ============================================================
-# DATEN
-# ============================================================
+DATA_FILE = "data/matches.csv"
 
 REQUIRED_COLUMNS = [
     "date",
@@ -157,36 +71,235 @@ REQUIRED_COLUMNS = [
     "away_goals",
 ]
 
+MIN_TRAINING_MATCHES = 20
 
-def load_data(uploaded_file):
+DEFAULT_DECAY = 0.003
 
-    df = pd.read_csv(
-        uploaded_file
+DEFAULT_REGULARIZATION = 0.15
+
+MAX_GOALS = 10
+
+
+# ============================================================
+# STREAMLIT
+# ============================================================
+
+st.set_page_config(
+    page_title=APP_TITLE,
+    page_icon="⚽",
+    layout="wide",
+)
+
+
+# ============================================================
+# ALLGEMEINE HILFSFUNKTIONEN
+# ============================================================
+
+def poisson_probability(k, lam):
+    """
+    Berechnet P(X=k) bei einer Poisson-Verteilung.
+    """
+
+    if lam <= 0:
+        return 0.0
+
+    try:
+
+        return (
+            math.exp(-lam)
+            * (lam ** k)
+            / math.factorial(k)
+        )
+
+    except Exception:
+
+        return 0.0
+
+
+def normalize_team_name(name):
+    """
+    Vereinheitlicht Teamnamen.
+    """
+
+    if name is None:
+        return ""
+
+    name = str(name).lower().strip()
+
+    replacements = {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "ß": "ss",
+    }
+
+    for old, new in replacements.items():
+
+        name = name.replace(
+            old,
+            new
+        )
+
+    name = re.sub(
+        r"[^a-z0-9\s]",
+        " ",
+        name
     )
 
+    name = re.sub(
+        r"\s+",
+        " ",
+        name
+    ).strip()
+
+    prefixes = [
+        "fc ",
+        "cf ",
+        "ac ",
+        "afc ",
+        "sc ",
+        "sv ",
+        "vfb ",
+        "vfl ",
+    ]
+
+    for prefix in prefixes:
+
+        if name.startswith(prefix):
+
+            name = name[
+                len(prefix):
+            ]
+
+            break
+
+    return name.strip()
+
+
+def safe_float(value, default=0.0):
+
+    try:
+
+        return float(value)
+
+    except Exception:
+
+        return default
+
+
+# ============================================================
+# DATEN
+# ============================================================
+
+def create_sample_data():
+
+    os.makedirs(
+        "data",
+        exist_ok=True
+    )
+
+    sample = [
+
+        ["2025-01-05", "Bayern Munich", "Mainz", 3, 1],
+        ["2025-01-06", "Dortmund", "Leverkusen", 2, 2],
+        ["2025-01-07", "Frankfurt", "Freiburg", 2, 0],
+        ["2025-01-08", "Mainz", "Dortmund", 1, 2],
+        ["2025-01-09", "Leverkusen", "Frankfurt", 3, 1],
+        ["2025-01-10", "Freiburg", "Bayern Munich", 0, 2],
+        ["2025-01-11", "Dortmund", "Freiburg", 3, 1],
+        ["2025-01-12", "Mainz", "Leverkusen", 1, 3],
+        ["2025-01-13", "Frankfurt", "Bayern Munich", 1, 2],
+        ["2025-01-14", "Freiburg", "Mainz", 1, 1],
+        ["2025-01-15", "Bayern Munich", "Dortmund", 2, 1],
+        ["2025-01-16", "Leverkusen", "Freiburg", 2, 0],
+        ["2025-01-17", "Mainz", "Frankfurt", 1, 2],
+        ["2025-01-18", "Dortmund", "Leverkusen", 1, 2],
+        ["2025-01-19", "Frankfurt", "Dortmund", 2, 2],
+        ["2025-01-20", "Bayern Munich", "Leverkusen", 2, 2],
+        ["2025-01-21", "Freiburg", "Dortmund", 0, 2],
+        ["2025-01-22", "Mainz", "Bayern Munich", 0, 3],
+        ["2025-01-23", "Leverkusen", "Mainz", 3, 0],
+        ["2025-01-24", "Dortmund", "Frankfurt", 2, 1],
+        ["2025-01-25", "Bayern Munich", "Freiburg", 4, 0],
+        ["2025-01-26", "Frankfurt", "Mainz", 2, 1],
+        ["2025-01-27", "Freiburg", "Leverkusen", 1, 3],
+        ["2025-01-28", "Dortmund", "Bayern Munich", 1, 3],
+        ["2025-01-29", "Mainz", "Freiburg", 1, 0],
+        ["2025-01-30", "Leverkusen", "Dortmund", 2, 1],
+        ["2025-01-31", "Bayern Munich", "Frankfurt", 3, 1],
+        ["2025-02-01", "Freiburg", "Frankfurt", 1, 1],
+        ["2025-02-02", "Dortmund", "Mainz", 3, 0],
+        ["2025-02-03", "Leverkusen", "Bayern Munich", 1, 2],
+
+    ]
+
+    df = pd.DataFrame(
+        sample,
+        columns=REQUIRED_COLUMNS
+    )
+
+    df.to_csv(
+        DATA_FILE,
+        index=False
+    )
+
+    return df
+
+
+@st.cache_data
+def load_data(uploaded_file=None):
+
+    if uploaded_file is not None:
+
+        df = pd.read_csv(
+            uploaded_file
+        )
+
+    elif os.path.exists(DATA_FILE):
+
+        df = pd.read_csv(
+            DATA_FILE
+        )
+
+    else:
+
+        df = create_sample_data()
+
     df.columns = [
-        str(column)
-        .strip()
-        .lower()
-        for column in df.columns
+        str(c).strip()
+        for c in df.columns
     ]
 
     missing = [
-        column
-        for column in REQUIRED_COLUMNS
-        if column not in df.columns
+        col
+        for col in REQUIRED_COLUMNS
+        if col not in df.columns
     ]
 
     if missing:
 
         raise ValueError(
-            "Fehlende Spalten: "
+            "Folgende Spalten fehlen: "
             + ", ".join(missing)
         )
 
+    df = df[
+        REQUIRED_COLUMNS
+    ].copy()
+
     df["date"] = pd.to_datetime(
         df["date"],
-        errors="coerce",
+        errors="coerce"
+    )
+
+    df["home_goals"] = pd.to_numeric(
+        df["home_goals"],
+        errors="coerce"
+    )
+
+    df["away_goals"] = pd.to_numeric(
+        df["away_goals"],
+        errors="coerce"
     )
 
     df["home_team"] = (
@@ -201,940 +314,1465 @@ def load_data(uploaded_file):
         .str.strip()
     )
 
-    df["home_goals"] = pd.to_numeric(
-        df["home_goals"],
-        errors="coerce",
+    df = df.dropna(
+        subset=[
+            "date",
+            "home_team",
+            "away_team",
+            "home_goals",
+            "away_goals",
+        ]
     )
 
-    df["away_goals"] = pd.to_numeric(
-        df["away_goals"],
-        errors="coerce",
-    )
+    df = df[
+        (df["home_goals"] >= 0)
+        & (df["away_goals"] >= 0)
+    ]
 
-    if df[REQUIRED_COLUMNS].isnull().any().any():
-
-        raise ValueError(
-            "Die CSV enthält ungültige oder fehlende Werte."
-        )
-
-    if (
-        df["home_goals"] < 0
-    ).any() or (
-        df["away_goals"] < 0
-    ).any():
-
-        raise ValueError(
-            "Tore dürfen nicht negativ sein."
-        )
-
-    df = (
-        df
-        .sort_values("date")
-        .reset_index(drop=True)
+    df = df.sort_values(
+        "date"
+    ).reset_index(
+        drop=True
     )
 
     return df
+
+
+def get_team_list(df):
+
+    teams = set()
+
+    for team in df["home_team"]:
+
+        teams.add(team)
+
+    for team in df["away_team"]:
+
+        teams.add(team)
+
+    return sorted(
+        teams
+    )
+
+
+# ============================================================
+# TEAM MATCHING
+# ============================================================
+
+def match_team(
+    ocr_name,
+    teams,
+    threshold=0.50
+):
+
+    if not ocr_name:
+
+        return None, 0.0
+
+    normalized_input = (
+        normalize_team_name(
+            ocr_name
+        )
+    )
+
+    if not normalized_input:
+
+        return None, 0.0
+
+    best_team = None
+    best_score = 0.0
+
+    for team in teams:
+
+        normalized_team = (
+            normalize_team_name(
+                team
+            )
+        )
+
+        if (
+            normalized_input
+            == normalized_team
+        ):
+
+            return team, 1.0
+
+        sequence_score = (
+            difflib.SequenceMatcher(
+                None,
+                normalized_input,
+                normalized_team
+            ).ratio()
+        )
+
+        input_words = set(
+            normalized_input.split()
+        )
+
+        team_words = set(
+            normalized_team.split()
+        )
+
+        word_score = 0.0
+
+        if input_words and team_words:
+
+            intersection = len(
+                input_words
+                .intersection(
+                    team_words
+                )
+            )
+
+            word_score = (
+                intersection
+                / max(
+                    len(input_words),
+                    len(team_words)
+                )
+            )
+
+        score = max(
+            sequence_score,
+            word_score
+        )
+
+        if score > best_score:
+
+            best_score = score
+            best_team = team
+
+    if best_score >= threshold:
+
+        return (
+            best_team,
+            best_score
+        )
+
+    return (
+        None,
+        best_score
+    )
 
 
 # ============================================================
 # POISSON MODELL
 # ============================================================
 
-class FootballModel:
+class PoissonFootballModel:
 
     def __init__(
         self,
-        max_goals=10,
-        regularization=0.08,
-        decay_days=900,
+        decay=DEFAULT_DECAY,
+        regularization=DEFAULT_REGULARIZATION
     ):
 
-        self.max_goals = max_goals
+        self.decay = decay
 
         self.regularization = (
             regularization
         )
 
-        self.decay_days = (
-            decay_days
-        )
-
-        self.teams = []
-
         self.attack = {}
 
         self.defense = {}
 
-        self.home_advantage = 0.0
+        self.home_advantage = 0.15
+
+        self.global_home_goals = 1.40
+
+        self.global_away_goals = 1.10
+
+        self.teams = []
 
         self.fitted = False
 
-
     # --------------------------------------------------------
-    # TRAINING
+    # FIT
     # --------------------------------------------------------
 
     def fit(self, df):
 
-        data = (
-            df
-            .sort_values("date")
+        if len(df) < MIN_TRAINING_MATCHES:
+
+            raise ValueError(
+                f"Mindestens "
+                f"{MIN_TRAINING_MATCHES} "
+                f"Spiele werden benötigt."
+            )
+
+        df = (
+            df.sort_values("date")
             .reset_index(drop=True)
             .copy()
         )
 
-        self.teams = sorted(
-            set(data["home_team"])
-            |
-            set(data["away_team"])
+        self.teams = get_team_list(
+            df
         )
 
-        if len(self.teams) < 2:
-
-            raise ValueError(
-                "Mindestens zwei Teams benötigt."
+        self.global_home_goals = max(
+            0.2,
+            float(
+                df["home_goals"].mean()
             )
+        )
 
-        team_index = {
-            team: index
-            for index, team
-            in enumerate(self.teams)
+        self.global_away_goals = max(
+            0.2,
+            float(
+                df["away_goals"].mean()
+            )
+        )
+
+        attack_values = {
+            team: 1.0
+            for team in self.teams
         }
 
-        n = len(self.teams)
+        defense_values = {
+            team: 1.0
+            for team in self.teams
+        }
 
-        home_goals = (
-            data["home_goals"]
-            .to_numpy(float)
-        )
+        max_date = df["date"].max()
 
-        away_goals = (
-            data["away_goals"]
-            .to_numpy(float)
-        )
+        weights = []
 
-        latest_date = data["date"].max()
+        for _, row in df.iterrows():
 
-        age_days = (
-            latest_date
-            - data["date"]
-        ).dt.days.to_numpy(float)
-
-        weights = np.exp(
-            -age_days
-            / self.decay_days
-        )
-
-
-        # Parameter:
-        #
-        # 0             = Heimvorteil
-        # 1 ... n       = Angriff
-        # n+1 ... 2n    = Verteidigung
-
-        initial = np.zeros(
-            1 + 2 * n
-        )
-
-
-        def unpack(params):
-
-            home_advantage = params[0]
-
-            attack = params[
-                1 : 1 + n
-            ]
-
-            defense = params[
-                1 + n :
-                1 + 2 * n
-            ]
-
-            return (
-                home_advantage,
-                attack,
-                defense,
+            days_old = max(
+                0,
+                (
+                    max_date
+                    - row["date"]
+                ).days
             )
 
+            weight = math.exp(
+                -self.decay
+                * days_old
+            )
 
-        def objective(params):
+            weights.append(
+                weight
+            )
 
-            (
-                home_advantage,
-                attack,
-                defense,
-            ) = unpack(params)
+        df["weight"] = weights
 
-            loss = 0.0
+        for _ in range(35):
 
-            for i, row in enumerate(
-                data.itertuples(
-                    index=False
-                )
-            ):
+            new_attack = {}
 
-                home_index = team_index[
-                    row.home_team
+            new_defense = {}
+
+            # ------------------------------------------------
+            # ANGRIFF
+            # ------------------------------------------------
+
+            for team in self.teams:
+
+                scored = 0.0
+
+                expected = 0.0
+
+                home_games = df[
+                    df["home_team"]
+                    == team
                 ]
 
-                away_index = team_index[
-                    row.away_team
+                away_games = df[
+                    df["away_team"]
+                    == team
                 ]
 
+                for _, row in (
+                    home_games.iterrows()
+                ):
 
-                log_home_lambda = (
-                    home_advantage
-                    + attack[home_index]
-                    - defense[away_index]
+                    opponent = (
+                        row["away_team"]
+                    )
+
+                    opponent_defense = (
+                        defense_values.get(
+                            opponent,
+                            1.0
+                        )
+                    )
+
+                    expected_goals = (
+                        self.global_home_goals
+                        * attack_values.get(
+                            team,
+                            1.0
+                        )
+                        * opponent_defense
+                    )
+
+                    scored += (
+                        row["home_goals"]
+                        * row["weight"]
+                    )
+
+                    expected += (
+                        expected_goals
+                        * row["weight"]
+                    )
+
+                for _, row in (
+                    away_games.iterrows()
+                ):
+
+                    opponent = (
+                        row["home_team"]
+                    )
+
+                    opponent_defense = (
+                        defense_values.get(
+                            opponent,
+                            1.0
+                        )
+                    )
+
+                    expected_goals = (
+                        self.global_away_goals
+                        * attack_values.get(
+                            team,
+                            1.0
+                        )
+                        * opponent_defense
+                    )
+
+                    scored += (
+                        row["away_goals"]
+                        * row["weight"]
+                    )
+
+                    expected += (
+                        expected_goals
+                        * row["weight"]
+                    )
+
+                if expected > 0:
+
+                    ratio = (
+                        scored
+                        / expected
+                    )
+
+                else:
+
+                    ratio = 1.0
+
+                ratio = (
+                    ratio
+                    * (
+                        1
+                        - self.regularization
+                    )
+                    + self.regularization
                 )
 
-                log_away_lambda = (
-                    attack[away_index]
-                    - defense[home_index]
-                )
-
-
-                home_lambda = np.exp(
+                new_attack[team] = float(
                     np.clip(
-                        log_home_lambda,
-                        -4,
-                        3,
+                        ratio,
+                        0.35,
+                        2.5
                     )
                 )
 
-                away_lambda = np.exp(
+            # ------------------------------------------------
+            # VERTEIDIGUNG
+            # ------------------------------------------------
+
+            for team in self.teams:
+
+                conceded = 0.0
+
+                expected_conceded = 0.0
+
+                home_games = df[
+                    df["home_team"]
+                    == team
+                ]
+
+                away_games = df[
+                    df["away_team"]
+                    == team
+                ]
+
+                for _, row in (
+                    home_games.iterrows()
+                ):
+
+                    opponent = (
+                        row["away_team"]
+                    )
+
+                    opponent_attack = (
+                        attack_values.get(
+                            opponent,
+                            1.0
+                        )
+                    )
+
+                    expected_goals = (
+                        self.global_away_goals
+                        * opponent_attack
+                        * defense_values.get(
+                            team,
+                            1.0
+                        )
+                    )
+
+                    conceded += (
+                        row["away_goals"]
+                        * row["weight"]
+                    )
+
+                    expected_conceded += (
+                        expected_goals
+                        * row["weight"]
+                    )
+
+                for _, row in (
+                    away_games.iterrows()
+                ):
+
+                    opponent = (
+                        row["home_team"]
+                    )
+
+                    opponent_attack = (
+                        attack_values.get(
+                            opponent,
+                            1.0
+                        )
+                    )
+
+                    expected_goals = (
+                        self.global_home_goals
+                        * opponent_attack
+                        * defense_values.get(
+                            team,
+                            1.0
+                        )
+                    )
+
+                    conceded += (
+                        row["home_goals"]
+                        * row["weight"]
+                    )
+
+                    expected_conceded += (
+                        expected_goals
+                        * row["weight"]
+                    )
+
+                if expected_conceded > 0:
+
+                    ratio = (
+                        conceded
+                        / expected_conceded
+                    )
+
+                else:
+
+                    ratio = 1.0
+
+                ratio = (
+                    ratio
+                    * (
+                        1
+                        - self.regularization
+                    )
+                    + self.regularization
+                )
+
+                new_defense[team] = float(
                     np.clip(
-                        log_away_lambda,
-                        -4,
-                        3,
+                        ratio,
+                        0.35,
+                        2.5
                     )
                 )
 
-
-                log_probability = (
-                    poisson.logpmf(
-                        home_goals[i],
-                        home_lambda,
-                    )
-                    +
-                    poisson.logpmf(
-                        away_goals[i],
-                        away_lambda,
-                    )
-                )
-
-
-                loss -= (
-                    weights[i]
-                    * log_probability
-                )
-
-
-            # Regularisierung
-
-            loss += (
-                self.regularization
-                * (
-                    np.sum(
-                        attack ** 2
-                    )
-                    +
-                    np.sum(
-                        defense ** 2
-                    )
-                    +
-                    home_advantage ** 2
-                )
+            attack_values = (
+                new_attack
             )
 
-
-            # Angriff und Verteidigung
-            # um 0 zentrieren.
-
-            loss += (
-                20.0
-                * (
-                    attack.mean() ** 2
-                    +
-                    defense.mean() ** 2
-                )
+            defense_values = (
+                new_defense
             )
 
-            return float(loss)
+        self.attack = attack_values
 
+        self.defense = defense_values
 
-        result = minimize(
-            objective,
-            initial,
-            method="L-BFGS-B",
-            options={
-                "maxiter": 1500,
-                "ftol": 1e-10,
-            },
+        # ----------------------------------------------------
+        # DATENBASIERTER HEIMVORTEIL
+        # ----------------------------------------------------
+
+        home_mean = (
+            df["home_goals"]
+            .mean()
         )
 
-
-        if not result.success:
-
-            raise RuntimeError(
-                "Modelltraining fehlgeschlagen: "
-                + str(result.message)
-            )
-
-
-        (
-            self.home_advantage,
-            attack,
-            defense,
-        ) = unpack(
-            result.x
+        away_mean = (
+            df["away_goals"]
+            .mean()
         )
 
+        if away_mean > 0:
 
-        self.attack = dict(
-            zip(
-                self.teams,
-                attack,
+            calculated_home_advantage = (
+                math.log(
+                    max(
+                        0.5,
+                        home_mean
+                    )
+                    / max(
+                        0.5,
+                        away_mean
+                    )
+                )
             )
-        )
 
-        self.defense = dict(
-            zip(
-                self.teams,
-                defense,
+            self.home_advantage = float(
+                np.clip(
+                    calculated_home_advantage,
+                    0.05,
+                    0.30
+                )
             )
-        )
 
         self.fitted = True
 
         return self
 
-
     # --------------------------------------------------------
-    # TEAM FINDEN
-    # --------------------------------------------------------
-
-    def resolve_team(
-        self,
-        name,
-    ):
-
-        if name in self.attack:
-            return name
-
-        best_team, score = find_best_team(
-            name,
-            self.teams,
-            threshold=0.65,
-        )
-
-        if best_team is None:
-
-            raise KeyError(
-                f"Team nicht gefunden: {name}"
-            )
-
-        return best_team
-
-
-    # --------------------------------------------------------
-    # ERWARTETE TORE
+    # EXPECTED GOALS
     # --------------------------------------------------------
 
     def expected_goals(
         self,
-        home,
-        away,
+        home_team,
+        away_team
     ):
 
         if not self.fitted:
 
             raise RuntimeError(
-                "Modell wurde noch nicht trainiert."
+                "Modell wurde noch "
+                "nicht trainiert."
             )
 
-        home = self.resolve_team(
-            home
+        home_attack = (
+            self.attack.get(
+                home_team,
+                1.0
+            )
         )
 
-        away = self.resolve_team(
-            away
+        away_attack = (
+            self.attack.get(
+                away_team,
+                1.0
+            )
         )
 
+        home_defense = (
+            self.defense.get(
+                home_team,
+                1.0
+            )
+        )
 
-        home_lambda = np.exp(
-            np.clip(
+        away_defense = (
+            self.defense.get(
+                away_team,
+                1.0
+            )
+        )
+
+        home_lambda = (
+            self.global_home_goals
+            * home_attack
+            * away_defense
+            * math.exp(
                 self.home_advantage
-                + self.attack[home]
-                - self.defense[away],
-                -4,
-                3,
             )
         )
 
+        away_lambda = (
+            self.global_away_goals
+            * away_attack
+            * home_defense
+        )
 
-        away_lambda = np.exp(
+        home_lambda = float(
             np.clip(
-                self.attack[away]
-                - self.defense[home],
-                -4,
-                3,
+                home_lambda,
+                0.15,
+                5.0
             )
         )
 
+        away_lambda = float(
+            np.clip(
+                away_lambda,
+                0.15,
+                5.0
+            )
+        )
 
         return (
-            float(home_lambda),
-            float(away_lambda),
+            home_lambda,
+            away_lambda
         )
 
+    # --------------------------------------------------------
+    # TOR-MATRIX
+    # --------------------------------------------------------
+
+    def goal_matrix(
+        self,
+        home_team,
+        away_team
+    ):
+
+        home_lambda, away_lambda = (
+            self.expected_goals(
+                home_team,
+                away_team
+            )
+        )
+
+        matrix = np.zeros(
+            (
+                MAX_GOALS + 1,
+                MAX_GOALS + 1
+            )
+        )
+
+        for home_goals in range(
+            MAX_GOALS + 1
+        ):
+
+            for away_goals in range(
+                MAX_GOALS + 1
+            ):
+
+                matrix[
+                    home_goals,
+                    away_goals
+                ] = (
+                    poisson_probability(
+                        home_goals,
+                        home_lambda
+                    )
+                    *
+                    poisson_probability(
+                        away_goals,
+                        away_lambda
+                    )
+                )
+
+        total = matrix.sum()
+
+        if total > 0:
+
+            matrix /= total
+
+        return matrix
 
     # --------------------------------------------------------
     # 1 X 2
     # --------------------------------------------------------
 
-    def predict(
+    def probabilities(
         self,
-        home,
-        away,
+        home_team,
+        away_team
     ):
 
-        (
-            home_lambda,
-            away_lambda,
-        ) = self.expected_goals(
-            home,
-            away,
+        matrix = self.goal_matrix(
+            home_team,
+            away_team
         )
 
+        prob_home = 0.0
 
-        goals = np.arange(
-            self.max_goals + 1
-        )
+        prob_draw = 0.0
 
+        prob_away = 0.0
 
-        home_distribution = poisson.pmf(
-            goals,
-            home_lambda,
-        )
+        for h in range(
+            MAX_GOALS + 1
+        ):
 
-        away_distribution = poisson.pmf(
-            goals,
-            away_lambda,
-        )
+            for a in range(
+                MAX_GOALS + 1
+            ):
 
+                probability = (
+                    matrix[h, a]
+                )
 
-        matrix = np.outer(
-            home_distribution,
-            away_distribution,
-        )
+                if h > a:
 
+                    prob_home += (
+                        probability
+                    )
 
-        # Heim gewinnt
-        home_win = float(
-            np.tril(
-                matrix,
-                -1,
-            ).sum()
-        )
+                elif h == a:
 
+                    prob_draw += (
+                        probability
+                    )
 
-        # Unentschieden
-        draw = float(
-            np.trace(
-                matrix
-            )
-        )
+                else:
 
-
-        # Auswärts gewinnt
-        away_win = float(
-            np.triu(
-                matrix,
-                1,
-            ).sum()
-        )
-
-
-        total = (
-            home_win
-            + draw
-            + away_win
-        )
-
-
-        home_win /= total
-        draw /= total
-        away_win /= total
-
+                    prob_away += (
+                        probability
+                    )
 
         probabilities = {
-            "1": home_win,
-            "X": draw,
-            "2": away_win,
+
+            "1": float(
+                prob_home
+            ),
+
+            "X": float(
+                prob_draw
+            ),
+
+            "2": float(
+                prob_away
+            ),
+
         }
 
-
-        pick = max(
+        return (
             probabilities,
-            key=probabilities.get,
+            matrix
         )
 
+    # --------------------------------------------------------
+    # KOMPLETTE PROGNOSE
+    # --------------------------------------------------------
 
-        confidence = (
-            probabilities[pick]
-        )
+    def predict(
+        self,
+        home_team,
+        away_team
+    ):
 
-
-        fair_odds = (
-            1.0
-            / max(
-                confidence,
-                1e-12,
+        probabilities, matrix = (
+            self.probabilities(
+                home_team,
+                away_team
             )
         )
 
+        prediction = max(
+            probabilities,
+            key=probabilities.get
+        )
+
+        confidence = (
+            probabilities[
+                prediction
+            ]
+        )
+
+        fair_odds = {}
+
+        for key, probability in (
+            probabilities.items()
+        ):
+
+            if probability > 0:
+
+                fair_odds[key] = (
+                    1.0
+                    / probability
+                )
+
+            else:
+
+                fair_odds[key] = (
+                    float("inf")
+                )
+
+        best_score = np.unravel_index(
+            np.argmax(matrix),
+            matrix.shape
+        )
+
+        home_lambda, away_lambda = (
+            self.expected_goals(
+                home_team,
+                away_team
+            )
+        )
+
+        # ----------------------------------------------------
+        # OVER / UNDER
+        # ----------------------------------------------------
+
+        total_goals = {}
+
+        for threshold in [
+            0.5,
+            1.5,
+            2.5,
+            3.5,
+            4.5,
+        ]:
+
+            over_probability = 0.0
+
+            for h in range(
+                MAX_GOALS + 1
+            ):
+
+                for a in range(
+                    MAX_GOALS + 1
+                ):
+
+                    if (
+                        h + a
+                        > threshold
+                    ):
+
+                        over_probability += (
+                            matrix[h, a]
+                        )
+
+            total_goals[
+                threshold
+            ] = {
+                "over": float(
+                    over_probability
+                ),
+                "under": float(
+                    1.0
+                    - over_probability
+                ),
+            }
+
+        # ----------------------------------------------------
+        # BTTS
+        # ----------------------------------------------------
+
+        btts_yes = 0.0
+
+        for h in range(
+            1,
+            MAX_GOALS + 1
+        ):
+
+            for a in range(
+                1,
+                MAX_GOALS + 1
+            ):
+
+                btts_yes += (
+                    matrix[h, a]
+                )
+
+        btts = {
+
+            "yes": float(
+                btts_yes
+            ),
+
+            "no": float(
+                1.0 - btts_yes
+            ),
+
+        }
 
         return {
-            "home_win": home_win,
-            "draw": draw,
-            "away_win": away_win,
-            "pick": pick,
+
+            "prediction": prediction,
+
+            "probabilities": probabilities,
+
             "confidence": confidence,
+
             "fair_odds": fair_odds,
-            "expected_home_goals": home_lambda,
-            "expected_away_goals": away_lambda,
+
+            "expected_home_goals": (
+                home_lambda
+            ),
+
+            "expected_away_goals": (
+                away_lambda
+            ),
+
+            "most_likely_score": (
+                int(best_score[0]),
+                int(best_score[1])
+            ),
+
+            "over_under": total_goals,
+
+            "btts": btts,
+
         }
+
+
+# ============================================================
+# VALUE
+# ============================================================
+
+def calculate_value(
+    probability,
+    bookmaker_odds
+):
+
+    probability = safe_float(
+        probability
+    )
+
+    bookmaker_odds = safe_float(
+        bookmaker_odds
+    )
+
+    if (
+        probability <= 0
+        or bookmaker_odds <= 0
+    ):
+
+        return None
+
+    fair_odds = (
+        1.0
+        / probability
+    )
+
+    implied_probability = (
+        1.0
+        / bookmaker_odds
+    )
+
+    value_percent = (
+        (
+            probability
+            * bookmaker_odds
+        )
+        - 1.0
+    ) * 100
+
+    return {
+
+        "fair_odds": fair_odds,
+
+        "implied_probability": (
+            implied_probability
+        ),
+
+        "value_percent": (
+            value_percent
+        ),
+
+        "positive_value": (
+            value_percent > 0
+        ),
+
+    }
 
 
 # ============================================================
 # OCR
 # ============================================================
 
-@dataclass
-class Fixture:
+def preprocess_image(image):
 
-    home_team: str
-
-    away_team: str
-
-
-def preprocess_image(
-    image,
-):
-
-    array = np.array(
-        image.convert("RGB")
+    img = image.convert(
+        "RGB"
     )
 
-    gray = cv2.cvtColor(
-        array,
-        cv2.COLOR_RGB2GRAY,
+    img = ImageOps.grayscale(
+        img
     )
 
-    # Größer machen
-
-    gray = cv2.resize(
-        gray,
-        None,
-        fx=2,
-        fy=2,
-        interpolation=cv2.INTER_CUBIC,
+    width, height = (
+        img.size
     )
 
-    # Entrauschen
+    if width < 1800:
 
-    gray = cv2.GaussianBlur(
-        gray,
-        (3, 3),
-        0,
-    )
-
-    # Schwarz/Weiß
-
-    processed = cv2.threshold(
-        gray,
-        0,
-        255,
-        cv2.THRESH_BINARY
-        + cv2.THRESH_OTSU,
-    )[1]
-
-    return processed
-
-
-def extract_fixtures(
-    image,
-):
-
-    processed = preprocess_image(
-        image
-    )
-
-
-    try:
-
-        text = pytesseract.image_to_string(
-            processed,
-            config="--psm 6",
+        scale = (
+            1800
+            / width
         )
 
-    except Exception as exc:
+        img = img.resize(
+            (
+                int(width * scale),
+                int(height * scale)
+            ),
+            Image.Resampling.LANCZOS
+        )
 
-        raise RuntimeError(
-            "OCR konnte nicht ausgeführt werden. "
-            "Ist Tesseract installiert?"
-        ) from exc
+    img = ImageEnhance.Contrast(
+        img
+    ).enhance(2.2)
 
+    img = ImageEnhance.Sharpness(
+        img
+    ).enhance(2.0)
 
-    # Typische Schreibweisen vereinheitlichen
-
-    text = re.sub(
-        r"\bvs\.?\b",
-        "-",
-        text,
-        flags=re.IGNORECASE,
+    img = img.filter(
+        ImageFilter.SHARPEN
     )
 
-    text = re.sub(
-        r"\bv\.?\b",
-        "-",
-        text,
-        flags=re.IGNORECASE,
+    img = ImageOps.autocontrast(
+        img
     )
 
+    return img
 
-    lines = [
-        line.strip()
-        for line
-        in text.splitlines()
-        if line.strip()
+
+def run_ocr(image):
+
+    if not OCR_AVAILABLE:
+
+        return ""
+
+    processed = (
+        preprocess_image(
+            image
+        )
+    )
+
+    texts = []
+
+    configs = [
+
+        "--psm 6",
+
+        "--psm 11",
+
+        "--psm 12",
+
     ]
 
+    for config in configs:
 
-    fixtures = []
+        try:
 
-
-    for line in lines:
-
-        # Verschiedene Trennzeichen
-
-        parts = re.split(
-            r"\s+(?:-|–|—)\s+",
-            line,
-            maxsplit=1,
-        )
-
-
-        if len(parts) != 2:
-            continue
-
-
-        home = parts[0]
-        away = parts[1]
-
-
-        # Ergebnisse entfernen
-
-        home = re.sub(
-            r"\b\d{1,2}\s*[:\-]\s*\d{1,2}\b",
-            "",
-            home,
-        )
-
-        away = re.sub(
-            r"\b\d{1,2}\s*[:\-]\s*\d{1,2}\b",
-            "",
-            away,
-        )
-
-
-        # Wettquoten entfernen
-
-        home = re.sub(
-            r"\b\d+[.,]\d{1,2}\b",
-            "",
-            home,
-        )
-
-        away = re.sub(
-            r"\b\d+[.,]\d{1,2}\b",
-            "",
-            away,
-        )
-
-
-        home = re.sub(
-            r"[|•●]+",
-            " ",
-            home,
-        )
-
-        away = re.sub(
-            r"[|•●]+",
-            " ",
-            away,
-        )
-
-
-        home = re.sub(
-            r"\s+",
-            " ",
-            home,
-        ).strip()
-
-
-        away = re.sub(
-            r"\s+",
-            " ",
-            away,
-        ).strip()
-
-
-        # Plausibilität
-
-        if len(home) < 2:
-            continue
-
-        if len(away) < 2:
-            continue
-
-        if len(home) > 70:
-            continue
-
-        if len(away) > 70:
-            continue
-
-
-        fixtures.append(
-            Fixture(
-                home_team=home,
-                away_team=away,
+            text = (
+                pytesseract
+                .image_to_string(
+                    processed,
+                    config=config
+                )
             )
+
+            if text:
+
+                texts.append(
+                    text
+                )
+
+        except Exception:
+
+            pass
+
+    # Doppelte OCR-Zeilen vermeiden
+
+    lines = []
+
+    seen = set()
+
+    for text in texts:
+
+        for line in text.splitlines():
+
+            line = line.strip()
+
+            if not line:
+
+                continue
+
+            key = line.lower()
+
+            if key not in seen:
+
+                seen.add(key)
+
+                lines.append(
+                    line
+                )
+
+    return "\n".join(
+        lines
+    )
+
+
+# ============================================================
+# OCR SPIELE ERKENNEN
+# ============================================================
+
+def clean_ocr_line(line):
+
+    line = str(line)
+
+    line = line.replace(
+        "\t",
+        " "
+    )
+
+    line = re.sub(
+        r"\s+",
+        " ",
+        line
+    )
+
+    return line.strip()
+
+
+def extract_possible_matches(
+    text
+):
+
+    if not text:
+
+        return []
+
+    lines = (
+        text.splitlines()
+    )
+
+    matches = []
+
+    separators = [
+        " vs ",
+        " v ",
+        " - ",
+        " – ",
+        " — ",
+        " : ",
+        " @ ",
+    ]
+
+    for raw_line in lines:
+
+        line = clean_ocr_line(
+            raw_line
         )
 
+        if len(line) < 5:
 
-    # Duplikate entfernen
+            continue
+
+        digit_count = sum(
+            c.isdigit()
+            for c in line
+        )
+
+        if digit_count > 8:
+
+            continue
+
+        for separator in separators:
+
+            if separator in (
+                line.lower()
+            ):
+
+                parts = re.split(
+                    re.escape(
+                        separator
+                    ),
+                    line,
+                    maxsplit=1,
+                    flags=re.IGNORECASE
+                )
+
+                if len(parts) != 2:
+
+                    continue
+
+                home = (
+                    parts[0]
+                    .strip()
+                )
+
+                away = (
+                    parts[1]
+                    .strip()
+                )
+
+                # Zahlen/Quoten aus Teamnamen entfernen
+
+                home = re.sub(
+                    r"\b\d+(?:[.,]\d+)?\b",
+                    "",
+                    home
+                ).strip()
+
+                away = re.sub(
+                    r"\b\d+(?:[.,]\d+)?\b",
+                    "",
+                    away
+                ).strip()
+
+                if (
+                    len(home) >= 2
+                    and len(away) >= 2
+                ):
+
+                    matches.append(
+                        (
+                            home,
+                            away
+                        )
+                    )
+
+                break
 
     unique = []
 
     seen = set()
 
-
-    for fixture in fixtures:
+    for home, away in matches:
 
         key = (
-            normalize_team_name(
-                fixture.home_team
-            ),
-            normalize_team_name(
-                fixture.away_team
-            ),
+            home.lower(),
+            away.lower()
         )
 
+        if key not in seen:
 
-        if key in seen:
-            continue
+            seen.add(key)
 
+            unique.append(
+                (
+                    home,
+                    away
+                )
+            )
 
-        seen.add(key)
-
-        unique.append(
-            fixture
-        )
-
-
-    return (
-        text,
-        unique,
-    )
+    return unique
 
 
 # ============================================================
-# BACKTEST
+# RESULTAT
 # ============================================================
 
 def actual_result(
     home_goals,
-    away_goals,
+    away_goals
 ):
 
     if home_goals > away_goals:
+
         return "1"
 
     if home_goals < away_goals:
+
         return "2"
 
     return "X"
 
 
-def run_backtest(
+# ============================================================
+# ROLLING BACKTEST
+# ============================================================
+
+def run_rolling_backtest(
     df,
-    test_fraction=0.20,
-    max_goals=10,
-    regularization=0.08,
+    decay,
+    regularization,
+    minimum_training_matches=20
 ):
 
     df = (
-        df
-        .sort_values("date")
+        df.sort_values("date")
         .reset_index(drop=True)
+        .copy()
     )
 
+    if len(df) <= minimum_training_matches:
 
-    split = int(
+        return None
+
+    results = []
+
+    for index in range(
+        minimum_training_matches,
         len(df)
-        * (1 - test_fraction)
-    )
+    ):
 
+        train_df = df.iloc[
+            :index
+        ].copy()
 
-    if split < 20:
-        raise ValueError(
-            "Zu wenige Trainingsspiele."
+        test_row = df.iloc[
+            index
+        ]
+
+        home_team = (
+            test_row["home_team"]
         )
 
-
-    train = df.iloc[
-        :split
-    ].copy()
-
-
-    test = df.iloc[
-        split:
-    ].copy()
-
-
-    model = FootballModel(
-        max_goals=max_goals,
-        regularization=regularization,
-    )
-
-
-    model.fit(
-        train
-    )
-
-
-    rows = []
-
-
-    for row in test.itertuples(
-        index=False
-    ):
+        away_team = (
+            test_row["away_team"]
+        )
 
         try:
 
-            prediction = model.predict(
-                row.home_team,
-                row.away_team,
+            model = (
+                PoissonFootballModel(
+                    decay=decay,
+                    regularization=(
+                        regularization
+                    )
+                )
             )
 
-        except KeyError:
+            model.fit(
+                train_df
+            )
+
+        except Exception:
 
             continue
 
+        if (
+            home_team
+            not in model.teams
+            or away_team
+            not in model.teams
+        ):
 
-        actual = actual_result(
-            row.home_goals,
-            row.away_goals,
+            continue
+
+        try:
+
+            prediction = (
+                model.predict(
+                    home_team,
+                    away_team
+                )
+            )
+
+        except Exception:
+
+            continue
+
+        predicted = (
+            prediction["prediction"]
         )
 
+        actual = actual_result(
+            test_row["home_goals"],
+            test_row["away_goals"]
+        )
 
-        rows.append(
+        results.append(
             {
-                "Datum": row.date,
-                "Heim": row.home_team,
-                "Auswärts": row.away_team,
-                "P(1)": prediction["home_win"],
-                "P(X)": prediction["draw"],
-                "P(2)": prediction["away_win"],
-                "Tipp": prediction["pick"],
-                "Ergebnis": actual,
-                "Richtig": int(
-                    prediction["pick"]
-                    == actual
+
+                "date": test_row["date"],
+
+                "home_team": home_team,
+
+                "away_team": away_team,
+
+                "prediction": predicted,
+
+                "actual": actual,
+
+                "correct": (
+                    predicted == actual
                 ),
+
+                "P(1)": (
+                    prediction[
+                        "probabilities"
+                    ]["1"]
+                ),
+
+                "P(X)": (
+                    prediction[
+                        "probabilities"
+                    ]["X"]
+                ),
+
+                "P(2)": (
+                    prediction[
+                        "probabilities"
+                    ]["2"]
+                ),
+
             }
         )
 
+    if not results:
 
-    predictions = pd.DataFrame(
-        rows
+        return None
+
+    result_df = pd.DataFrame(
+        results
     )
 
-
-    if predictions.empty:
-
-        raise ValueError(
-            "Keine auswertbaren Testspiele."
-        )
-
-
-    accuracy = float(
-        predictions["Richtig"].mean()
+    accuracy = (
+        result_df["correct"]
+        .mean()
     )
-
-
-    losses = []
-
-
-    for row in predictions.itertuples(
-        index=False
-    ):
-
-        if row.Ergebnis == "1":
-            probability = row._3
-
-        elif row.Ergebnis == "X":
-            probability = row._4
-
-        else:
-            probability = row._5
-
-        probability = max(
-            min(
-                probability,
-                1 - 1e-15,
-            ),
-            1e-15,
-        )
-
-        losses.append(
-            -np.log(
-                probability
-            )
-        )
-
-
-    log_loss = float(
-        np.mean(losses)
-    )
-
 
     return {
-        "predictions": predictions,
-        "accuracy": accuracy,
-        "log_loss": log_loss,
+
+        "results": result_df,
+
+        "accuracy": float(
+            accuracy
+        ),
+
+        "tested_matches": len(
+            result_df
+        ),
+
     }
 
 
 # ============================================================
-# STREAMLIT APP
+# CSV
+# ============================================================
+
+def dataframe_to_csv(df):
+
+    return df.to_csv(
+        index=False
+    ).encode(
+        "utf-8-sig"
+    )
+
+
+# ============================================================
+# HEADER
 # ============================================================
 
 st.title(
-    "⚽ Wett-KI – Fußball 1X2"
+    APP_TITLE
 )
 
 st.markdown(
     """
-Diese Anwendung analysiert Fußballspiele und wählt automatisch
-zwischen **1**, **X** und **2**.
+    **Statistisches Fußball-Prognosemodell für 1/X/2.**
 
-**1 = Heimsieg**  
-**X = Unentschieden**  
-**2 = Auswärtssieg**
-"""
+    Zusätzlich werden erwartete Tore, Over/Under,
+    BTTS, faire Quoten und Value berechnet.
+
+    ⚠️ Statistische Prognosen sind keine Garantie
+    für Gewinne.
+    """
 )
 
 
@@ -1142,562 +1780,1004 @@ zwischen **1**, **X** und **2**.
 # SIDEBAR
 # ============================================================
 
-with st.sidebar:
+st.sidebar.header(
+    "⚙️ Einstellungen"
+)
 
-    st.header(
-        "⚙️ Einstellungen"
+decay = st.sidebar.slider(
+    "Zeitgewichtung",
+    min_value=0.000,
+    max_value=0.010,
+    value=DEFAULT_DECAY,
+    step=0.001
+)
+
+regularization = st.sidebar.slider(
+    "Regularisierung",
+    min_value=0.00,
+    max_value=0.50,
+    value=DEFAULT_REGULARIZATION,
+    step=0.01
+)
+
+st.sidebar.header(
+    "📊 Historische Daten"
+)
+
+uploaded_csv = st.sidebar.file_uploader(
+    "CSV hochladen",
+    type=["csv"],
+    help=(
+        "date, home_team, away_team, "
+        "home_goals, away_goals"
     )
-
-
-    max_goals = st.slider(
-        "Maximale Tore",
-        6,
-        15,
-        MAX_GOALS_DEFAULT,
-    )
-
-
-    regularization = st.slider(
-        "Regularisierung",
-        0.01,
-        0.50,
-        REGULARIZATION_DEFAULT,
-        0.01,
-    )
-
-
-    st.divider()
-
-
-    st.subheader(
-        "Historische Daten"
-    )
-
-
-    csv_file = st.file_uploader(
-        "CSV hochladen",
-        type=["csv"],
-    )
-
-
-    st.divider()
-
-
-    st.subheader(
-        "Screenshot"
-    )
-
-
-    screenshot = st.file_uploader(
-        "Spiele-Screenshot hochladen",
-        type=[
-            "png",
-            "jpg",
-            "jpeg",
-            "webp",
-        ],
-    )
+)
 
 
 # ============================================================
 # DATEN LADEN
 # ============================================================
 
-if csv_file is None:
+try:
 
-    st.warning(
-        """
-Bitte lade zunächst eine CSV mit historischen Spielen hoch.
+    df = load_data(
+        uploaded_file=uploaded_csv
+    )
 
-Format:
+except Exception as e:
 
-date,home_team,away_team,home_goals,away_goals
-"""
+    st.error(
+        f"Fehler beim Laden der Daten: {e}"
     )
 
     st.stop()
 
+
+# ============================================================
+# DATEN INFO
+# ============================================================
+
+col1, col2, col3, col4 = (
+    st.columns(4)
+)
+
+with col1:
+
+    st.metric(
+        "Spiele",
+        len(df)
+    )
+
+with col2:
+
+    st.metric(
+        "Teams",
+        len(
+            get_team_list(df)
+        )
+    )
+
+with col3:
+
+    st.metric(
+        "Ø Heimtore",
+        f"{df['home_goals'].mean():.2f}"
+    )
+
+with col4:
+
+    st.metric(
+        "Ø Auswärtstore",
+        f"{df['away_goals'].mean():.2f}"
+    )
+
+
+# ============================================================
+# MODELL
+# ============================================================
 
 try:
 
-    matches = load_data(
-        csv_file
+    model = PoissonFootballModel(
+        decay=decay,
+        regularization=regularization
     )
 
-except Exception as exc:
+    model.fit(
+        df
+    )
+
+except Exception as e:
 
     st.error(
-        f"CSV-Fehler: {exc}"
+        f"Modell konnte nicht trainiert werden: {e}"
     )
 
     st.stop()
 
 
 # ============================================================
-# DATENÜBERSICHT
+# TABS
 # ============================================================
 
-st.header(
-    "📊 Historische Daten"
+tab1, tab2, tab3, tab4 = st.tabs(
+    [
+        "🔮 Prognose",
+        "📷 Screenshot",
+        "📈 Backtest",
+        "📚 Daten",
+    ]
 )
 
 
-col1, col2, col3 = st.columns(3)
-
-
-col1.metric(
-    "Spiele",
-    len(matches),
-)
-
-
-col2.metric(
-    "Teams",
-    len(
-        set(matches["home_team"])
-        |
-        set(matches["away_team"])
-    ),
-)
-
-
-col3.metric(
-    "Letztes Spiel",
-    matches["date"]
-    .max()
-    .strftime("%d.%m.%Y"),
-)
-
-
-with st.expander(
-    "Daten anzeigen"
-):
-
-    st.dataframe(
-        matches,
-        width="stretch",
-        hide_index=True,
-    )
-
-
 # ============================================================
-# MODELL TRAINIEREN
+# TAB 1
 # ============================================================
 
-st.header(
-    "🧠 KI trainieren"
-)
-
-
-if st.button(
-    "🚀 Modell trainieren",
-    type="primary",
-):
-
-    if len(matches) < 20:
-
-        st.error(
-            "Bitte mindestens 20 historische Spiele verwenden."
-        )
-
-    else:
-
-        with st.spinner(
-            "KI trainiert..."
-        ):
-
-            model = FootballModel(
-                max_goals=max_goals,
-                regularization=regularization,
-                decay_days=DECAY_DAYS_DEFAULT,
-            )
-
-            model.fit(
-                matches
-            )
-
-            st.session_state[
-                "model"
-            ] = model
-
-            st.session_state[
-                "trained"
-            ] = True
-
-
-        st.success(
-            "🟢 Modell erfolgreich trainiert."
-        )
-
-
-# ============================================================
-# SCREENSHOT
-# ============================================================
-
-st.divider()
-
-st.header(
-    "📷 Screenshot → Spiele → 1/X/2"
-)
-
-
-if screenshot:
-
-    image = Image.open(
-        screenshot
-    )
-
-
-    st.image(
-        image,
-        caption="Screenshot",
-        width="stretch",
-    )
-
-
-    if st.button(
-        "🔎 Screenshot analysieren"
-    ):
-
-        with st.spinner(
-            "Screenshot wird gelesen..."
-        ):
-
-            try:
-
-                raw_text, fixtures = (
-                    extract_fixtures(
-                        image
-                    )
-                )
-
-
-                st.session_state[
-                    "ocr_text"
-                ] = raw_text
-
-
-                st.session_state[
-                    "fixtures"
-                ] = fixtures
-
-
-            except Exception as exc:
-
-                st.error(
-                    str(exc)
-                )
-
-
-if "ocr_text" in st.session_state:
-
-    with st.expander(
-        "OCR-Rohtext anzeigen"
-    ):
-
-        st.text(
-            st.session_state[
-                "ocr_text"
-            ]
-        )
-
-
-# ============================================================
-# SPIELE BEARBEITEN
-# ============================================================
-
-fixtures = st.session_state.get(
-    "fixtures",
-    [],
-)
-
-
-if fixtures:
+with tab1:
 
     st.subheader(
-        "⚽ Erkannte Spiele"
+        "🔮 Fußball-Prognose"
     )
 
+    teams = get_team_list(
+        df
+    )
 
-    edited = []
+    col1, col2 = (
+        st.columns(2)
+    )
 
+    with col1:
 
-    for index, fixture in enumerate(
-        fixtures
-    ):
-
-        col1, col2 = st.columns(2)
-
-
-        home = col1.text_input(
-            "Heim",
-            fixture.home_team,
-            key=f"home_team_{index}",
+        home_team = st.selectbox(
+            "Heimteam",
+            teams,
+            key="home_team"
         )
 
+    with col2:
 
-        away = col2.text_input(
-            "Auswärts",
-            fixture.away_team,
-            key=f"away_team_{index}",
+        away_options = [
+            team
+            for team in teams
+            if team != home_team
+        ]
+
+        if not away_options:
+
+            away_options = teams
+
+        away_team = st.selectbox(
+            "Auswärtsteam",
+            away_options,
+            key="away_team"
         )
-
-
-        edited.append(
-            (
-                home.strip(),
-                away.strip(),
-            )
-        )
-
-
-    if "trained" not in st.session_state:
-
-        st.warning(
-            "Trainiere zuerst die KI."
-        )
-
-    elif st.session_state[
-        "trained"
-    ]:
-
-        if st.button(
-            "🎯 KI soll automatisch 1 / X / 2 auswählen",
-            type="primary",
-        ):
-
-            model = (
-                st.session_state[
-                    "model"
-                ]
-            )
-
-
-            results = []
-
-
-            for home, away in edited:
-
-                try:
-
-                    prediction = model.predict(
-                        home,
-                        away,
-                    )
-
-
-                    results.append(
-                        {
-                            "Heim": home,
-                            "Auswärts": away,
-
-                            "1": (
-                                prediction[
-                                    "home_win"
-                                ]
-                                * 100
-                            ),
-
-                            "X": (
-                                prediction[
-                                    "draw"
-                                ]
-                                * 100
-                            ),
-
-                            "2": (
-                                prediction[
-                                    "away_win"
-                                ]
-                                * 100
-                            ),
-
-                            "KI-Tipp": prediction[
-                                "pick"
-                            ],
-
-                            "Sicherheit": (
-                                prediction[
-                                    "confidence"
-                                ]
-                                * 100
-                            ),
-
-                            "Faire Quote": prediction[
-                                "fair_odds"
-                            ],
-
-                            "Erwartete Heimtore": prediction[
-                                "expected_home_goals"
-                            ],
-
-                            "Erwartete Auswärtstore": prediction[
-                                "expected_away_goals"
-                            ],
-                        }
-                    )
-
-
-                except Exception as exc:
-
-                    results.append(
-                        {
-                            "Heim": home,
-                            "Auswärts": away,
-                            "1": None,
-                            "X": None,
-                            "2": None,
-                            "KI-Tipp": f"Fehler: {exc}",
-                            "Sicherheit": None,
-                            "Faire Quote": None,
-                            "Erwartete Heimtore": None,
-                            "Erwartete Auswärtstore": None,
-                        }
-                    )
-
-
-            predictions = pd.DataFrame(
-                results
-            )
-
-
-            st.session_state[
-                "predictions"
-            ] = predictions
-
-
-# ============================================================
-# ERGEBNISSE
-# ============================================================
-
-if st.session_state.get(
-    "predictions"
-) is not None:
 
     st.divider()
 
-    st.header(
-        "🎯 KI-Auswahl"
+    if st.button(
+        "🚀 PROGNOSE BERECHNEN",
+        type="primary",
+        use_container_width=True
+    ):
+
+        if home_team == away_team:
+
+            st.warning(
+                "Heim- und Auswärtsteam "
+                "dürfen nicht identisch sein."
+            )
+
+        else:
+
+            prediction = model.predict(
+                home_team,
+                away_team
+            )
+
+            result = (
+                prediction["prediction"]
+            )
+
+            labels = {
+
+                "1":
+                    "🏠 HEIMSIEG (1)",
+
+                "X":
+                    "🤝 UNENTSCHIEDEN (X)",
+
+                "2":
+                    "✈️ AUSWÄRTSSIEG (2)",
+
+            }
+
+            st.success(
+                f"### KI-Prognose: "
+                f"{labels[result]}"
+            )
+
+            # ------------------------------------------------
+            # 1 X 2
+            # ------------------------------------------------
+
+            st.subheader(
+                "1/X/2 Wahrscheinlichkeiten"
+            )
+
+            c1, c2, c3 = (
+                st.columns(3)
+            )
+
+            with c1:
+
+                st.metric(
+                    "1 – Heimsieg",
+                    f"{prediction['probabilities']['1'] * 100:.1f}%"
+                )
+
+            with c2:
+
+                st.metric(
+                    "X – Unentschieden",
+                    f"{prediction['probabilities']['X'] * 100:.1f}%"
+                )
+
+            with c3:
+
+                st.metric(
+                    "2 – Auswärtssieg",
+                    f"{prediction['probabilities']['2'] * 100:.1f}%"
+                )
+
+            # ------------------------------------------------
+            # KONFIDENZ
+            # ------------------------------------------------
+
+            confidence = (
+                prediction["confidence"]
+            )
+
+            st.subheader(
+                "🎯 Modell-Konfidenz"
+            )
+
+            st.progress(
+                min(
+                    max(
+                        confidence,
+                        0.0
+                    ),
+                    1.0
+                )
+            )
+
+            st.write(
+                f"**{confidence * 100:.1f}%** "
+                "für das wahrscheinlichste 1/X/2-Ergebnis"
+            )
+
+            # ------------------------------------------------
+            # TORE
+            # ------------------------------------------------
+
+            st.subheader(
+                "⚽ Erwartete Tore"
+            )
+
+            c1, c2 = (
+                st.columns(2)
+            )
+
+            with c1:
+
+                st.metric(
+                    home_team,
+                    f"{prediction['expected_home_goals']:.2f}"
+                )
+
+            with c2:
+
+                st.metric(
+                    away_team,
+                    f"{prediction['expected_away_goals']:.2f}"
+                )
+
+            score = (
+                prediction[
+                    "most_likely_score"
+                ]
+            )
+
+            st.info(
+                f"⚽ Wahrscheinlichstes Ergebnis: "
+                f"**{score[0]} : {score[1]}**"
+            )
+
+            # ------------------------------------------------
+            # OVER / UNDER
+            # ------------------------------------------------
+
+            st.subheader(
+                "📊 Over / Under"
+            )
+
+            ou_rows = []
+
+            for threshold in [
+                0.5,
+                1.5,
+                2.5,
+                3.5,
+                4.5,
+            ]:
+
+                data = (
+                    prediction[
+                        "over_under"
+                    ][threshold]
+                )
+
+                ou_rows.append(
+                    {
+
+                        "Linie":
+                            f"{threshold:.1f}",
+
+                        "Over":
+                            f"{data['over'] * 100:.1f}%",
+
+                        "Under":
+                            f"{data['under'] * 100:.1f}%",
+
+                    }
+                )
+
+            st.dataframe(
+                pd.DataFrame(
+                    ou_rows
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # ------------------------------------------------
+            # BTTS
+            # ------------------------------------------------
+
+            st.subheader(
+                "⚽ Beide Teams treffen – BTTS"
+            )
+
+            btts = prediction[
+                "btts"
+            ]
+
+            c1, c2 = (
+                st.columns(2)
+            )
+
+            with c1:
+
+                st.metric(
+                    "BTTS Ja",
+                    f"{btts['yes'] * 100:.1f}%"
+                )
+
+            with c2:
+
+                st.metric(
+                    "BTTS Nein",
+                    f"{btts['no'] * 100:.1f}%"
+                )
+
+            # ------------------------------------------------
+            # FAIRE QUOTEN
+            # ------------------------------------------------
+
+            st.subheader(
+                "💰 Faire Modellquoten"
+            )
+
+            fair_rows = []
+
+            for key in [
+                "1",
+                "X",
+                "2"
+            ]:
+
+                fair_rows.append(
+                    {
+
+                        "Ergebnis":
+                            key,
+
+                        "Wahrscheinlichkeit":
+                            f"{prediction['probabilities'][key] * 100:.2f}%",
+
+                        "Faire Quote":
+                            f"{prediction['fair_odds'][key]:.2f}",
+
+                    }
+                )
+
+            st.dataframe(
+                pd.DataFrame(
+                    fair_rows
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # ------------------------------------------------
+            # VALUE CALCULATOR
+            # ------------------------------------------------
+
+            st.subheader(
+                "💰 Value-Rechner"
+            )
+
+            value_result = st.selectbox(
+                "Welches Ergebnis möchtest du prüfen?",
+                ["1", "X", "2"],
+                key="value_result"
+            )
+
+            bookmaker_odds = st.number_input(
+                "Buchmacherquote",
+                min_value=1.01,
+                max_value=100.0,
+                value=2.00,
+                step=0.01,
+                key="bookmaker_odds"
+            )
+
+            probability = (
+                prediction[
+                    "probabilities"
+                ][value_result]
+            )
+
+            value = calculate_value(
+                probability,
+                bookmaker_odds
+            )
+
+            if value is not None:
+
+                c1, c2, c3 = (
+                    st.columns(3)
+                )
+
+                with c1:
+
+                    st.metric(
+                        "Modell-Wahrscheinlichkeit",
+                        f"{probability * 100:.2f}%"
+                    )
+
+                with c2:
+
+                    st.metric(
+                        "Faire Quote",
+                        f"{value['fair_odds']:.2f}"
+                    )
+
+                with c3:
+
+                    st.metric(
+                        "Value",
+                        f"{value['value_percent']:.2f}%"
+                    )
+
+                if value[
+                    "positive_value"
+                ]:
+
+                    st.success(
+                        "🟢 POSITIVER VALUE laut Modell"
+                    )
+
+                else:
+
+                    st.warning(
+                        "🔴 Kein positiver Value laut Modell"
+                    )
+
+
+# ============================================================
+# TAB 2 SCREENSHOT
+# ============================================================
+
+with tab2:
+
+    st.subheader(
+        "📷 Spiele automatisch erkennen"
     )
 
-
-    predictions = (
-        st.session_state[
-            "predictions"
-        ]
-        .copy()
-    )
-
-
-    st.dataframe(
-        predictions.round(2),
-        width="stretch",
-        hide_index=True,
-    )
-
-
-    st.success(
+    st.write(
         """
-Die Spalte **KI-Tipp** enthält automatisch 1, X oder 2.
-
-Die Auswahl basiert auf der höchsten vom Modell
-geschätzten Wahrscheinlichkeit.
-"""
+        Lade einen Screenshot einer Spieleliste hoch.
+        Die OCR versucht die Paarungen zu erkennen und
+        anschließend mit deinen historischen Teamnamen
+        abzugleichen.
+        """
     )
 
+    screenshot = st.file_uploader(
+        "Screenshot hochladen",
+        type=[
+            "png",
+            "jpg",
+            "jpeg",
+            "webp"
+        ],
+        key="screenshot_upload"
+    )
 
-    csv_output = (
-        predictions
-        .to_csv(
-            index=False
+    if not OCR_AVAILABLE:
+
+        st.warning(
+            """
+            OCR ist aktuell nicht installiert.
+
+            Die restliche App funktioniert trotzdem.
+            """
         )
-        .encode("utf-8")
-    )
 
+    if screenshot is not None:
 
-    st.download_button(
-        "⬇️ Prognosen herunterladen",
-        csv_output,
-        "prognosen.csv",
-        "text/csv",
-    )
+        image = Image.open(
+            screenshot
+        )
+
+        st.image(
+            image,
+            caption="Screenshot",
+            use_container_width=True
+        )
+
+        if OCR_AVAILABLE:
+
+            if st.button(
+                "🔍 SCREENSHOT ANALYSIEREN",
+                type="primary",
+                use_container_width=True
+            ):
+
+                with st.spinner(
+                    "OCR analysiert Screenshot..."
+                ):
+
+                    ocr_text = run_ocr(
+                        image
+                    )
+
+                if not ocr_text.strip():
+
+                    st.error(
+                        "Kein Text erkannt."
+                    )
+
+                else:
+
+                    st.subheader(
+                        "📝 Erkannter Text"
+                    )
+
+                    st.text_area(
+                        "OCR",
+                        ocr_text,
+                        height=200
+                    )
+
+                    possible_matches = (
+                        extract_possible_matches(
+                            ocr_text
+                        )
+                    )
+
+                    if not possible_matches:
+
+                        st.warning(
+                            "Keine eindeutigen "
+                            "Spielpaarungen gefunden."
+                        )
+
+                    else:
+
+                        st.subheader(
+                            "🎯 Erkannte Spiele"
+                        )
+
+                        all_teams = (
+                            get_team_list(
+                                df
+                            )
+                        )
+
+                        predictions = []
+
+                        for index, (
+                            raw_home,
+                            raw_away
+                        ) in enumerate(
+                            possible_matches
+                        ):
+
+                            st.markdown(
+                                f"### Spiel {index + 1}"
+                            )
+
+                            matched_home, score_home = (
+                                match_team(
+                                    raw_home,
+                                    all_teams
+                                )
+                            )
+
+                            matched_away, score_away = (
+                                match_team(
+                                    raw_away,
+                                    all_teams
+                                )
+                            )
+
+                            c1, c2 = (
+                                st.columns(2)
+                            )
+
+                            with c1:
+
+                                st.write(
+                                    f"**OCR Heim:** "
+                                    f"{raw_home}"
+                                )
+
+                                if matched_home:
+
+                                    st.success(
+                                        f"{matched_home} "
+                                        f"– Match "
+                                        f"{score_home * 100:.0f}%"
+                                    )
+
+                                else:
+
+                                    st.error(
+                                        "Heimteam "
+                                        "nicht erkannt"
+                                    )
+
+                            with c2:
+
+                                st.write(
+                                    f"**OCR Auswärts:** "
+                                    f"{raw_away}"
+                                )
+
+                                if matched_away:
+
+                                    st.success(
+                                        f"{matched_away} "
+                                        f"– Match "
+                                        f"{score_away * 100:.0f}%"
+                                    )
+
+                                else:
+
+                                    st.error(
+                                        "Auswärtsteam "
+                                        "nicht erkannt"
+                                    )
+
+                            if (
+                                matched_home
+                                and matched_away
+                                and matched_home
+                                != matched_away
+                            ):
+
+                                prediction = (
+                                    model.predict(
+                                        matched_home,
+                                        matched_away
+                                    )
+                                )
+
+                                result = (
+                                    prediction[
+                                        "prediction"
+                                    ]
+                                )
+
+                                st.success(
+                                    f"### Empfehlung: "
+                                    f"**{result}**"
+                                )
+
+                                c1, c2, c3 = (
+                                    st.columns(3)
+                                )
+
+                                with c1:
+
+                                    st.metric(
+                                        "1",
+                                        f"{prediction['probabilities']['1'] * 100:.1f}%"
+                                    )
+
+                                with c2:
+
+                                    st.metric(
+                                        "X",
+                                        f"{prediction['probabilities']['X'] * 100:.1f}%"
+                                    )
+
+                                with c3:
+
+                                    st.metric(
+                                        "2",
+                                        f"{prediction['probabilities']['2'] * 100:.1f}%"
+                                    )
+
+                                predictions.append(
+                                    {
+
+                                        "Heimteam":
+                                            matched_home,
+
+                                        "Auswärtsteam":
+                                            matched_away,
+
+                                        "1":
+                                            prediction[
+                                                "probabilities"
+                                            ]["1"],
+
+                                        "X":
+                                            prediction[
+                                                "probabilities"
+                                            ]["X"],
+
+                                        "2":
+                                            prediction[
+                                                "probabilities"
+                                            ]["2"],
+
+                                        "Prognose":
+                                            result,
+
+                                        "Konfidenz":
+                                            prediction[
+                                                "confidence"
+                                            ],
+
+                                    }
+                                )
+
+                            st.divider()
+
+                        if predictions:
+
+                            pred_df = pd.DataFrame(
+                                predictions
+                            )
+
+                            display_df = (
+                                pred_df.copy()
+                            )
+
+                            for column in [
+                                "1",
+                                "X",
+                                "2",
+                                "Konfidenz"
+                            ]:
+
+                                display_df[
+                                    column
+                                ] = display_df[
+                                    column
+                                ].map(
+                                    lambda x:
+                                    f"{x * 100:.1f}%"
+                                )
+
+                            st.subheader(
+                                "📋 Zusammenfassung"
+                            )
+
+                            st.dataframe(
+                                display_df,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+
+                            st.download_button(
+                                "⬇️ Prognosen CSV",
+                                data=dataframe_to_csv(
+                                    pred_df
+                                ),
+                                file_name=(
+                                    "wett_ki_prognosen.csv"
+                                ),
+                                mime="text/csv",
+                                use_container_width=True
+                            )
 
 
 # ============================================================
-# BACKTEST
+# TAB 3 BACKTEST
 # ============================================================
 
-st.divider()
+with tab3:
 
-st.header(
-    "📈 Backtesting"
-)
+    st.subheader(
+        "📈 Rolling Backtest"
+    )
 
+    st.write(
+        """
+        Bei diesem Backtest wird jedes Spiel nur mit den
+        Daten vorheriger Spiele vorhergesagt. Das entspricht
+        deutlich besser einem echten zukünftigen Einsatz.
+        """
+    )
 
-test_fraction = st.slider(
-    "Anteil Testdaten",
-    0.10,
-    0.40,
-    0.20,
-    0.05,
-)
+    if len(df) < 30:
 
-
-if st.button(
-    "📊 Backtest durchführen"
-):
-
-    if len(matches) < 30:
-
-        st.error(
-            "Mindestens 30 Spiele für einen Backtest."
+        st.warning(
+            f"Aktuell sind nur {len(df)} Spiele vorhanden. "
+            "Für einen aussagekräftigen Backtest werden "
+            "deutlich mehr historische Spiele empfohlen."
         )
 
-    else:
+    if st.button(
+        "📊 ROLLING BACKTEST STARTEN",
+        type="primary",
+        use_container_width=True
+    ):
 
         with st.spinner(
             "Backtest läuft..."
         ):
 
-            try:
+            result = (
+                run_rolling_backtest(
+                    df,
+                    decay,
+                    regularization
+                )
+            )
 
-                result = run_backtest(
-                    matches,
-                    test_fraction=test_fraction,
-                    max_goals=max_goals,
-                    regularization=regularization,
+        if result is None:
+
+            st.error(
+                "Backtest konnte nicht durchgeführt werden."
+            )
+
+        else:
+
+            accuracy = (
+                result["accuracy"]
+            )
+
+            tested_matches = (
+                result[
+                    "tested_matches"
+                ]
+            )
+
+            c1, c2 = (
+                st.columns(2)
+            )
+
+            with c1:
+
+                st.metric(
+                    "Trefferquote",
+                    f"{accuracy * 100:.2f}%"
                 )
 
+            with c2:
 
-                col1, col2 = st.columns(2)
-
-
-                col1.metric(
-                    "Accuracy",
-                    f"{result['accuracy'] * 100:.2f}%",
+                st.metric(
+                    "Testspiele",
+                    tested_matches
                 )
 
+            backtest_df = (
+                result["results"]
+                .copy()
+            )
 
-                col2.metric(
-                    "Log Loss",
-                    f"{result['log_loss']:.4f}",
+            display_df = (
+                backtest_df.copy()
+            )
+
+            for column in [
+                "P(1)",
+                "P(X)",
+                "P(2)"
+            ]:
+
+                display_df[
+                    column
+                ] = display_df[
+                    column
+                ].map(
+                    lambda x:
+                    f"{x * 100:.1f}%"
                 )
 
+            display_df[
+                "correct"
+            ] = display_df[
+                "correct"
+            ].map(
+                lambda x:
+                "✅"
+                if x
+                else "❌"
+            )
 
-                st.dataframe(
-                    result[
-                        "predictions"
-                    ].round(4),
-                    width="stretch",
-                    hide_index=True,
-                )
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.download_button(
+                "⬇️ Backtest CSV",
+                data=dataframe_to_csv(
+                    backtest_df
+                ),
+                file_name=(
+                    "wett_ki_backtest.csv"
+                ),
+                mime="text/csv"
+            )
 
 
-            except Exception as exc:
+# ============================================================
+# TAB 4 DATEN
+# ============================================================
 
-                st.error(
-                    f"Backtest-Fehler: {exc}"
-                )
+with tab4:
+
+    st.subheader(
+        "📚 Historische Daten"
+    )
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.download_button(
+        "⬇️ matches.csv herunterladen",
+        data=dataframe_to_csv(
+            df
+        ),
+        file_name="matches.csv",
+        mime="text/csv"
+    )
+
+    st.subheader(
+        "CSV-Format"
+    )
+
+    st.code(
+        """
+date,home_team,away_team,home_goals,away_goals
+2026-01-01,Bayern Munich,Dortmund,3,1
+2026-01-02,Leverkusen,Frankfurt,2,0
+        """.strip()
+    )
 
 
 # ============================================================
@@ -1707,6 +2787,14 @@ if st.button(
 st.divider()
 
 st.caption(
-    "Wett-KI 1X2 • Analyse- und Forschungssoftware • "
-    "Keine Gewinn- oder Ergebnisgarantie."
-)
+    """
+    Wett-KI | Poisson Football Predictor
+
+    Das Modell verwendet historische Ergebnisse.
+    Es berücksichtigt nicht automatisch Verletzungen,
+    Aufstellungen, Sperren, Motivation, Wetter,
+    Marktbewegungen oder kurzfristige Ereignisse.
+
+    Keine Gewinn-Garantie.
+    """
+    )
