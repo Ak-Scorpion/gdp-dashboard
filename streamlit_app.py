@@ -1,4 +1,4 @@
-äimport streamlit as st
+import streamlit as st
 import math
 import hashlib
 import random
@@ -150,3 +150,4 @@ else:
     if st.button("🗑️ Alle Partien zurücksetzen", use_container_width=True):
         st.session_state['custom_matches'] = []
         st.rerun()
+
