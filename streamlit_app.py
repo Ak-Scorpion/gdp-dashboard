@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from itertools import combinations
 
 # ============================================================
-# WETT-KI – VOLLSTÄNDIG KORRIGIERTE VERSION
+# WETT-KI – MULTI-LIGA & AUSGEGLICHENE TIPPS VERSION
 # ============================================================
 
 st.set_page_config(
@@ -76,7 +76,7 @@ def format_local_datetime(value):
 def get_week_dates():
     now_local = datetime.now(ZoneInfo(LOCAL_TZ))
     today = now_local.date()
-    return today, today + timedelta(days=10)
+    return today, today + timedelta(days=14)
 
 def normalize_name(name):
     if not name:
@@ -107,67 +107,77 @@ def api_get_cached(url, headers=None, params=None):
     except Exception as e:
         return None, str(e)
 
-def get_current_fixtures(token, competition_codes, start_date, end_date):
-    url = f"{FOOTBALL_DATA_URL}/matches"
+def get_fixtures_for_leagues(token, selected_league_names, start_date, end_date):
     headers = {"X-Auth-Token": token}
-    params = {
-        "dateFrom": start_date.isoformat(),
-        "dateTo": end_date.isoformat(),
-        "competitions": ",".join(competition_codes),
-        "limit": 500,
-    }
-    data, error = api_get_cached(url, headers=headers, params=params)
-    if error:
-        return [], error
-
-    matches = data.get("matches", [])
-    rows = []
+    all_rows = []
+    errors = []
     current_time = utc_now()
 
-    for match in matches:
-        utc_date = parse_utc(match.get("utcDate"))
-        if utc_date is None or utc_date <= current_time:
+    for l_name in selected_league_names:
+        code = LEAGUES[l_name]["football_data"]
+        url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
+        
+        # 1. Versuch: Nach Datum filtern
+        params = {"dateFrom": start_date.isoformat(), "dateTo": end_date.isoformat()}
+        data, error = api_get_cached(url, headers=headers, params=params)
+        
+        matches = []
+        if not error and data:
+            matches = data.get("matches", [])
+            
+        # Fallback: Wenn im Datumsfenster nichts ist, die nächsten SCHEDULED Spiele laden
+        if not matches:
+            params_fallback = {"status": "SCHEDULED", "limit": 15}
+            data_fb, err_fb = api_get_cached(url, headers=headers, params=params_fallback)
+            if not err_fb and data_fb:
+                matches = data_fb.get("matches", [])
+
+        if error and not matches:
+            errors.append(f"{l_name}: {error}")
             continue
-        status = str(match.get("status", "")).upper()
-        if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
-            continue
 
-        comp = match.get("competition", {})
-        home = match.get("homeTeam", {})
-        away = match.get("awayTeam", {})
-        home_name = home.get("name") or home.get("shortName")
-        away_name = away.get("name") or away.get("shortName")
+        for match in matches:
+            utc_date = parse_utc(match.get("utcDate"))
+            if utc_date is None or utc_date <= current_time:
+                continue
+            status = str(match.get("status", "")).upper()
+            if status in {"CANCELLED", "POSTPONED", "SUSPENDED", "FINISHED", "IN_PLAY", "PAUSED"}:
+                continue
 
-        if not home_name or not away_name:
-            continue
+            home = match.get("homeTeam", {})
+            away = match.get("awayTeam", {})
+            home_name = home.get("name") or home.get("shortName")
+            away_name = away.get("name") or away.get("shortName")
 
-        rows.append({
-            "match_id": match.get("id"),
-            "competition_code": comp.get("code"),
-            "league": comp.get("name"),
-            "utcDate": utc_date,
-            "home": home_name,
-            "away": away_name,
-            "status": status,
-        })
-    return rows, None
+            if not home_name or not away_name:
+                continue
 
-def get_historical_matches(token, competition_codes, days_back=90):
+            all_rows.append({
+                "match_id": match.get("id"),
+                "competition_code": code,
+                "league": l_name,
+                "matchday": match.get("matchday"),
+                "utcDate": utc_date,
+                "home": home_name,
+                "away": away_name,
+                "status": status,
+            })
+    return all_rows, errors
+
+def get_historical_matches(token, selected_league_names, days_back=90):
     end_date = utc_now().date()
     start_date = end_date - timedelta(days=days_back)
-    url = f"{FOOTBALL_DATA_URL}/matches"
     headers = {"X-Auth-Token": token}
-    params = {
-        "dateFrom": start_date.isoformat(),
-        "dateTo": end_date.isoformat(),
-        "competitions": ",".join(competition_codes),
-        "status": "FINISHED",
-        "limit": 500,
-    }
-    data, error = api_get_cached(url, headers=headers, params=params)
-    if error:
-        return [], error
-    return data.get("matches", []), None
+    all_historical = []
+    
+    for l_name in selected_league_names:
+        code = LEAGUES[l_name]["football_data"]
+        url = f"{FOOTBALL_DATA_URL}/competitions/{code}/matches"
+        params = {"dateFrom": start_date.isoformat(), "dateTo": end_date.isoformat(), "status": "FINISHED"}
+        data, error = api_get_cached(url, headers=headers, params=params)
+        if not error and data:
+            all_historical.extend(data.get("matches", []))
+    return all_historical
 
 def build_team_stats(historical_matches):
     stats = {}
@@ -185,11 +195,10 @@ def build_team_stats(historical_matches):
 
         for team in [home_name, away_name]:
             if team not in stats:
-                stats[team] = {"played": 0, "gf": 0, "ga": 0, "home_played": 0, "home_gf": 0, "home_ga": 0}
+                stats[team] = {"played": 0, "gf": 0, "ga": 0}
 
-        hs, aws = stats[home_name], stats[away_name]
-        hs["played"] += 1; hs["gf"] += hg; hs["ga"] += ag; hs["home_played"] += 1; hs["home_gf"] += hg; hs["home_ga"] += ag
-        aws["played"] += 1; aws["gf"] += ag; aws["ga"] += hg
+        stats[home_name]["played"] += 1; stats[home_name]["gf"] += hg; stats[home_name]["ga"] += ag
+        stats[away_name]["played"] += 1; stats[away_name]["gf"] += ag; stats[away_name]["ga"] += hg
     return stats
 
 def calculate_advanced_markets(home_lambda, away_lambda):
@@ -209,14 +218,14 @@ def calculate_advanced_markets(home_lambda, away_lambda):
 
 def calculate_model(home, away, stats):
     hs, aws = stats.get(home), stats.get(away)
-    home_attack = (hs["home_gf"] / max(hs["home_played"], 1)) if hs and hs["home_played"] > 0 else 1.3
-    home_defence = (hs["home_ga"] / max(hs["home_played"], 1)) if hs and hs["home_played"] > 0 else 1.2
-    away_attack = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.2
-    away_defence = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
+    home_gf = (hs["gf"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.4
+    home_ga = (hs["ga"] / max(hs["played"], 1)) if hs and hs["played"] > 0 else 1.2
+    away_gf = (aws["gf"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
+    away_ga = (aws["ga"] / max(aws["played"], 1)) if aws and aws["played"] > 0 else 1.3
 
-    # Ausbalancierte Erwartungswerte ohne übertriebene Heimdominanz
-    home_lambda = min(max(home_attack * 0.5 + away_defence * 0.5 * 1.04, 0.4), 3.0)
-    away_lambda = min(max(away_attack * 0.5 + home_defence * 0.5, 0.4), 3.0)
+    # Ausgewogene Berechnung für realistische 1 / X / 2 Verteilung
+    home_lambda = max(0.4, (home_gf * 0.5 + away_ga * 0.5) * 1.03)
+    away_lambda = max(0.4, (away_gf * 0.5 + home_ga * 0.5))
     return calculate_advanced_markets(home_lambda, away_lambda)
 
 def get_fresh_odds(odds_key, sport_key):
@@ -254,27 +263,33 @@ def analyze_match(row, stats):
     odd_2 = row.get("odd_2")
     
     if not odd_1 or not odd_x or not odd_2:
-        odd_1 = round(1.0 / max(p1, 0.05) * 0.92, 2)
-        odd_x = round(1.0 / max(px, 0.05) * 0.92, 2)
-        odd_2 = round(1.0 / max(p2, 0.05) * 0.92, 2)
+        odd_1 = round(1.0 / max(p1, 0.05) * 0.93, 2)
+        odd_x = round(1.0 / max(px, 0.05) * 0.93, 2)
+        odd_2 = round(1.0 / max(p2, 0.05) * 0.93, 2)
         row["bookmaker_1"] = "WETT-KI Modell-Quote"
 
     market = np.array([1/odd_1, 1/odd_x, 1/odd_2])
     market = market / market.sum()
 
     final = {
-        "1": 0.65 * p1 + 0.35 * market[0],
-        "X": 0.65 * px + 0.35 * market[1],
-        "2": 0.65 * p2 + 0.35 * market[2],
+        "1": 0.60 * p1 + 0.40 * market[0],
+        "X": 0.60 * px + 0.40 * market[1],
+        "2": 0.60 * p2 + 0.40 * market[2],
     }
     total = sum(final.values())
     final = {k: v / total for k, v in final.items()}
 
     prediction = max(final, key=final.get)
     confidence = final[prediction]
-    gap = confidence - sorted(final.values(), reverse=True)[1]
+    sorted_probs = sorted(final.values(), reverse=True)
+    gap = sorted_probs[0] - sorted_probs[1]
 
-    risk = "LOW" if confidence >= 0.58 and gap >= 0.15 else ("MID" if confidence >= 0.45 and gap >= 0.08 else "HIGH")
+    if confidence >= 0.52 and gap >= 0.12:
+        risk = "LOW"
+    elif confidence >= 0.40 and gap >= 0.05:
+        risk = "MID"
+    else:
+        risk = "HIGH"
     
     selected_odd = odd_1 if prediction == "1" else (odd_x if prediction == "X" else odd_2)
     value = (confidence * selected_odd - 1) if selected_odd > 1 else 0.0
@@ -303,11 +318,10 @@ selected_risks = st.sidebar.multiselect("Risiko-Filter", ["LOW", "MID", "HIGH"],
 budget = st.sidebar.number_input("💰 Gesamt-Bankroll (€)", min_value=1.0, value=100.0, step=10.0)
 
 if st.sidebar.button("🔄 SPIELE & QUOTEN LADEN", use_container_width=True):
-    with st.spinner("Lade alle Spiele der Top-Ligen und Quoten..."):
-        codes = [LEAGUES[l]["football_data"] for l in selected_leagues]
+    with st.spinner("Lade alle Spiele der ausgewählten Top-Ligen und Quoten..."):
         start_d, end_d = get_week_dates()
-        fixtures, err1 = get_current_fixtures(st.session_state.football_token, codes, start_d, end_d)
-        historical, _ = get_historical_matches(st.session_state.football_token, codes)
+        fixtures, err1 = get_fixtures_for_leagues(st.session_state.football_token, selected_leagues, start_d, end_d)
+        historical = get_historical_matches(st.session_state.football_token, selected_leagues)
         stats = build_team_stats(historical)
 
         all_odds = {}
