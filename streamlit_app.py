@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from itertools import combinations
 
 # ============================================================
-# WETT-KI – OPTIMIERTE VERSION
+# WETT-KI – AKTUALISIERTE VERSION MIT HINTERLEGTEN KEYS
 # ============================================================
 
 st.set_page_config(
@@ -32,16 +32,18 @@ LEAGUES = {
     "Conference League": {"football_data": "EC", "odds": "soccer_uefa_europa_conference_league"},
 }
 
+if "football_token" not in st.session_state:
+    st.session_state.football_token = "1e330696e0324932848d33cc95be84f0"
+
+if "odds_key" not in st.session_state:
+    st.session_state.odds_key = "d0d0d6f9c7c493345eee17b80f3ded05"
+
 if "fixtures" not in st.session_state:
     st.session_state.fixtures = pd.DataFrame()
 if "last_update" not in st.session_state:
     st.session_state.last_update = None
 if "errors" not in st.session_state:
     st.session_state.errors = []
-if "football_token" not in st.session_state:
-    st.session_state.football_token = ""
-if "odds_key" not in st.session_state:
-    st.session_state.odds_key = ""
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -96,7 +98,7 @@ def names_match(a, b):
         return False
     return a == b or a in b or b in a
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def api_get_cached(url, headers=None, params=None):
     try:
         response = requests.get(url, headers=headers, params=params, timeout=25)
@@ -198,12 +200,6 @@ def build_team_stats(historical_matches):
             hs["draws"] += 1; aws["draws"] += 1; hs["recent"].append("D"); aws["recent"].append("D")
     return stats
 
-def poisson_pmf(goals, expected):
-    try:
-        return math.exp(-expected) * (expected ** goals) / math.math.factorial(goals) if goals >= 0 else 0.0
-    except Exception:
-        return 0.0
-
 def calculate_advanced_markets(home_lambda, away_lambda):
     p1, px, p2 = 0.0, 0.0, 0.0
     btts_yes, over_25 = 0.0, 0.0
@@ -298,7 +294,6 @@ def analyze_match(row, stats):
     selected_odd = row.get("odd_1") if prediction == "1" else (row.get("odd_x") if prediction == "X" else row.get("odd_2"))
     value = (confidence * selected_odd - 1) if selected_odd and selected_odd > 1 else None
 
-    # Kelly Criterion fraction calculation (quarter Kelly for safety)
     kelly = 0.0
     if value and value > 0 and selected_odd > 1:
         kelly = max(0.0, (confidence * selected_odd - 1) / (selected_odd - 1)) * 0.25
@@ -327,20 +322,19 @@ if st.sidebar.button("🔄 DATEN AKTUALISIEREN & LADEN", use_container_width=Tru
     with st.spinner("Lade Live-Spiele und frische Quoten..."):
         codes = [LEAGUES[l]["football_data"] for l in selected_leagues]
         dates = get_week_dates()
-        fixtures, err1 = get_current_fixtures(football_token, codes, dates[0], dates[-1])
-        historical, _ = get_historical_matches(football_token, codes)
+        fixtures, err1 = get_current_fixtures(st.session_state.football_token, codes, dates[0], dates[-1])
+        historical, _ = get_historical_matches(st.session_state.football_token, codes)
         stats = build_team_stats(historical)
 
         all_odds = {}
-        if odds_key:
+        if st.session_state.odds_key:
             for l_name in selected_leagues:
-                all_odds[l_name] = get_fresh_odds(odds_key, LEAGUES[l_name]["odds"])
+                all_odds[l_name] = get_fresh_odds(st.session_state.odds_key, LEAGUES[l_name]["odds"])
 
         if fixtures:
             df = pd.DataFrame(fixtures)
             rows_analysis = []
             for _, r in df.iterrows():
-                # Match matching odds
                 match_odds = {"odd_1": None, "odd_x": None, "odd_2": None, "bookmaker_1": None}
                 for ev in all_odds.get(r["league"], []):
                     if names_match(r["home"], ev.get("home_team")) and names_match(r["away"], ev.get("away_team")):
@@ -365,10 +359,9 @@ if st.sidebar.button("🔄 DATEN AKTUALISIEREN & LADEN", use_container_width=Tru
 df = st.session_state.fixtures.copy()
 
 if df.empty:
-        st.warning("Trage deine API-Keys in der Sidebar ein und klicke auf 'Daten aktualisieren', um echte Live-Spiele zu laden.")
-        st.stop()
+    st.info("Klicke in der Sidebar auf **'Daten aktualisieren & laden'**, um die aktuellen Spiele für diesen Spieltag abzurufen.")
+    st.stop()
 
-# Dashboard & Ansichten
 tab1, tab2, tab3 = st.tabs(["🔥 Top Value & Kelly", "🤖 KI-Analyse", "📊 Live-Quoten"])
 
 with tab1:
