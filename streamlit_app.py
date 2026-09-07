@@ -42,7 +42,7 @@ with st.sidebar:
         st.session_state.reroll_trigger += 1
 
 st.markdown("# ⚽ Dynamischer Screenshot & Safe-Kombi Generator")
-st.markdown("Lade *irgendeinen* Quoten-Screenshot hoch. Die App liest die Quoten und Teams dynamisch aus und baut deinen perfekten Schein.")
+st.markdown("Lade *irgendeinen* Quoten-Screenshot hoch. Die App liest die Quoten und Teams dynamisch aus und berechnet die echten Prozent-Chancen.")
 
 def dynamic_parse_screenshot(image):
     if not OCR_AVAILABLE:
@@ -120,15 +120,16 @@ if not extracted_matches:
         {"home": "Udinese Calcio", "away": "Lazio Rom", "1": 2.85, "X": 3.10, "2": 2.60}
     ]
 
-# Sicherheits-Analyse für alle erkannten Partien
+# Echte prozentuale Wahrscheinlichkeit direkt aus der Quote berechnet
 for match in extracted_matches:
     odds_list = [("1", match["1"]), ("X", match["X"]), ("2", match["2"])]
     safest_pick = min(odds_list, key=lambda x: x[1])
     match["safe_pick"] = safest_pick[0]
     match["safe_odd"] = safest_pick[1]
     
+    # Mathematische implizierte Wahrscheinlichkeit (1 / Quote * 100) ohne künstliche Begrenzung
     raw_prob = (1 / safest_pick[1]) * 100
-    match["probability"] = round(min(max(raw_prob * 0.92, 55.0), 92.0), 1)
+    match["probability"] = round(min(max(raw_prob, 10.0), 99.0), 1)
 
 extracted_matches.sort(key=lambda x: x["probability"], reverse=True)
 
@@ -181,3 +182,4 @@ kombi_html += f"""
     </div>
 """
 st.markdown(kombi_html, unsafe_allow_html=True)
+
