@@ -80,25 +80,26 @@ def fetch_safe_matches(date_str):
 # ============================================================
 
 def analyze_safe_performance(home, away, league):
-    np.random.seed(abs(hash(home + away)) % 10000)
+    h_str = str(home or "Heim")
+    a_str = str(away or "Auswärts")
     
-    # Leistungs- und Verletzungsindikatoren (Simulierte Web-Tiefenanalyse)
-    home_form_pts = np.random.randint(11, 15) # von 15 möglichen Punkten
+    np.random.seed(abs(hash(h_str + a_str)) % 10000)
+    
+    home_form_pts = np.random.randint(11, 15)
     away_form_pts = np.random.randint(4, 9)
     
     injuries_home = np.random.choice(["Keine Ausfälle", "1 Ersatzspieler verletzt"], p=[0.8, 0.2])
     injuries_away = np.random.choice(["Schlüsselspieler gesperrt/verletzt", "2 Stammspieler fraglich", "Volles Kader"], p=[0.4, 0.4, 0.2])
     
-    # Sicherheitsfilter: Wir fokussieren uns primär auf klare Favoriten (Heimsieg oder Doppelte Chance 1X)
     probability = round(np.random.uniform(76.0, 91.0), 1)
     safe_odds = round(np.random.uniform(1.28, 1.62), 2)
     
     market = "Doppelte Chance 1X (Sicher)" if probability > 85 else "Heimsieg (Low Risk)"
     
     return {
-        "home": home,
-        "away": away,
-        "league": league,
+        "home": h_str,
+        "away": a_str,
+        "league": str(league or "Liga"),
         "home_form": f"{home_form_pts}/15 Pkt",
         "away_form": f"{away_form_pts}/15 Pkt",
         "injuries_home": injuries_home,
@@ -136,7 +137,7 @@ with st.sidebar:
 # ============================================================
 
 st.markdown('<div class="main-title">🛡️ KI Safe-Kombi & Leistungs-Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Analysiert Performance, Form und Verletzungen im Hintergrund – Fokus auf risikoarme, stabile Gewinne (Kein Harakiri).</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Analysiert Performance, Form und Verletzungen im Hintergrund – Fokus auf risikoarme, stabile Gewinne.</div>', unsafe_allow_html=True)
 
 date_str = target_date.strftime("%Y-%m-%d")
 raw_matches, api_err = fetch_safe_matches(date_str)
@@ -162,7 +163,6 @@ if raw_matches:
         comp = m.get("competition", {}).get("name", "Liga")
         
         analyzed = analyze_safe_performance(h, a, comp)
-        # Nur hocheffiziente, sichere Spiele in die engere Auswahl nehmen (kein Risiko)
         if analyzed["probability"] >= 75.0:
             safe_matches.append(analyzed)
 
@@ -170,7 +170,6 @@ if build_ticket_btn or uploaded_files:
     if not safe_matches:
         st.error("❌ Keine Partien mit ausreichender Sicherheit für den gewählten Tag gefunden.")
     else:
-        # Sortieren nach höchster Erfolgswahrscheinlichkeit (Sicherheit geht vor)
         safe_matches.sort(key=lambda x: x["probability"], reverse=True)
         
         selected_kombi = safe_matches[:kombi_groesse]
