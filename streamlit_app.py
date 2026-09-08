@@ -108,19 +108,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Datenbank mit mindestens 3 CL-Spielen für "Heute"
+# Umfassende Datenbank mit Spielen für alle Ligen und Tage
 safe_matches_db = [
-    # HEUTE - Champions League (jetzt 3 Spiele, damit 3er-Kombi klappt)
+    # HEUTE
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Heute, 18:45 Uhr",
         "day": "Heute",
         "conf": "🟢 Sehr Hoch",
         "teams": "AC Milan vs. Feyenoord Rotterdam",
-        "analysis": (
-            "Milan im San Siro sehr heimstark, klare Favoritenrolle gegen"
-            " Feyenoord."
-        ),
+        "analysis": "Milan im San Siro sehr heimstark.",
         "tip": "Doppelte Chance 1X",
         "odds": 1.28,
     },
@@ -130,10 +127,7 @@ safe_matches_db = [
         "day": "Heute",
         "conf": "🟢 Sehr Hoch",
         "teams": "Real Madrid vs. Inter Mailand",
-        "analysis": (
-            "Taktisches Topspiel im Bernabéu. Real defensiv stabil,"
-            " Sicherheits-Tipp."
-        ),
+        "analysis": "Taktisches Topspiel im Bernabéu.",
         "tip": "Doppelte Chance 1X",
         "odds": 1.32,
     },
@@ -143,12 +137,39 @@ safe_matches_db = [
         "day": "Heute",
         "conf": "🟢 Hoch",
         "teams": "Paris Saint-Germain vs. Atlético Madrid",
-        "analysis": (
-            "PSG drückt vor heimischem Publikum auf die Offensive, Atlético"
-            " steht tief."
-        ),
+        "analysis": "PSG drückt vor heimischem Publikum.",
         "tip": "Über 1.5 Tore",
         "odds": 1.25,
+    },
+    {
+        "league": "🇪🇺 UEFA Europa League",
+        "time": "Heute, 18:45 Uhr",
+        "day": "Heute",
+        "conf": "🟢 Hoch",
+        "teams": "Sporting CP vs. Atalanta Bergamo",
+        "analysis": "Offenes Spiel mit Chancen auf beiden Seiten.",
+        "tip": "Über 1.5 Tore",
+        "odds": 1.26,
+    },
+    {
+        "league": "🇪🇺 UEFA Europa League",
+        "time": "Heute, 21:00 Uhr",
+        "day": "Heute",
+        "conf": "🟢 Hoch",
+        "teams": "FC Porto vs. Lazio Rom",
+        "analysis": "Porto heimstark in europäischen Nächten.",
+        "tip": "Doppelte Chance 1X",
+        "odds": 1.30,
+    },
+    {
+        "league": "🇪🇺 UEFA Conference League",
+        "time": "Heute, 21:00 Uhr",
+        "day": "Heute",
+        "conf": "🟢 Hoch",
+        "teams": "Lille OSC vs. Slovan Bratislava",
+        "analysis": "Klarer Klassenunterschied zugunsten von Lille.",
+        "tip": "Sieg Lille",
+        "odds": 1.34,
     },
     {
         "league": "⚽ Bundesliga",
@@ -156,10 +177,7 @@ safe_matches_db = [
         "day": "Heute",
         "conf": "🟢 Hoch",
         "teams": "VfB Stuttgart vs. Werder Bremen",
-        "analysis": (
-            "Stuttgart offensiv druckvoll zu Hause, Bremen anfällig in der"
-            " Abwehr."
-        ),
+        "analysis": "Stuttgart offensiv druckvoll zu Hause.",
         "tip": "Über 1.5 Tore",
         "odds": 1.22,
     },
@@ -170,7 +188,7 @@ safe_matches_db = [
         "day": "Morgen",
         "conf": "🟢 Sehr Hoch",
         "teams": "FC Barcelona vs. Sporting CP",
-        "analysis": "Barcelona drückt von Beginn an und will den Heimsieg.",
+        "analysis": "Barcelona drückt von Beginn an.",
         "tip": "Sieg Barcelona (1X2)",
         "odds": 1.45,
     },
@@ -180,9 +198,7 @@ safe_matches_db = [
         "day": "Morgen",
         "conf": "🟢 Sehr Hoch",
         "teams": "Manchester City vs. Borussia Dortmund",
-        "analysis": (
-            "City zu Hause eine Macht, extrem spielstark im Mittelfeld."
-        ),
+        "analysis": "City zu Hause eine Macht.",
         "tip": "Sieg Man City",
         "odds": 1.35,
     },
@@ -192,23 +208,18 @@ safe_matches_db = [
         "day": "Morgen",
         "conf": "🟢 Hoch",
         "teams": "FC Villarreal vs. Olympique Marseille",
-        "analysis": (
-            "Ausgeglichenes Duell, aber Villarreal verliert selten daheim."
-        ),
+        "analysis": "Villarreal verliert selten daheim.",
         "tip": "Doppelte Chance 1X",
         "odds": 1.30,
     },
-    # ALLE 3 TAGE
+    # TAG 3
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Donnerstag, 21:00 Uhr",
         "day": "Tag3",
         "conf": "🟢 Sehr Hoch",
         "teams": "FC Bayern München vs. FK Bodø/Glimt",
-        "analysis": (
-            "Der Rekordmeister lässt sich daheim gegen Außenseiter selten"
-            " überraschen."
-        ),
+        "analysis": "Der Rekordmeister lässt sich daheim selten überraschen.",
         "tip": "Bayern Sieg & Über 1.5 Tore",
         "odds": 1.35,
     },
@@ -218,9 +229,7 @@ safe_matches_db = [
         "day": "Tag3",
         "conf": "🟢 Hoch",
         "teams": "AS Roma vs. Bayer Leverkusen",
-        "analysis": (
-            "Leverkusen agiert auswärts extrem kompakt und verliert kaum."
-        ),
+        "analysis": "Leverkusen agiert auswärts extrem kompakt.",
         "tip": "Doppelte Chance X2",
         "odds": 1.38,
     },
@@ -230,7 +239,7 @@ safe_matches_db = [
         "day": "Tag3",
         "conf": "🟢 Hoch",
         "teams": "ACF Fiorentina vs. Aston Villa",
-        "analysis": "Offener Schlagabtausch, mindestens 2 Tore im Spiel.",
+        "analysis": "Offener Schlagabtausch.",
         "tip": "Über 1.5 Tore im Spiel",
         "odds": 1.25,
     },
@@ -280,21 +289,29 @@ else:
 
 filtered_pool = [m for m in time_pool if m["league"] in selected_leagues]
 
-if len(filtered_pool) < combo_size:
+if len(filtered_pool) == 0:
     st.warning(
-        f"⚠️ Es sind nur {len(filtered_pool)} Spiel(e) für den Filter '{time_filter}'"
-        f" in den gewählten Ligen verfügbar. Bitte Kombigröße anpassen oder"
-        " mehr Ligen in der Sidebar aktivieren."
+        "⚠️ Keine Spiele für diese Kombination aus Zeitraum und Ligen"
+        " verfügbar. Bitte wähle weitere Ligen aus oder ändere den Zeitraum."
     )
 else:
-    selected_slip = random.sample(filtered_pool, combo_size)
+    # Automatische Anpassung, falls weniger Spiele da sind als gewünscht
+    actual_combo_size = min(combo_size, len(filtered_pool))
+    if actual_combo_size < combo_size:
+        st.info(
+            f"ℹ️ Kombigröße wurde automatisch auf {actual_combo_size} angepasst,"
+            f" da aktuell nur {len(filtered_pool)} Spiel(e) für diese Auswahl"
+            " vorliegen."
+        )
+
+    selected_slip = random.sample(filtered_pool, actual_combo_size)
 
     total_odds = 1.0
     for match in selected_slip:
         total_odds *= match["odds"]
 
     st.markdown(
-        f"<h3>📋 Dein generierter {combo_size}er-Sicherheits-Schein</h3>",
+        f"<h3>📋 Dein generierter {actual_combo_size}er-Sicherheits-Schein</h3>",
         unsafe_allow_html=True,
     )
 
@@ -337,3 +354,4 @@ st.markdown(
     " ohne Gewähr.</p>",
     unsafe_allow_html=True,
 )
+
