@@ -108,7 +108,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Erweiterte Datenbank mit Tag-Zuordnung (Heute, Morgen, Tag 3)
+# Korrekte Datenbank mit eindeutiger Zuordnung für day ("Heute", "Morgen", "Tag3")
 safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Champions League",
@@ -139,7 +139,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Donnerstag, 21:00 Uhr",
-        "day": "Alle 3 Tage",
+        "day": "Tag3",
         "conf": "🟢 Sehr Hoch",
         "teams": "FC Bayern München vs. FK Bodø/Glimt",
         "analysis": (
@@ -152,7 +152,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Europa League",
         "time": "Donnerstag, 18:45 Uhr",
-        "day": "Alle 3 Tage",
+        "day": "Tag3",
         "conf": "🟢 Hoch",
         "teams": "AS Roma vs. Bayer Leverkusen",
         "analysis": (
@@ -165,7 +165,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Conference League",
         "time": "Donnerstag, 21:00 Uhr",
-        "day": "Alle 3 Tage",
+        "day": "Tag3",
         "conf": "🟢 Hoch",
         "teams": "ACF Fiorentina vs. Aston Villa",
         "analysis": (
@@ -178,7 +178,7 @@ safe_matches_db = [
     {
         "league": "⚽ Bundesliga",
         "time": "Samstag, 15:30 Uhr",
-        "day": "Alle 3 Tage",
+        "day": "Tag3",
         "conf": "🟢 Sehr Hoch",
         "teams": "Borussia Dortmund vs. SC Paderborn",
         "analysis": (
@@ -188,25 +188,12 @@ safe_matches_db = [
         "tip": "Sieg Dortmund (1X2)",
         "odds": 1.30,
     },
-    {
-        "league": "⚽ Premier League",
-        "time": "Samstag, 16:00 Uhr",
-        "day": "Alle 3 Tage",
-        "conf": "🟢 Hoch",
-        "teams": "Arsenal FC vs. FC Everton",
-        "analysis": (
-            "Arsenal defensiv eine Festung und im Titelrennen auf Heimsiege"
-            " angewiesen."
-        ),
-        "tip": "Sieg Arsenal",
-        "odds": 1.28,
-    },
 ]
 
 # --- SIDEBAR KONFIGURATION ---
 st.sidebar.header("⚙️ Schein Konfigurator")
 
-# Zeitraum-Auswahl (Heute, Morgen, Alle 3 Tage)
+# Zeitraum-Auswahl
 time_filter = st.sidebar.radio(
     "📅 Zeitraum wählen:", ["Heute", "Morgen", "Alle 3 Tage"]
 )
@@ -217,7 +204,7 @@ selected_leagues = st.sidebar.multiselect(
 )
 
 combo_size = st.sidebar.slider(
-    "🔢 Kombigröße (Anzahl Spiele):", min_value=2, max_value=4, value=3
+    "🔢 Kombigröße (Anzahl Spiele):", min_value=1, max_value=3, value=2
 )
 
 # Reroll Button
@@ -239,27 +226,25 @@ st.markdown(
 )
 st.markdown("---")
 
-# Filter-Logik nach Zeitraum und Ligen
+# Präzise Filter-Logik für den Tag
 if time_filter == "Heute":
-    time_pool = [
-        m for m in safe_matches_db if m["day"] in ["Heute", "Alle 3 Tage"]
-    ]
+    time_pool = [m for m in safe_matches_db if m["day"] == "Heute"]
 elif time_filter == "Morgen":
-    time_pool = [
-        m for m in safe_matches_db if m["day"] in ["Morgen", "Alle 3 Tage"]
-    ]
-else:
+    time_pool = [m for m in safe_matches_db if m["day"] == "Morgen"]
+else:  # Alle 3 Tage
     time_pool = safe_matches_db
 
 filtered_pool = [m for m in time_pool if m["league"] in selected_leagues]
 
 if len(filtered_pool) < combo_size:
     st.warning(
-        f"⚠️ Zu wenige Spiele für eine {combo_size}er-Kombi im gewählten Zeitraum"
-        " / den gewählten Ligen verfügbar! Bitte Filter anpassen."
+        f"⚠️ Es sind nur {len(filtered_pool)} Spiel(e) für den Filter '{time_filter}'"
+        f" in den gewählten Ligen verfügbar. Bitte Kombigröße auf"
+        f" {len(filtered_pool)} oder weniger stellen (oder andere Ligen"
+        " wählen)."
     )
 else:
-    # Zufällige Auswahl für den Reroll-System
+    # Zufällige Auswahl für das Reroll-System
     selected_slip = random.sample(filtered_pool, combo_size)
 
     # Gesamte Quote berechnen
