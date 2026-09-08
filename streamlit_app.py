@@ -108,9 +108,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Erweiterte Datenbank mit mehreren Spielen pro Tag/Liga
+# Datenbank mit mindestens 3 CL-Spielen für "Heute"
 safe_matches_db = [
-    # HEUTE
+    # HEUTE - Champions League (jetzt 3 Spiele, damit 3er-Kombi klappt)
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Heute, 18:45 Uhr",
@@ -136,6 +136,19 @@ safe_matches_db = [
         ),
         "tip": "Doppelte Chance 1X",
         "odds": 1.32,
+    },
+    {
+        "league": "🇪🇺 UEFA Champions League",
+        "time": "Heute, 21:00 Uhr",
+        "day": "Heute",
+        "conf": "🟢 Hoch",
+        "teams": "Paris Saint-Germain vs. Atlético Madrid",
+        "analysis": (
+            "PSG drückt vor heimischem Publikum auf die Offensive, Atlético"
+            " steht tief."
+        ),
+        "tip": "Über 1.5 Tore",
+        "odds": 1.25,
     },
     {
         "league": "⚽ Bundesliga",
@@ -185,7 +198,7 @@ safe_matches_db = [
         "tip": "Doppelte Chance 1X",
         "odds": 1.30,
     },
-    # ALLE 3 TAGE (Tag 3)
+    # ALLE 3 TAGE
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Donnerstag, 21:00 Uhr",
@@ -236,7 +249,7 @@ selected_leagues = st.sidebar.multiselect(
 )
 
 combo_size = st.sidebar.slider(
-    "🔢 Kombigröße (Anzahl Spiele):", min_value=1, max_value=3, value=2
+    "🔢 Kombigröße (Anzahl Spiele):", min_value=1, max_value=3, value=3
 )
 
 reroll_clicked = st.sidebar.button(
