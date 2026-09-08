@@ -108,11 +108,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Datenbank für "sichere" Spiele (niedrige Quoten, hohe Konfidenz)
+# Erweiterte Datenbank mit Tag-Zuordnung (Heute, Morgen, Tag 3)
 safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Champions League",
-        "time": "Dienstag, 21:00 Uhr",
+        "time": "Heute, 21:00 Uhr",
+        "day": "Heute",
         "conf": "🟢 Sehr Hoch",
         "teams": "Real Madrid vs. Inter Mailand",
         "analysis": (
@@ -125,6 +126,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Mittwoch, 18:45 Uhr",
+        "day": "Morgen",
         "conf": "🟢 Sehr Hoch",
         "teams": "FC Barcelona vs. Feyenoord Rotterdam",
         "analysis": (
@@ -137,6 +139,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Champions League",
         "time": "Donnerstag, 21:00 Uhr",
+        "day": "Alle 3 Tage",
         "conf": "🟢 Sehr Hoch",
         "teams": "FC Bayern München vs. FK Bodø/Glimt",
         "analysis": (
@@ -149,6 +152,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Europa League",
         "time": "Donnerstag, 18:45 Uhr",
+        "day": "Alle 3 Tage",
         "conf": "🟢 Hoch",
         "teams": "AS Roma vs. Bayer Leverkusen",
         "analysis": (
@@ -161,6 +165,7 @@ safe_matches_db = [
     {
         "league": "🇪🇺 UEFA Conference League",
         "time": "Donnerstag, 21:00 Uhr",
+        "day": "Alle 3 Tage",
         "conf": "🟢 Hoch",
         "teams": "ACF Fiorentina vs. Aston Villa",
         "analysis": (
@@ -173,6 +178,7 @@ safe_matches_db = [
     {
         "league": "⚽ Bundesliga",
         "time": "Samstag, 15:30 Uhr",
+        "day": "Alle 3 Tage",
         "conf": "🟢 Sehr Hoch",
         "teams": "Borussia Dortmund vs. SC Paderborn",
         "analysis": (
@@ -185,6 +191,7 @@ safe_matches_db = [
     {
         "league": "⚽ Premier League",
         "time": "Samstag, 16:00 Uhr",
+        "day": "Alle 3 Tage",
         "conf": "🟢 Hoch",
         "teams": "Arsenal FC vs. FC Everton",
         "analysis": (
@@ -198,18 +205,19 @@ safe_matches_db = [
 
 # --- SIDEBAR KONFIGURATION ---
 st.sidebar.header("⚙️ Schein Konfigurator")
-st.sidebar.markdown(
-    "Wähle deine Wunsch-Ligen und die Anzahl der Spiele für deinen sicheren"
-    " Kombi-Schein."
+
+# Zeitraum-Auswahl (Heute, Morgen, Alle 3 Tage)
+time_filter = st.sidebar.radio(
+    "📅 Zeitraum wählen:", ["Heute", "Morgen", "Alle 3 Tage"]
 )
 
 all_leagues = list(set([m["league"] for m in safe_matches_db]))
 selected_leagues = st.sidebar.multiselect(
-    "Ligen filtern:", all_leagues, default=all_leagues
+    "🏆 Ligen filtern:", all_leagues, default=all_leagues
 )
 
 combo_size = st.sidebar.slider(
-    "Kombigröße (Anzahl Spiele):", min_value=2, max_value=4, value=3
+    "🔢 Kombigröße (Anzahl Spiele):", min_value=2, max_value=4, value=3
 )
 
 # Reroll Button
@@ -231,19 +239,27 @@ st.markdown(
 )
 st.markdown("---")
 
-# Filter matches based on user selection
-filtered_pool = [
-    m for m in safe_matches_db if m["league"] in selected_leagues
-]
+# Filter-Logik nach Zeitraum und Ligen
+if time_filter == "Heute":
+    time_pool = [
+        m for m in safe_matches_db if m["day"] in ["Heute", "Alle 3 Tage"]
+    ]
+elif time_filter == "Morgen":
+    time_pool = [
+        m for m in safe_matches_db if m["day"] in ["Morgen", "Alle 3 Tage"]
+    ]
+else:
+    time_pool = safe_matches_db
+
+filtered_pool = [m for m in time_pool if m["league"] in selected_leagues]
 
 if len(filtered_pool) < combo_size:
     st.warning(
-        f"⚠️ Zu wenige Spiele für eine {combo_size}er-Kombi in den gewählten"
-        " Ligen verfügbar! Bitte mehr Ligen auswählen oder Kombigröße"
-        " verringern."
+        f"⚠️ Zu wenige Spiele für eine {combo_size}er-Kombi im gewählten Zeitraum"
+        " / den gewählten Ligen verfügbar! Bitte Filter anpassen."
     )
 else:
-    # Zufällige Auswahl für das Reroll-System (nutzt Streamlit Rerun bei Klick)
+    # Zufällige Auswahl für den Reroll-System
     selected_slip = random.sample(filtered_pool, combo_size)
 
     # Gesamte Quote berechnen
